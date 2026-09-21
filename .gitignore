@@ -1,0 +1,4 @@
+# 本地工具产物
+.workbuddy/
+
+# P4-W2 脚手架拷入时模板会自带 Node 侧忽略（node_modules/dist 等），此处只收仓级工具产物
