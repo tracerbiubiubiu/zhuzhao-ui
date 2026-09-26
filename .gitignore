@@ -1,4 +1,35 @@
-# 本地工具产物
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+dist-*/
+
+# Local tool artifacts
 .workbuddy/
 
-# P4-W2 脚手架拷入时模板会自带 Node 侧忽略（node_modules/dist 等），此处只收仓级工具产物
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Env (keep .env.* templates from seed)
+.env.local
+.env.*.local
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Test coverage
+coverage/
+
+# Playwright
+playwright-report/
+test-results/
