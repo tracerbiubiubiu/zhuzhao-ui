@@ -1,9 +1,10 @@
 <script setup lang="ts">
   import { ElDropdown, ElDropdownMenu, ElDropdownItem, ElMessageBox } from 'element-plus'
   import { useI18n } from 'vue-i18n'
+  import { useRouter } from 'vue-router'
   import { useUserStore } from '@/store/modules/user'
-  import { logoutApi } from '@/api/auth'
-
+  
+  const router = useRouter()
   const userStore = useUserStore()
 
   const prefixCls = 'v-user-info'
@@ -21,11 +22,9 @@
       return
     }
 
-    try {
-      await logoutApi()
-    } finally {
-      await userStore.logout()
-    }
+    await userStore.logout()
+    router.push('/login')
+    // 跳登录页（request 层 hash redirect 由守卫处理）
   }
 
   const toDocument = () => {

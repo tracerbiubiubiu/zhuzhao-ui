@@ -14,6 +14,7 @@ import {
 import { usePermissionStore } from './permission'
 import { useTagsViewStore } from './tagsView'
 import { resetRouter } from '@/router'
+import { resetCatchAll } from '@/permission'
 
 /** GET /user/profile 响应（User 结构体——无角色字段） */
 export interface UserProfile {
@@ -116,6 +117,7 @@ export const useUserStore = defineStore('user', {
         tagsViewStore.removeAllViews()
         // TODO: vue-query 接入后清缓存（queryClient.clear()）——W2 范例页批
         resetRouter()
+        resetCatchAll()
       }
     },
 

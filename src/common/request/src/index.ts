@@ -29,15 +29,23 @@ async function _doRefresh(): Promise<string | null> {
   try {
     const resp = await axios.post('/api/v1/auth/refresh', { refresh_token: rt }, {
       headers: { 'X-Request-ID': generateRequestID() },
+      timeout: 30000,
     })
     if (resp.data?.code === 0 && resp.data.data?.access_token) {
       setTokens(resp.data.data)
       return resp.data.data.access_token as string
     }
+    // 终态码族（20004/20014/20015）→ 清 session
     clearTokens()
     return null
-  } catch {
-    return null // 网络错误不清会话
+  } catch (err: unknown) {
+    // P1 修复：有 HTTP 响应=终态→清；无响应（网络错误/5xx）→保会话
+    const hasResponse = (err as { response?: unknown })?.response !== undefined
+    if (hasResponse) {
+      clearTokens()
+      return null
+    }
+    return null // 网络错误不清会话——P1 修复
   }
 }
 
@@ -87,10 +95,12 @@ service.interceptors.response.use(
 )
 
 function _redirectToLogin(): void {
-  if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
-    const redirect = encodeURIComponent(window.location.pathname + window.location.search)
-    window.location.href = `/login?redirect=${redirect}`
-  }
+  if (typeof window === 'undefined') return
+  // hash 路由：真实路径在 location.hash（#/xxx），pathname 恒为 base
+  const currentHash = window.location.hash
+  if (currentHash.startsWith('#/login')) return // 已在登录页防重入
+  const fullPath = currentHash.replace(/^#/, '') || '/'
+  window.location.hash = `#/login?redirect=${encodeURIComponent(fullPath)}`
 }
 
 export default service

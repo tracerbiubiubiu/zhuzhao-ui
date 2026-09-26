@@ -26,6 +26,8 @@ const WHITE_LIST = [...NO_REDIRECT_WHITE_LIST, '/change-password']
 
 // ─── 动态路由注册（§3.2）───
 let catchAllRegistered = false
+/** 登出时重置（B3：防再登录后 catch-all 幽灵跳过注册） */
+export const resetCatchAll = () => { catchAllRegistered = false }
 
 export const ensureDynamicRoutes = async () => {
   const permissionStore = usePermissionStoreWithOut()
