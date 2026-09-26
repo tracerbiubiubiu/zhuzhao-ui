@@ -12,7 +12,7 @@ import constantRoutes from '@/router/routes'
 import { Layout } from '@/utils/routerHelper'
 import { buildRoutes, type RouteMenuNode } from '@/store/modules/permissionRoutes'
 
-const stub = { render: () => null } as unknown as RouteRecordRaw['component']
+const stub = { render: () => null }
 
 const stubify = (route: any): RouteRecordRaw => ({
   ...route,
@@ -37,7 +37,7 @@ const buildRouter = (menus: RouteMenuNode[]) => {
   })
   buildRoutes(menus).forEach((route) => router.addRoute(stubify(route)))
   // catch-all 尾注册（与 ensureDynamicRoutes 一致）
-  router.addRoute({ path: '/:pathMatch(.*)*', name: 'NotFound', component: stub })
+  router.addRoute({ path: '/:pathMatch(.*)*', name: 'NotFound', component: stub } as never)
   return router
 }
 
