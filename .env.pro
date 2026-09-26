@@ -1,5 +1,4 @@
 # 接口前缀
-VITE_API_BASE_PATH=
 
 # 打包路径
 VITE_BASE_PATH=/
@@ -11,7 +10,7 @@ VITE_SOURCEMAP=false
 VITE_OUT_DIR=dist-pro
 
 # 标题
-VITE_APP_TITLE=ElementAdmin
+VITE_APP_TITLE=zhuzhao 控制台
 
 # 是否开启mock
 VITE_USE_MOCK=true

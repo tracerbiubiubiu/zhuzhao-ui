@@ -13,7 +13,7 @@
   const { t } = useI18n()
 
   // zhuzhao 契约：employee_no（工号）登录，非 username
-  const { state } = useForm<LoginParams>({
+  const { state, actions } = useForm<LoginParams>({
     initialValues: { employee_no: '', password: '' },
     rules: {
       employee_no: required(() => '请输入工号'),
@@ -27,7 +27,7 @@
   const redirect = computed(() => {
     const value = currentRoute.value.query.redirect
     // 站内 redirect 校验（防开放重定向）
-    if (typeof value === 'string' && value.startsWith('/') && !value.startsWith('//')) return value
+    if (typeof value === 'string' && value.startsWith('/') && !value.startsWith('//') && !value.includes('\\')) return value
     return '/'
   })
 
@@ -54,7 +54,10 @@
   }
 
   const submit = () => {
-    doLogin()
+    // 走 useForm.submit 链（内部 validate→handler）——修复绕过校验
+    actions.submit(async () => {
+      await doLogin()
+    })
   }
 </script>
 

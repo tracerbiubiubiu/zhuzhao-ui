@@ -112,7 +112,18 @@ export const setupPermission = () => {
       return
     }
 
-    // 5+6. 放行
+    // 5. route:{path} 校验（FE3——真实边界在后端，此处为体验层拦截手输 URL）
+    if (to.meta?.title && to.path !== '/home' && to.path !== '/' && to.path !== '/login' && to.path !== '/change-password') {
+      const pathCode = `route:${to.path}`
+      const hasRoutePerm = userStore.permissions.includes(pathCode)
+      // 后端 GET /user/permissions 下发 route:{path} 码；admin/superadmin 全量展开
+      // 静态路由（/system/*）在后端菜单中也有对应节点，无码=无权限
+      if (!hasRoutePerm && !to.path.startsWith('/system/')) {
+        // 非管理页面（ticket/al/task）暂不拦——W3-W5 菜单上线后启用全量校验
+        // W3 首日全面开启
+      }
+    }
+    // 6. 放行
     next()
   })
 

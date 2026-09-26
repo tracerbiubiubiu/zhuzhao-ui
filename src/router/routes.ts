@@ -2,11 +2,13 @@ import type { RouteRecordRaw } from 'vue-router'
 
 // 静态路由（constantRoutes 01 §3.2⑤）——菜单外常驻
 const routes: RouteRecordRaw[] = [
-  { path: '/login', name: 'Login', component: () => import('@/views/Login/Login.vue'), meta: { title: '登录' } },
-  { path: '/change-password', name: 'ChangePassword', component: () => import('@/views/ChangePassword/index.vue'), meta: { title: '修改密码' } },
+  { path: '/login', name: 'Login', component: () => import('@/views/Login/Login.vue'), meta: { title: '登录', hidden: true } },
+  { path: '/change-password', name: 'ChangePassword', component: () => import('@/views/ChangePassword/index.vue'), meta: { title: '修改密码', hidden: true } },
   { path: '/', redirect: '/home' },
   { path: '/home', name: 'Home', component: () => import('@/views/Home/index.vue'), meta: { title: '首页' } },
-  // system 域占位（W3 交付完整版）
+  // system 域占位（W3 交付完整版）  // Redirect 中转路由（TagsView 刷新用——§3.2⑤ constantRoutes）
+  { path: '/redirect/:path(.*)', name: 'Redirect', component: () => import('@/views/Redirect/Redirect.vue'), meta: { hidden: true } },
+
   { path: '/system/user', name: 'SystemUser', component: () => import('@/views/system/user/index.vue'), meta: { title: '用户管理' } },
   { path: '/system/role', name: 'SystemRole', component: () => import('@/views/system/role/index.vue'), meta: { title: '角色管理' } },
   { path: '/system/menu', name: 'SystemMenu', component: () => import('@/views/system/menu/index.vue'), meta: { title: '菜单管理' } },
