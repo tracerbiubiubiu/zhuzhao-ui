@@ -25,6 +25,7 @@ import { createApp } from 'vue'
 import App from './App.vue'
 
 import { setupPermission } from './permission'
+import { vPermission } from '@/common/auth'
 
 const setupMock = async () => {
   if (import.meta.env.PROD && import.meta.env.VITE_USE_MOCK === 'true') {
@@ -38,6 +39,7 @@ const setupAll = async () => {
   await setupMock()
 
   const app = createApp(App)
+app.directive('permission', vPermission)
 
   setupStore(app)
 
