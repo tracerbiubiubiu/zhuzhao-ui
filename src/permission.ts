@@ -36,7 +36,7 @@ export const ensureDynamicRoutes = async () => {
   const resp = await request.get('/api/v1/user/menus')
   const menus = ((resp as { menus?: unknown[] })?.menus ?? []) as MenuNode[]
 
-  permissionStore.generateRoutes(menus as unknown as never[]).forEach((route) => {
+  permissionStore.generateRoutes(menus).forEach((route) => {
     router.addRoute(route as unknown as RouteRecordRaw)
   })
 

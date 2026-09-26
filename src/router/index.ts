@@ -3,78 +3,30 @@ import type { RouteRecordRaw } from 'vue-router'
 import type { App } from 'vue'
 import { Layout } from '@/utils/routerHelper'
 import { NO_RESET_WHITE_LIST } from '@/constants'
+import staticRoutes from './routes'
 
-export const constantRouterMap: AppRouteRecordRaw[] = [
+export const constantRouterMap: RouteRecordRaw[] = [
   {
     path: '/',
     component: Layout,
-    redirect: '/dashboard/analysis',
-    name: 'Root',
-    meta: {
-      hidden: true
-    }
+    redirect: '/home',
+    children: staticRoutes.filter((r) => r.path !== '/login' && r.path !== '/change-password'),
   },
-  {
-    path: '/redirect',
-    component: Layout,
-    name: 'RedirectWrap',
-    children: [
-      {
-        path: '/redirect/:path(.*)',
-        name: 'Redirect',
-        component: () => import('@/views/Redirect/Redirect.vue'),
-        meta: {}
-      }
-    ],
-    meta: {
-      hidden: true,
-      noTagsView: true
-    }
-  },
-  {
-    path: '/login',
-    component: () => import('@/views/Login/Login.vue'),
-    name: 'Login',
-    meta: {
-      hidden: true,
-      title: 'router.login',
-      noTagsView: true
-    }
-  },
-  {
-    path: '/404',
-    component: () => import('@/views/Error/404.vue'),
-    name: 'NoFind',
-    meta: {
-      hidden: true,
-      title: '404',
-      noTagsView: true
-    }
-  },
-  {
-    path: '/:pathMatch(.*)*',
-    component: () => import('@/views/Error/404.vue'),
-    name: 'Fallback',
-    meta: {
-      hidden: true,
-      breadcrumb: false,
-      noTagsView: true
-    }
-  }
+  // 登录/改密页不挂 Layout（独立全屏页）
+  ...staticRoutes.filter((r) => r.path === '/login' || r.path === '/change-password'),
 ]
 
 const router = createRouter({
   history: createWebHashHistory(),
   strict: true,
-  routes: constantRouterMap as RouteRecordRaw[],
-  scrollBehavior: () => ({ left: 0, top: 0 })
+  routes: constantRouterMap,
 })
 
-export const resetRouter = (): void => {
+export const resetRouter = () => {
   router.getRoutes().forEach((route) => {
     const { name } = route
-    if (name && !NO_RESET_WHITE_LIST.includes(name as string) && router.hasRoute(name)) {
-      router.removeRoute(name)
+    if (name && !NO_RESET_WHITE_LIST.includes(name as string)) {
+      router.hasRoute(name) && router.removeRoute(name)
     }
   })
 }
