@@ -65,5 +65,5 @@ test('covers form validation, submission, errors and reset', async () => {
   assert.deepEqual(form.state.errors.value, {})
   assert.deepEqual(form.state.touchedFields.value, [])
 
-  console.log('✓ covers form validation, submission, errors and reset')
+  console.warn('✓ covers form validation, submission, errors and reset')
 })

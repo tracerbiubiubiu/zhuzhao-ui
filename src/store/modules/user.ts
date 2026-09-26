@@ -103,35 +103,42 @@ export const useUserStore = defineStore('user', {
       if (this.profile) this.profile.must_change_password = false
     },
 
-    /** 登出（清全部状态+vue-query 缓存） */
+    /** 登出（先调 logoutApi，无论成败都拆除会话） */
     async logout() {
       try {
         await logoutApi()
       } finally {
-        clearTokens()
-        this.profile = null
-        this.permissions = []
-        this.mustChangePassword = false
-        this.sessionLoaded = false
-        // 清 permissionStore 动态路由
-        const permissionStore = usePermissionStore()
-        permissionStore.reset()
-        // 清 tagsView
-        const tagsViewStore = useTagsViewStore()
-        tagsViewStore.removeAllViews()
-        // TODO: vue-query 接入后清缓存（queryClient.clear()）——W2 范例页批
-        resetRouter()
-        resetCatchAll()
+        // 会话拆除收敛为唯一实现（与 401 终态 / 守卫加载失败共用）
+        // TODO: vue-query 接入后在此一并清缓存（queryClient.clear()）——W2 范例页批
+        this.resetState()
       }
     },
 
-    /** 重置（守卫跳登录时用——不调 logoutApi） */
+    /**
+     * 会话拆除（唯一实现——登出 / 401 终态 / 守卫加载失败共用，§3.1/§3.3）
+     *
+     * 必须「彻底」：`_redirectToLogin()` 只改 `location.hash`、**不整页刷新**，
+     * Pinia 实例在标签页内存活。若只清 token/用户态而不清 permissionStore，
+     * 同标签换用户登录时 `ensureDynamicRoutes()` 会因 `isAddRouters===true` 提前 return，
+     * 新用户的菜单永久不会 addRoute → 侧栏/路由残留上一个用户的可见性（跨用户越权）。
+     * 故此处清：token + 用户态（含 rawMenus）+ 动态路由/注册标志 + tagsView + 路由注册表。
+     */
     resetState() {
+      // 1. token
       clearTokens()
+      // 2. 用户态复位（含 rawMenus——菜单缓存，不随 token 清除会串会话）
       this.profile = null
       this.permissions = []
       this.mustChangePassword = false
       this.sessionLoaded = false
+      this.rawMenus = []
+      // 3. 权限动态路由复位（isAddRouters 必须回 false，否则新会话不重注册）
+      usePermissionStore().reset()
+      // 4. 标签页复位
+      useTagsViewStore().removeAllViews()
+      // 5. 路由注册表复位（清动态路由 + 允许 catch-all 下次重新尾注册）
+      resetRouter()
+      resetCatchAll()
     },
   },
 })

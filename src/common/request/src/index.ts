@@ -162,7 +162,11 @@ service.interceptors.response.use(
   },
 )
 
-/** 终态会话失效：清 token + 清 Pinia + 跳登录（仅终态路径调用，非终态绝不清会话） */
+/**
+ * 终态会话失效：清 token（兜底）+ 彻底拆除会话（userStore.resetState 内含
+ * 权限动态路由/注册标志、tagsView、resetRouter、rawMenus 清理）+ 跳登录。
+ * 仅终态路径调用；非终态（网络/5xx）绝不清会话。
+ */
 function _clearPiniaAndRedirect(): void {
   clearTokens()
   try {
