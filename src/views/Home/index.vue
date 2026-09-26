@@ -55,7 +55,10 @@ onMounted(async () => {
       }
     })
     // 最近工单
-    const recentData = await request.get('/api/v1/tickets', { params: { page: 1, page_size: 10 } })
+    const recentResult = await Promise.allSettled([
+      request.get('/api/v1/tickets', { params: { page: 1, page_size: 10 } }),
+    ])
+    const recentData = recentResult[0].status === 'fulfilled' ? recentResult[0].value : null
     recent.value = ((recentData as { list?: TicketSummary[] })?.list ?? []).map((t) => ({
       ...t,
     }))

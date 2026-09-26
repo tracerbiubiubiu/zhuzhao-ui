@@ -7,6 +7,7 @@
   const router = useRouter()
   const userStore = useUserStore()
 
+  import avatarFallback from '@/assets/imgs/avatar.jpg'
   const prefixCls = 'v-user-info'
 
   const { t } = useI18n()
@@ -36,7 +37,7 @@
   <ElDropdown class="header-action" :class="prefixCls" trigger="click">
     <div class="flex items-center">
       <img
-        :src="userStore.profile?.avatar || '/src/assets/imgs/avatar.jpg'"
+        :src="userStore.profile?.avatar || avatarFallback"
         alt=""
         class="w-[calc(var(--logo-height)-25px)] rounded-[50%]"
       />

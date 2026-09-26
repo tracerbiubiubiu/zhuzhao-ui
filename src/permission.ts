@@ -101,10 +101,16 @@ export const setupPermission = () => {
         // 重新导航到目标（addRoute 后路由表已变，需 replace 触发匹配）
         next({ ...to, replace: true })
         return
-      } catch {
-        // 加载失败（AT 可能已过期但请求层未能恢复）→ 重置跳登录
-        userStore.resetState()
-        next({ path: '/login', query: { redirect: to.fullPath } })
+      } catch (err) {
+        // 区分：有 HTTP 响应（401/4xx 终态）→ 清跳登录；无响应（网络/5xx）→ 保留会话
+        const hasResponse = (err as { response?: unknown })?.response !== undefined
+        if (hasResponse) {
+          userStore.resetState()
+          next({ path: '/login', query: { redirect: to.fullPath } })
+        } else {
+          console.warn('[guard] session load network error, keeping session', err)
+          next(false)
+        }
         return
       }
     }

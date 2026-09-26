@@ -32,7 +32,7 @@ export default defineConfigWithVueTs(
       '@typescript-eslint/no-explicit-any': 'off',
       '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_' }],
       // 生产代码禁 debugger/console
-      'no-console': ['off', { allow: ['warn', 'error'] }],
+      'no-console': ['warn', { allow: ['warn', 'error'] }],
       'no-debugger': 'off',
     },
   },
