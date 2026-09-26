@@ -10,6 +10,7 @@
 
 import axios, { type AxiosInstance, type AxiosError, type InternalAxiosRequestConfig } from 'axios'
 import { getAccessToken, getRefreshToken, setTokens, clearTokens } from '@/common/auth/tokenStorage'
+import { useUserStoreWithOut } from '@/store/modules/user'
 import { TOKEN_EXPIRED, TOKEN_INVALID } from '@/common/constants/errorBehavior'
 
 // ─── Request-ID（req- + 32 位小写 hex）───
@@ -39,7 +40,7 @@ async function _doRefresh(): Promise<string | null> {
     clearTokens()
     return null
   } catch (err: unknown) {
-    // P1 修复：有 HTTP 响应=终态→清；无响应（网络错误/5xx）→保会话
+    // 有 HTTP 响应（含 5xx）→ refresh 终态→清（RT 已消费无法重试）；无响应（网络断）→保
     const hasResponse = (err as { response?: unknown })?.response !== undefined
     if (hasResponse) {
       clearTokens()
@@ -97,18 +98,26 @@ service.interceptors.response.use(
           return service(error.config)
         }
         clearTokens()
-        _redirectToLogin()
+        _clearPiniaAndRedirect()
         return Promise.reject(error)
       }
       if (bizCode === TOKEN_INVALID) {
         clearTokens()
-        _redirectToLogin()
+        _clearPiniaAndRedirect()
         return Promise.reject(error)
       }
     }
     return Promise.reject(error)
   },
 )
+
+function _clearPiniaAndRedirect(): void {
+  try {
+    const userStore = useUserStoreWithOut()
+    userStore.resetState()
+  } catch { /* Pinia not yet initialized */ }
+  _redirectToLogin()
+}
 
 function _redirectToLogin(): void {
   if (typeof window === 'undefined') return

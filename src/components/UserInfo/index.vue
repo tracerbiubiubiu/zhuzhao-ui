@@ -36,7 +36,7 @@
   <ElDropdown class="header-action" :class="prefixCls" trigger="click">
     <div class="flex items-center">
       <img
-        src="@/assets/imgs/avatar.jpg"
+        :src="userStore.profile?.avatar || '/src/assets/imgs/avatar.jpg'"
         alt=""
         class="w-[calc(var(--logo-height)-25px)] rounded-[50%]"
       />

@@ -1,6 +1,5 @@
 <script setup lang="ts">
-  import { ref } from 'vue'
-  import { ThemeSwitch } from '@vea/components'
+    import { ThemeSwitch } from '@vea/components'
   import LocaleDropdown from '@/components/LocaleDropdown/index.vue'
   import { useI18n } from 'vue-i18n'
   import { useAppStore } from '@/store/modules/app'
@@ -8,7 +7,7 @@
 
   const appStore = useAppStore()
   const { t } = useI18n()
-  const isLogin = ref(true)
+  // RegisterForm removed - always login mode
 </script>
 
 <template>
@@ -73,7 +72,7 @@
     <section class="form-stage">
       <div class="form-card">
         <Transition name="form-swap" mode="out-in">
-          <LoginForm v-if="isLogin" key="login" @to-register="isLogin = false" />
+          <LoginForm key="login" />
         </Transition>
       </div>
     </section>

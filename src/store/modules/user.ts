@@ -38,6 +38,7 @@ interface UserState {
   mustChangePassword: boolean
   /** session 已加载标志（守卫防重入死循环） */
   sessionLoaded: boolean
+  rawMenus: unknown[]
 }
 
 export const useUserStore = defineStore('user', {
@@ -46,6 +47,7 @@ export const useUserStore = defineStore('user', {
     permissions: [],
     mustChangePassword: false,
     sessionLoaded: false,
+    rawMenus: [],
   }),
 
   getters: {
@@ -79,10 +81,12 @@ export const useUserStore = defineStore('user', {
     async loadSession() {
       if (this.sessionLoaded) return
       const request = (await import('@vea/request')).default
-      const [profile, perms] = await Promise.all([
+      const [profile, perms, menus] = await Promise.all([
         request.get('/api/v1/user/profile'),
         request.get('/api/v1/user/permissions'),
+        request.get('/api/v1/user/menus'),
       ])
+      this.rawMenus = ((menus as unknown as { menus?: unknown[] })?.menus ?? [])
       this.profile = profile as unknown as UserProfile
       this.permissions = ((perms as unknown as { permissions?: string[] })?.permissions ?? []) as string[]
       if (this.profile?.must_change_password) {
