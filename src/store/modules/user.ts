@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { store } from '../index'
-import type { LoginResult, UserInfo } from '@/api/login/types'
+import type { LoginResult, UserInfo } from '@/api/auth'
 import { usePermissionStore } from './permission'
 import { useTagsViewStore } from './tagsView'
 import router, { resetRouter } from '@/router'

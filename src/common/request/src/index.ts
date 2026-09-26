@@ -1,123 +1,96 @@
-import axios, {
-  type AxiosInstance,
-  type AxiosRequestConfig,
-  type AxiosResponse,
-  type CreateAxiosDefaults
-} from 'axios'
+/**
+ * zhuzhao 统一请求层（01 §3.3 实现规格，替换模板通用封装）
+ *
+ * 契约：
+ * - 信封 {code, message, data, request_id}——code≠0 恒非 2xx（按 HTTP 状态分流）
+ * - X-Request-ID = req- + 32 位小写 hex（D2-24）
+ * - 401 分码：20002 过期→单飞刷新 / 20003 无效→清 session 跳登录
+ * - 5xx 不清会话（拒绝挂起+提示重试）
+ */
 
-type MaybePromise<Value> = Value | Promise<Value>
+import axios, { type AxiosInstance, type AxiosError, type InternalAxiosRequestConfig } from 'axios'
+import { getAccessToken, getRefreshToken, setTokens, clearTokens } from '@/common/auth/tokenStorage'
+import { TOKEN_EXPIRED, TOKEN_INVALID } from '@/common/constants/errorBehavior'
 
-export interface RequestConfig<Data = unknown> extends AxiosRequestConfig<Data> {
-  requestKey?: string
+// ─── Request-ID（req- + 32 位小写 hex）───
+let _counter = 0
+export function generateRequestID(): string {
+  const hex = (Date.now().toString(16) + (_counter++).toString(16) + Math.random().toString(16).slice(2, 10))
+    .padEnd(32, '0').slice(0, 32).toLowerCase()
+  return `req-${hex}`
 }
 
-export interface CreateRequestOptions {
-  axiosConfig?: CreateAxiosDefaults
-  beforeRequest?: <Data>(config: RequestConfig<Data>) => MaybePromise<RequestConfig<Data>>
-  transformResponse?: (response: AxiosResponse) => MaybePromise<unknown>
-  onError?: (error: unknown) => MaybePromise<void>
-  getRequestKey?: <Data>(config: RequestConfig<Data>) => string
-}
+// ─── 单飞刷新 ───
+let _refreshing: Promise<string | null> | null = null
 
-export interface RequestClient {
-  instance: AxiosInstance
-  request: <Response = unknown, Data = unknown>(config: RequestConfig<Data>) => Promise<Response>
-  get: <Response = unknown>(config: RequestConfig) => Promise<Response>
-  post: <Response = unknown, Data = unknown>(config: RequestConfig<Data>) => Promise<Response>
-  put: <Response = unknown, Data = unknown>(config: RequestConfig<Data>) => Promise<Response>
-  delete: <Response = unknown, Data = unknown>(config: RequestConfig<Data>) => Promise<Response>
-  cancelRequest: (key: string | readonly string[]) => void
-  cancelAllRequest: () => void
-}
-
-export const createRequest = (options: CreateRequestOptions = {}): RequestClient => {
-  const instance = axios.create(options.axiosConfig)
-  const controllers = new Set<AbortController>()
-  const controllersByKey = new Map<string, Set<AbortController>>()
-
-  const track = (controller: AbortController, key: string) => {
-    controllers.add(controller)
-    if (!key) return
-    const keyedControllers = controllersByKey.get(key) ?? new Set<AbortController>()
-    keyedControllers.add(controller)
-    controllersByKey.set(key, keyedControllers)
-  }
-
-  const untrack = (controller: AbortController, key: string) => {
-    controllers.delete(controller)
-    if (!key) return
-    const keyedControllers = controllersByKey.get(key)
-    keyedControllers?.delete(controller)
-    if (keyedControllers?.size === 0) controllersByKey.delete(key)
-  }
-
-  const request = async <Response = unknown, Data = unknown>(
-    config: RequestConfig<Data>
-  ): Promise<Response> => {
-    let prepared: RequestConfig<Data> = config
-    try {
-      prepared = options.beforeRequest ? await options.beforeRequest(config) : config
-    } catch (error) {
-      await options.onError?.(error)
-      throw error
-    }
-
-    const key = prepared.requestKey ?? options.getRequestKey?.(prepared) ?? prepared.url ?? ''
-    const externalSignal = prepared.signal as AbortSignal | undefined
-    const controller = new AbortController()
-    const abort = () => controller.abort(externalSignal?.reason)
-
-    if (externalSignal?.aborted) abort()
-    else externalSignal?.addEventListener('abort', abort, { once: true })
-
-    const axiosConfig = { ...prepared }
-    delete axiosConfig.requestKey
-    track(controller, key)
-    try {
-      const response = await instance.request({ ...axiosConfig, signal: controller.signal })
-      return (
-        options.transformResponse ? await options.transformResponse(response) : response.data
-      ) as Response
-    } catch (error) {
-      await options.onError?.(error)
-      throw error
-    } finally {
-      externalSignal?.removeEventListener('abort', abort)
-      untrack(controller, key)
-    }
-  }
-
-  const cancelRequest = (key: string | readonly string[]) => {
-    const keys = Array.isArray(key) ? key : [key]
-    keys.forEach((item) => {
-      controllersByKey.get(item)?.forEach((controller) => controller.abort())
-      controllersByKey.delete(item)
+async function _doRefresh(): Promise<string | null> {
+  const rt = getRefreshToken()
+  if (!rt) return null
+  try {
+    const resp = await axios.post('/api/v1/auth/refresh', { refresh_token: rt }, {
+      headers: { 'X-Request-ID': generateRequestID() },
     })
-  }
-
-  const cancelAllRequest = () => {
-    controllers.forEach((controller) => controller.abort())
-    controllers.clear()
-    controllersByKey.clear()
-  }
-
-  return {
-    instance,
-    request,
-    get: (config) => request({ ...config, method: 'get' }),
-    post: (config) => request({ ...config, method: 'post' }),
-    put: (config) => request({ ...config, method: 'put' }),
-    delete: (config) => request({ ...config, method: 'delete' }),
-    cancelRequest,
-    cancelAllRequest
+    if (resp.data?.code === 0 && resp.data.data?.access_token) {
+      setTokens(resp.data.data)
+      return resp.data.data.access_token as string
+    }
+    clearTokens()
+    return null
+  } catch {
+    return null // 网络错误不清会话
   }
 }
 
-export type {
-  AxiosError,
-  AxiosRequestConfig,
-  AxiosResponse,
-  InternalAxiosRequestConfig,
-  RawAxiosRequestHeaders
-} from 'axios'
-export { isCancel } from 'axios'
+function _singleFlightRefresh(): Promise<string | null> {
+  if (!_refreshing) {
+    _refreshing = _doRefresh().finally(() => { _refreshing = null })
+  }
+  return _refreshing
+}
+
+// ─── axios 实例 ───
+const service: AxiosInstance = axios.create({ timeout: 30000 })
+
+service.interceptors.request.use((config: InternalAxiosRequestConfig) => {
+  const at = getAccessToken()
+  if (at) config.headers.Authorization = `Bearer ${at}`
+  config.headers['X-Request-ID'] = generateRequestID()
+  return config
+})
+
+service.interceptors.response.use(
+  (response) => response.data?.data ?? response.data,
+  async (error: AxiosError) => {
+    const status = error.response?.status
+    const body = error.response?.data as { code?: number } | undefined
+    const bizCode = body?.code
+
+    if (status === 401) {
+      if (bizCode === TOKEN_EXPIRED) {
+        const newAT = await _singleFlightRefresh()
+        if (newAT && error.config) {
+          error.config.headers.Authorization = `Bearer ${newAT}`
+          return service(error.config)
+        }
+        clearTokens()
+        _redirectToLogin()
+        return Promise.reject(error)
+      }
+      if (bizCode === TOKEN_INVALID) {
+        clearTokens()
+        _redirectToLogin()
+        return Promise.reject(error)
+      }
+    }
+    return Promise.reject(error)
+  },
+)
+
+function _redirectToLogin(): void {
+  if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
+    const redirect = encodeURIComponent(window.location.pathname + window.location.search)
+    window.location.href = `/login?redirect=${redirect}`
+  }
+}
+
+export default service

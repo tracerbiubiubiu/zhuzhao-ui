@@ -1,7 +1,7 @@
 import type { RouteRecordRaw } from 'vue-router'
 import NProgress from 'nprogress'
 import router from './router'
-import { getRouteListApi } from '@/api/login'
+import { getRouteListApi } from '@/api/auth'
 import { NO_REDIRECT_WHITE_LIST } from '@/constants'
 import { useAppStoreWithOut } from '@/store/modules/app'
 import { usePermissionStoreWithOut } from '@/store/modules/permission'

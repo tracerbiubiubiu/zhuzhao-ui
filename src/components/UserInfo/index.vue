@@ -2,7 +2,7 @@
   import { ElDropdown, ElDropdownMenu, ElDropdownItem, ElMessageBox } from 'element-plus'
   import { useI18n } from 'vue-i18n'
   import { useUserStore } from '@/store/modules/user'
-  import { logoutApi } from '@/api/login'
+  import { logoutApi } from '@/api/auth'
 
   const userStore = useUserStore()
 
