@@ -15,6 +15,7 @@ import NProgress from 'nprogress'
 import router from './router'
 import { isLoggedIn } from '@/common/auth/tokenStorage'
 import { NO_REDIRECT_WHITE_LIST } from './constants'
+import { checkRoutePermission } from './router/routePermission'
 import { usePermissionStoreWithOut } from '@/store/modules/permission'
 import { useUserStoreWithOut } from '@/store/modules/user'
 import 'nprogress/nprogress.css'
@@ -29,14 +30,16 @@ let catchAllRegistered = false
 /** 登出时重置（B3：防再登录后 catch-all 幽灵跳过注册） */
 export const resetCatchAll = () => { catchAllRegistered = false }
 
+/** route: 码族降级告警只发一次（防每次导航刷屏） */
+let degradedWarned = false
+
 export const ensureDynamicRoutes = async () => {
   const permissionStore = usePermissionStoreWithOut()
   if (permissionStore.isAddRouters) return false
 
-  // 从后端拉菜单树 → 转换为路由
-  const request = (await import('@vea/request')).default
-  const resp = await request.get('/api/v1/user/menus')
-  const menus = ((resp as { menus?: unknown[] })?.menus ?? []) as MenuNode[]
+  // 从 userStore.rawMenus 读（loadSession 三件并行已拉——避免重复请求）
+  const userStore = useUserStoreWithOut()
+  const menus = userStore.rawMenus as unknown as MenuNode[]
 
   permissionStore.generateRoutes(menus).forEach((route) => {
     router.addRoute(route as unknown as RouteRecordRaw)
@@ -112,17 +115,24 @@ export const setupPermission = () => {
       return
     }
 
-    // 5. route:{path} 校验（FE3——真实边界在后端，此处为体验层拦截手输 URL）
-    if (to.meta?.title && to.path !== '/home' && to.path !== '/' && to.path !== '/login' && to.path !== '/change-password') {
-      const pathCode = `route:${to.path}`
-      const hasRoutePerm = userStore.permissions.includes(pathCode)
-      // 后端 GET /user/permissions 下发 route:{path} 码；admin/superadmin 全量展开
-      // 静态路由（/system/*）在后端菜单中也有对应节点，无码=无权限
-      if (!hasRoutePerm && !to.path.startsWith('/system/')) {
-        // 非管理页面（ticket/al/task）暂不拦——W3-W5 菜单上线后启用全量校验
-        // W3 首日全面开启
-      }
+    // 5. route:{path} 校验（FE3——真实边界在后端三层，此处为体验层拦截手输 URL）
+    //    纯函数 checkRoutePermission：豁免清单/无码落 404/码族未就绪降级（见其注释）
+    const routeCheck = checkRoutePermission(to, userStore.permissions)
+    if (routeCheck.degraded && !degradedWarned) {
+      degradedWarned = true
+      console.warn(
+        '[permission] 后端未下发任何 route: 权限码（GET /user/permissions 缺 route: 码族）——' +
+          'route:{path} 校验降级跳过，仅依赖后端 /user/menus 过滤与后端鉴权。' +
+          '待后端该码族就绪后自动恢复校验。',
+      )
     }
+    if (!routeCheck.allow) {
+      // 无权限/路由不存在 → 落 404 页（§3.1⑥）。catch-all 已在 ensureDynamicRoutes 内尾注册，
+      // 404 自身走 isExemptRoute 豁免，不会产生重定向循环。
+      next({ name: 'NotFound', replace: true })
+      return
+    }
+
     // 6. 放行
     next()
   })
