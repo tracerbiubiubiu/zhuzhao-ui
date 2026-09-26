@@ -31,7 +31,7 @@ import { vPermission } from '@/common/auth'
 const setupAll = async () => {
 
   const app = createApp(App)
-app.directive('permission', vPermission)
+  app.directive('permission', vPermission)
 
   setupStore(app)
 

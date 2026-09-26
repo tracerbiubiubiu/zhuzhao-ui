@@ -26,7 +26,7 @@ export default ({ mode }: ConfigEnv): UserConfig => {
         compositionOnly: true,
         include: [resolve(import.meta.dirname, 'src/locales/**')]
       }),
-            UnoCSS()
+      UnoCSS()
     ],
 
     resolve: {
