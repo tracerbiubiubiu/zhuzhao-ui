@@ -42,7 +42,7 @@
         class="w-[calc(var(--logo-height)-25px)] rounded-[50%]"
       />
       <span class="<lg:hidden text-14px pl-[5px] text-[var(--top-header-text-color)]">{{
-        userStore.userInfo?.username
+        userStore.profile?.username
       }}</span>
     </div>
     <template #dropdown>
