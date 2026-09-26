@@ -21,11 +21,15 @@ export const NO_REDIRECT_WHITE_LIST = ['/login']
 /**
  * 不重置路由白名单
  */
+// W2 评审 B3：白名单=本仓实际静态路由名（种子死名清理）
 export const NO_RESET_WHITE_LIST = [
-  'Redirect',
-  'RedirectWrap',
+  'Home',
+  'SystemUser',
+  'SystemRole',
+  'SystemMenu',
+  'SystemOrg',
+  'ChangePassword',
   'Login',
-  'NoFind',
-  'Fallback',
-  'Root'
+  'NotFound',
+  'Redirect'
 ]

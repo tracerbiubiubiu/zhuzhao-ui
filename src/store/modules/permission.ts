@@ -45,18 +45,25 @@ function buildRoutes(menus: MenuNode[]): unknown[] {
     .filter((m) => m.menu_type === 1 || m.menu_type === 2)
     .sort((a, b) => a.sort_order - b.sort_order)
     .map((menu) => {
+      // §3.2③ 目录带非空 component → 按页面渲染（home 种子：type=1+component='home'）
+      if (menu.menu_type === 1 && menu.component) {
+        return buildPageRoute(menu)
+      }
       const route: Record<string, unknown> = {
         path: menu.path,
         name: menu.code,
         meta: { title: menu.name, icon: menu.icon, hidden: !menu.visible },
       }
-      if (menu.menu_type === 1) {
-        // 目录：Layout 父级
+      if (menu.menu_type === 1 && !menu.component) {
+        // 目录（无组件）：Layout 父级
         route.component = Layout
         if (menu.children?.length) {
           route.children = buildRoutes(menu.children)
-          if (!route.redirect && (route.children as { path: string }[]).length) {
-            route.redirect = `${menu.path}/${(route.children as { path: string }[])[0].path}`
+          const kids = (route.children as { path: string }[]).filter((k) => k.path)
+          if (!route.redirect && kids.length) {
+            // §3.2① 子页为绝对路径（种子全路径）直接用，不拼接
+            const firstPath = kids[0].path
+            route.redirect = firstPath.startsWith('/') ? firstPath : `${menu.path}/${firstPath}`
           }
         }
       } else {
@@ -80,3 +87,18 @@ function buildRoutes(menus: MenuNode[]): unknown[] {
 }
 
 export const usePermissionStoreWithOut = () => usePermissionStore(store)
+
+/** §3.2③ 目录带组件：按页面渲染（glob 查 home 与 home/index 双键） */
+function buildPageRoute(menu: MenuNode): Record<string, unknown> {
+  const modules = import.meta.glob('@/views/**/*.vue')
+  const primary = `/src/views/${menu.component}.vue`
+  const fallback = `/src/views/${menu.component}/index.vue`
+  const component = modules[primary] ?? modules[fallback]
+  if (!component) console.warn(`[router] 目录带组件未找到: ${menu.component}（菜单 ${menu.code}）`)
+  return {
+    path: menu.path,
+    name: menu.code,
+    component: component ?? Layout,
+    meta: { title: menu.name, icon: menu.icon, hidden: !menu.visible },
+  }
+}
