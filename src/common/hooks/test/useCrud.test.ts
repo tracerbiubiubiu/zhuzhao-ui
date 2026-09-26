@@ -1,16 +1,15 @@
 import assert from 'node:assert/strict'
+import { test } from 'vitest'
 import { effectScope, nextTick } from 'vue'
 import { useCrud, type CrudListResult } from '../src/useCrud'
 
 type Row = { id: number; name: string }
 type Query = { name?: string }
 
-const test = async (name: string, run: () => Promise<void>) => {
-  await run()
-  console.log(`✓ ${name}`)
-}
+// 适配：原为独立 node 脚本（本地 test 助手 + 顶层 await），改用 vitest test() 收集；
+// 断言与语义零改动。
 
-await test('covers list, detail, mutations, pagination and selection', async () => {
+test('covers list, detail, mutations, pagination and selection', async () => {
   const rows: Row[] = [
     { id: 1, name: 'one' },
     { id: 2, name: 'two' },
@@ -91,7 +90,7 @@ await test('covers list, detail, mutations, pagination and selection', async () 
   scope.stop()
 })
 
-await test('ignores stale requests and exposes AbortSignal to services', async () => {
+test('ignores stale requests and exposes AbortSignal to services', async () => {
   type Pending = {
     context: { signal: AbortSignal }
     resolve: (result: CrudListResult<Row>) => void
@@ -126,7 +125,7 @@ await test('ignores stale requests and exposes AbortSignal to services', async (
   scope.stop()
 })
 
-await test('separates errors and supports opting out of refresh', async () => {
+test('separates errors and supports opting out of refresh', async () => {
   let listCalls = 0
   const listError = new Error('list failed')
   const mutationError = new Error('create failed')

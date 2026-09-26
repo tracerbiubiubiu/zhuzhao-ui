@@ -51,6 +51,7 @@
       ]
     },
     "types": [
+      "node",
       "@intlify/unplugin-vue-i18n/types",
       "vite/client"
     ],

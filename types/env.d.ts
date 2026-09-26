@@ -14,7 +14,6 @@ declare global {
     readonly VITE_BASE_PATH: string
     readonly VITE_SOURCEMAP: string
     readonly VITE_OUT_DIR: string
-    readonly VITE_USE_MOCK: string
     readonly VITE_USE_CSS_SPLIT: string
   }
 
