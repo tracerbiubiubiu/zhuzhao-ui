@@ -67,11 +67,27 @@ service.interceptors.request.use((config: InternalAxiosRequestConfig) => {
 })
 
 service.interceptors.response.use(
-  (response) => response.data?.data ?? response.data,
+  (response) => {
+    // 成功但 data:null 的接口（logout 等）→ 返回 null 而非整个信封
+    const envelope = response.data as { code?: number; data?: unknown }
+    const result = envelope?.code === 0 ? (envelope.data ?? null) : envelope
+    return result as never // 类型断言：运行时 data 直返（调用方拿到的就是业务数据）
+  },
   async (error: AxiosError) => {
     const status = error.response?.status
     const body = error.response?.data as { code?: number } | undefined
     const bizCode = body?.code
+
+    // 403+20007 强制改密（errorBehavior 接线——跳改密页不清会话）
+    if (status === 403 && bizCode === 20007) {
+      if (typeof window !== 'undefined') {
+        const hash = window.location.hash
+        if (!hash.includes('/change-password')) {
+          window.location.hash = '#/change-password'
+        }
+      }
+      return Promise.reject(error)
+    }
 
     if (status === 401) {
       if (bizCode === TOKEN_EXPIRED) {

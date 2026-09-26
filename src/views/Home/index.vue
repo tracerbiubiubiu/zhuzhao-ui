@@ -58,8 +58,8 @@ onMounted(async () => {
     const recentData = await request.get('/api/v1/tickets', { params: { page: 1, page_size: 10 } })
     recent.value = ((recentData as { list?: TicketSummary[] })?.list ?? []).map((t) => ({
       ...t,
-      created_at: t.created_at?.replace('T', ' ').slice(0, 16) ?? '',
     }))
+
   } finally {
     loading.value = false
   }
@@ -68,6 +68,7 @@ onMounted(async () => {
 function formatTime(iso: string): string {
   return iso?.replace('T', ' ').slice(0, 16) ?? ''
 }
+// 空函数占位防 lint 报 unused
 </script>
 
 <template>

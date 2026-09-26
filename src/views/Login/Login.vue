@@ -1,6 +1,5 @@
 <script setup lang="ts">
   import { ref } from 'vue'
-  import { LoginForm, RegisterForm } from './components'
   import { ThemeSwitch } from '@vea/components'
   import LocaleDropdown from '@/components/LocaleDropdown/index.vue'
   import { useI18n } from 'vue-i18n'
@@ -75,7 +74,6 @@
       <div class="form-card">
         <Transition name="form-swap" mode="out-in">
           <LoginForm v-if="isLogin" key="login" @to-register="isLogin = false" />
-          <RegisterForm v-else key="register" @to-login="isLogin = true" />
         </Transition>
       </div>
     </section>

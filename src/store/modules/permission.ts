@@ -9,6 +9,9 @@ import { constantRouterMap } from '@/router'
 import { Layout } from '@/utils/routerHelper'
 import type { MenuNode } from '@/permission'
 
+// glob 查表（模块级——Vite 编译时展开一次，函数内重建是浪费）
+const viewModules = import.meta.glob('@/views/**/*.vue')
+
 interface PermissionState {
   isAddRouters: boolean
   routers: AppRouteRecordRaw[]
@@ -67,11 +70,13 @@ function buildRoutes(menus: MenuNode[]): unknown[] {
           }
         }
       } else {
+        // §3.2② 顶层无父页面（parent=null，如 audit_log）→ 包 Layout 使侧栏/顶栏在位
+        // zhuzhao 菜单树 includeMenuAncestors 已补父级目录（后端 menu_service.go），
+        // 但防御性处理：type=2 无父级时套 Layout
         // 页面：component 字符串 → import.meta.glob 映射
         if (menu.component) {
-          const modules = import.meta.glob('@/views/**/*.vue')
           const key = `/src/views/${menu.component}.vue`
-          const component = modules[key]
+          const component = viewModules[key]
           if (component) {
             route.component = component
           } else {
@@ -90,10 +95,9 @@ export const usePermissionStoreWithOut = () => usePermissionStore(store)
 
 /** §3.2③ 目录带组件：按页面渲染（glob 查 home 与 home/index 双键） */
 function buildPageRoute(menu: MenuNode): Record<string, unknown> {
-  const modules = import.meta.glob('@/views/**/*.vue')
   const primary = `/src/views/${menu.component}.vue`
   const fallback = `/src/views/${menu.component}/index.vue`
-  const component = modules[primary] ?? modules[fallback]
+  const component = viewModules[primary] ?? viewModules[fallback]
   if (!component) console.warn(`[router] 目录带组件未找到: ${menu.component}（菜单 ${menu.code}）`)
   return {
     path: menu.path,
