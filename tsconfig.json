@@ -1,0 +1,68 @@
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "useDefineForClassFields": true,
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "jsx": "preserve",
+    "jsxImportSource": "vue",
+    "sourceMap": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "esModuleInterop": true,
+    "lib": [
+      "ESNext",
+      "DOM"
+    ],
+    "skipLibCheck": true,
+    "noEmit": true,
+    "forceConsistentCasingInFileNames": true,
+    "allowSyntheticDefaultImports": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "paths": {
+      "@/*": [
+        "./src/*"
+      ],
+      "@vea/hooks": [
+        "./src/common/hooks/src"
+      ],
+      "@vea/hooks/*": [
+        "./src/common/hooks/src/*"
+      ],
+      "@vea/styles": [
+        "./src/common/styles/src"
+      ],
+      "@vea/styles/*": [
+        "./src/common/styles/src/*"
+      ],
+      "@vea/components": [
+        "./src/common/components/src"
+      ],
+      "@vea/components/*": [
+        "./src/common/components/src/*"
+      ],
+      "@vea/request": [
+        "./src/common/request/src"
+      ],
+      "@vea/request/*": [
+        "./src/common/request/src/*"
+      ]
+    },
+    "types": [
+      "@intlify/unplugin-vue-i18n/types",
+      "vite/client"
+    ],
+    "noImplicitAny": true
+  },
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.tsx",
+    "src/**/*.vue",
+    "types/**/*.d.ts"
+  ],
+  "exclude": [
+    "mock"
+  ]
+}
