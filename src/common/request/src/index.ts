@@ -13,6 +13,7 @@ import axios, { type AxiosInstance, type AxiosError, type InternalAxiosRequestCo
 import { getAccessToken, getRefreshToken, setTokens, clearTokens, type TokenPair } from '@/common/auth/tokenStorage'
 import { useUserStoreWithOut } from '@/store/modules/user'
 import { TOKEN_EXPIRED, TOKEN_INVALID, REFRESH_FATAL_CODES } from '@/common/constants/errorBehavior'
+import { notifyError } from '../errorToast'
 
 // ─── Request-ID（req- + 32 位小写 hex）───
 let _counter = 0
@@ -149,6 +150,7 @@ service.interceptors.response.use(
         if (!result.terminal) {
           // refresh 端点自身非终态失败（5xx/网络抖动）——原始 401 不得被下游误判为终态（§3.3 红线）
           ;(error as AxiosError & { __sessionTransient?: boolean }).__sessionTransient = true
+          notifyError(error)
           return Promise.reject(error)
         }
         // 终态（RT 无效/改密纪元/重放）→ 清会话跳登录
@@ -160,6 +162,8 @@ service.interceptors.response.use(
         return Promise.reject(error)
       }
     }
+    // 全局错误提示（errorBehavior 白名单接线——401/20007/10006/silent 由决策函数排除）
+    notifyError(error)
     return Promise.reject(error)
   },
 )

@@ -35,7 +35,11 @@ export function getDeviceId(): string {
   cachedDeviceId = localStorage.getItem(DEVICE_KEY)
   if (!cachedDeviceId) {
     cachedDeviceId = generateUUID()
-    localStorage.setItem(DEVICE_KEY, cachedDeviceId)
+    try {
+      localStorage.setItem(DEVICE_KEY, cachedDeviceId)
+    } catch {
+      // 写失败（隐私模式/配额）→ 降级内存态：本会话内仍同源，仅不跨刷新
+    }
   }
   return cachedDeviceId
 }
@@ -43,7 +47,11 @@ export function getDeviceId(): string {
 /** 保存 TokenPair（登录/刷新/改密轮换后调用） */
 export function setTokens(pair: TokenPair): void {
   cached = pair
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(pair))
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(pair))
+  } catch {
+    // 写失败 → 内存态仍可用（本标签页会话正常，刷新后需重登）
+  }
 }
 
 /** 获取 AT（null = 未登录） */

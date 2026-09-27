@@ -14,9 +14,10 @@ export type CrudQuery = Record<string, unknown>
 export type CrudMutation = 'create' | 'update' | 'remove'
 export type CrudRequestScope = 'list' | 'detail' | 'mutation' | 'all'
 
+/** 分页参数（与后端契约直通——01 §5：page/page_size，hook 层不做参数名映射） */
 export interface CrudPagination {
-  pageIndex: number
-  pageSize: number
+  page: number
+  page_size: number
 }
 
 export type CrudListParams<Query extends CrudQuery> = Query & CrudPagination
@@ -132,8 +133,8 @@ export const useCrud = <
       const result = await options.service.list(
         {
           ...query.value,
-          pageIndex: page.value,
-          pageSize: pageSize.value
+          page: page.value,
+          page_size: pageSize.value
         } as CrudListParams<Query>,
         { signal: controller.signal }
       )

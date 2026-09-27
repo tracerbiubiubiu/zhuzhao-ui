@@ -41,6 +41,15 @@ interface UserState {
   rawMenus: unknown[]
 }
 
+/**
+ * button: 码匹配——入参可为裸码（'user:create'）或完整码（'button:user:create'）。
+ * 01 §3.4：码 = `button:` + menus.permission 字面值；三个 getter 必须共用同一匹配
+ * （曾各自实现导致 hasAny 漏拼前缀恒 miss——按钮对有权限用户永久置灰）。
+ */
+function matchesButton(permissions: PermissionCodes, code: string): boolean {
+  return permissions.includes(code.startsWith('button:') ? code : `button:${code}`)
+}
+
 export const useUserStore = defineStore('user', {
   state: (): UserState => ({
     profile: null,
@@ -54,17 +63,17 @@ export const useUserStore = defineStore('user', {
     isAuthenticated(): boolean {
       return isLoggedIn()
     },
-    /** 按钮权限判定：button:{permission} 码（01 §3.4——= menus.permission 字段值） */
+    /** 按钮权限判定：button:{permission} 码（01 §3.4——= menus.permission 字面值） */
     hasPermission(state) {
-      return (code: string) => state.permissions.includes(`button:${code}`)
+      return (code: string) => matchesButton(state.permissions, code)
     },
     /** 路由权限判定：route:{path} */
     hasRoute(state) {
       return (path: string) => state.permissions.includes(`route:${path}`)
     },
-    /** 任意码判定（复杂组合走此函数式） */
+    /** 任意码判定（复杂组合走此函数式；与 hasPermission 同一套 button: 匹配） */
     hasAny(state) {
-      return (...codes: string[]) => codes.some((c) => state.permissions.includes(c))
+      return (...codes: string[]) => codes.some((c) => matchesButton(state.permissions, c))
     },
   },
 

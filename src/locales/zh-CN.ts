@@ -3,7 +3,6 @@ export default {
     required: '该项为必填项',
     login: '登录',
     loginOut: '退出系统',
-    document: '项目文档',
     reminder: '温馨提示',
     loginOutMessage: '是否退出本系统？',
     ok: '确定',
