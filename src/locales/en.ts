@@ -1,6 +1,7 @@
 export default {
   common: {
     required: 'This is required',
+    login: 'Sign in',
     loginOut: 'Log out',
     document: 'Document',
     reminder: 'Reminder',

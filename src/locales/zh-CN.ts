@@ -1,6 +1,7 @@
 export default {
   common: {
     required: '该项为必填项',
+    login: '登录',
     loginOut: '退出系统',
     document: '项目文档',
     reminder: '温馨提示',
