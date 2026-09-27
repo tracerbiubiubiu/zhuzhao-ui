@@ -147,6 +147,8 @@ service.interceptors.response.use(
         }
         // 非终态（网络抖动/5xx）→ 保留会话，仅拒绝本次请求（不清 session、不跳登录）
         if (!result.terminal) {
+          // refresh 端点自身非终态失败（5xx/网络抖动）——原始 401 不得被下游误判为终态（§3.3 红线）
+          ;(error as AxiosError & { __sessionTransient?: boolean }).__sessionTransient = true
           return Promise.reject(error)
         }
         // 终态（RT 无效/改密纪元/重放）→ 清会话跳登录

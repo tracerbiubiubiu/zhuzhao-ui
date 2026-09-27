@@ -36,4 +36,9 @@ describe('classifySessionLoadError（§3.3 会话加载失败分段）', () => {
     expect(classifySessionLoadError({ message: 'timeout of 30000ms exceeded' })).toBe('transient')
     expect(classifySessionLoadError(undefined)).toBe('transient')
   })
+
+  it('携带 __sessionTransient 标记的 401 → transient（refresh 端点 5xx/网络失败，§3.3 红线）', () => {
+    // 请求层在 refresh 非终态失败时给原始 401 打标——缺此分支则一次 503 仍会登出（跨层分歧）
+    expect(classifySessionLoadError({ ...axiosErr(401, 20002), __sessionTransient: true })).toBe('transient')
+  })
 })

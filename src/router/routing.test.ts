@@ -22,11 +22,14 @@ const stubify = (route: any): RouteRecordRaw => ({
 
 const findRoute = (name: string): RouteRecordRaw => constantRoutes.find((r) => r.name === name) as RouteRecordRaw
 
-/** 复刻 router/index.ts 的 constantRouterMap（根容器 hidden + 常量路由） */
+/**
+ * 复刻 router/index.ts 的 constantRouterMap（根容器 hidden + 常量路由）。
+ * ⚠ 从真实 constantRoutes 整表派生（仅 Redirect 单独挂根容器），杜绝手挑漂移——
+ *   历史测试手列 Login/ChangePassword 而漏 SessionError，导致死路由 49/49 假绿。
+ */
 const constantRouterMap: RouteRecordRaw[] = [
   { path: '/', component: Layout, redirect: '/home', meta: { hidden: true }, children: [findRoute('Redirect')] },
-  findRoute('Login'),
-  findRoute('ChangePassword'),
+  ...constantRoutes.filter((r) => r.name !== 'Redirect'),
 ]
 
 const buildRouter = (menus: RouteMenuNode[]) => {
@@ -81,5 +84,10 @@ describe('路由装配（内存 history）', () => {
   it('未知路径落 catch-all 404', () => {
     const router = buildRouter([homeMenu])
     expect(router.resolve('/no/such/page').name).toBe('NotFound')
+  })
+
+  it('常量路由 /session-error 可达（守卫 transient 分支跳入，防死路由回归）', () => {
+    const router = buildRouter([homeMenu])
+    expect(router.resolve('/session-error').name).toBe('SessionError')
   })
 })

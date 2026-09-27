@@ -16,6 +16,8 @@ interface HttpResponseLike {
 
 /** 纯函数（routePermission 同款约定）：按 HTTP 状态+业务码分段，供守卫 catch 分流 */
 export function classifySessionLoadError(err: unknown): SessionLoadErrorKind {
+  // 请求层标记：refresh 端点非终态失败（5xx/网络）——原始 401 语义不成立，保留会话
+  if ((err as { __sessionTransient?: boolean } | null | undefined)?.__sessionTransient === true) return 'transient'
   const response = (err as { response?: HttpResponseLike } | null | undefined)?.response
   if (!response || typeof response.status !== 'number') {
     // 无 HTTP 响应（网络断开/超时）或非 axios 形态错误 → 非终态
