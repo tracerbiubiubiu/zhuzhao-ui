@@ -6,7 +6,7 @@
 
 ```bash
 pnpm lint          # ESLint（纯检查；自动修复用 pnpm lint:fix，修复后重跑 lint）
-pnpm typecheck     # vue-tsc --noEmit（codegen 类型漂移在此编译期报错）
+pnpm typecheck     # vue-tsc --noEmit（codegen 类型**接线后**契约漂移在此编译期报错——api 层切 generated 类型随 P4-W3 首个页面批；当前漂移靠 pnpm codegen 重跑零 diff 核对）
 pnpm test          # Vitest（composables/动态路由解析/单飞刷新）
 pnpm audit --prod  # npm 供应链（对称 Go 侧 govulncheck；镜像源无 audit 端点时加 --registry=https://registry.npmjs.org）
 pnpm build         # 产物构建

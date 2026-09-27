@@ -14,6 +14,8 @@ import type { RouteRecordRaw } from 'vue-router'
 const constantRoutes: RouteRecordRaw[] = [
   { path: '/login', name: 'Login', component: () => import('@/views/Login/Login.vue'), meta: { title: '登录', hidden: true } },
   { path: '/change-password', name: 'ChangePassword', component: () => import('@/views/ChangePassword/index.vue'), meta: { title: '修改密码', hidden: true } },
+  // 会话加载瞬时失败页（§3.3：5xx/网络抖动不清会话——守卫 transient 分支跳入，白名单放行）
+  { path: '/session-error', name: 'SessionError', component: () => import('@/views/Error/SessionError.vue'), meta: { title: '会话加载失败', hidden: true } },
   // Redirect 中转（挂在 Layout 下供 TagsView 刷新——见 router/index.ts）
   { path: '/redirect/:path(.*)', name: 'Redirect', component: () => import('@/views/Redirect/Redirect.vue'), meta: { hidden: true } },
 ]

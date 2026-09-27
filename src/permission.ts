@@ -16,14 +16,15 @@ import router from './router'
 import { isLoggedIn } from '@/common/auth/tokenStorage'
 import { NO_REDIRECT_WHITE_LIST } from './constants'
 import { checkRoutePermission } from './router/routePermission'
+import { classifySessionLoadError } from './router/sessionError'
 import { usePermissionStoreWithOut } from '@/store/modules/permission'
 import { useUserStoreWithOut } from '@/store/modules/user'
 import 'nprogress/nprogress.css'
 
 NProgress.configure({ showSpinner: false })
 
-/** 白名单：登录页+改密页（强制改密期间唯一可达页） */
-const WHITE_LIST = [...NO_REDIRECT_WHITE_LIST, '/change-password']
+/** 白名单：登录页+改密页（强制改密期间唯一可达页）+会话错误页（§3.3 瞬时失败可重试） */
+const WHITE_LIST = [...NO_REDIRECT_WHITE_LIST, '/change-password', '/session-error']
 
 // ─── 动态路由注册（§3.2）───
 let catchAllRegistered = false
@@ -102,15 +103,24 @@ export const setupPermission = () => {
         next({ ...to, replace: true })
         return
       } catch (err) {
-        // 区分：有 HTTP 响应（401/4xx 终态）→ 清跳登录；无响应（网络/5xx）→ 保留会话
-        const hasResponse = (err as { response?: unknown })?.response !== undefined
-        if (hasResponse) {
-          userStore.resetState()
-          next({ path: '/login', query: { redirect: to.fullPath } })
-        } else {
-          console.warn('[guard] session load network error, keeping session', err)
-          next(false)
+        // §3.3 分段（classifySessionLoadError，与请求层 refreshAccessToken 同一哲学）：
+        //  - 403+20007 → 跳改密页，绝不清会话（resetState 连 token 一起清，改密接口会 401）
+        //  - 无响应/5xx/429 → 保留会话（axios 的 5xx **带** response，旧实现「有响应=终态」误清）
+        //  - 其余 4xx → 终态清会话跳登录
+        const kind = classifySessionLoadError(err)
+        if (kind === 'change-password') {
+          next('/change-password')
+          return
         }
+        if (kind === 'transient') {
+          console.warn('[guard] session load transient error, keeping session', err)
+          // F5/首跳没有「上一页」可回（next(false)=白屏死路）→ 落可重试错误页；
+          // 会话保留，恢复后重试即回到原目标（redirect 随 query 透传）
+          next({ path: '/session-error', query: { redirect: to.fullPath } })
+          return
+        }
+        userStore.resetState()
+        next({ path: '/login', query: { redirect: to.fullPath } })
         return
       }
     }
@@ -147,6 +157,3 @@ export const setupPermission = () => {
     NProgress.done()
   })
 }
-
-// 兼容旧导出（LoginForm 等处使用）
-export const setupPermissionGuard = setupPermission
