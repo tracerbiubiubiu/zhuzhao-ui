@@ -11,6 +11,10 @@ import { ref, onMounted } from 'vue'
 import { ElCard, ElCol, ElRow, ElTable, ElTableColumn, ElTag, ElEmpty } from 'element-plus'
 import request from '@vea/request'
 
+// keep-alive 契约：name=最深匹配路由名（home 菜单为 type=1 带 component 特例——
+// §3.2③ 渲染子路由名 `${code}_page`，tagsView.cachedViews 存的即它）
+defineOptions({ name: 'home_page' })
+
 interface TicketSummary {
   id: string
   title: string
@@ -71,7 +75,6 @@ onMounted(async () => {
 function formatTime(iso: string): string {
   return iso?.replace('T', ' ').slice(0, 16) ?? ''
 }
-// 空函数占位防 lint 报 unused
 </script>
 
 <template>

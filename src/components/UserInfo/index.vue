@@ -23,13 +23,9 @@
       return
     }
 
-    await userStore.logout()
-    router.push('/login')
-    // 跳登录页（request 层 hash redirect 由守卫处理）
-  }
-
-  const toDocument = () => {
-    window.open('https://docs.element-plus-admin.cn/')
+  await userStore.logout()
+  router.push('/login')
+  // 跳登录页（request 层 hash redirect 由守卫处理）
   }
 </script>
 
@@ -47,9 +43,6 @@
     </div>
     <template #dropdown>
       <ElDropdownMenu>
-        <ElDropdownItem>
-          <div @click="toDocument">{{ t('common.document') }}</div>
-        </ElDropdownItem>
         <ElDropdownItem divided>
           <div @click="loginOut">{{ t('common.loginOut') }}</div>
         </ElDropdownItem>

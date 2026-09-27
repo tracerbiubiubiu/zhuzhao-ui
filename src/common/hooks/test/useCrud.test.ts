@@ -15,7 +15,7 @@ test('covers list, detail, mutations, pagination and selection', async () => {
     { id: 2, name: 'two' },
     { id: 3, name: 'three' }
   ]
-  const requests: Array<Query & { pageIndex: number; pageSize: number }> = []
+  const requests: Array<Query & { page: number; page_size: number }> = []
   const scope = effectScope()
   const crud = scope.run(() =>
     useCrud<Row, Row, Query, Row, Pick<Row, 'name'>, number>({
@@ -28,9 +28,9 @@ test('covers list, detail, mutations, pagination and selection', async () => {
           const filtered = params.name
             ? rows.filter(({ name }) => name.includes(params.name!))
             : rows
-          const start = (params.pageIndex - 1) * params.pageSize
+          const start = (params.page - 1) * params.page_size
           return {
-            list: filtered.slice(start, start + params.pageSize),
+            list: filtered.slice(start, start + params.page_size),
             total: filtered.length
           }
         },
@@ -55,6 +55,8 @@ test('covers list, detail, mutations, pagination and selection', async () => {
 
   await actions.fetchList()
   assert.deepEqual(state.items.value, [{ id: 3, name: 'three' }])
+  // 契约直通：list 出参即后端分页参数 page/page_size（01 §5——hook 层不得引入别名映射）
+  assert.deepEqual(requests[0], { page: 3, page_size: 1 })
 
   await actions.fetchDetail(2)
   assert.deepEqual(state.current.value, { id: 2, name: 'two' })
