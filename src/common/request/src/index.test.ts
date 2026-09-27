@@ -171,6 +171,8 @@ describe('响应拦截器 401 分支', () => {
     h.post.mockRejectedValue({ response: { status: 401, data: { code: 20004 } } })
     const error = makeError(401, 20002)
     await expect(h.handlers.err?.(error)).rejects.toBe(error)
+    // 终态失败**不得**打 transient 标记（否则下游 classifier 会误判保留会话）
+    expect((error as { __sessionTransient?: boolean }).__sessionTransient).toBeUndefined()
 
     expect(getAccessToken()).toBeNull()
     expect(usePermissionStore().isAddRouters).toBe(false)
@@ -186,7 +188,10 @@ describe('响应拦截器 401 分支', () => {
   it('非终态（503+10008）→ 会话与路由状态全保留，不跳登录', async () => {
     seedSession()
     h.post.mockRejectedValue({ response: { status: 503, data: { code: 10008 } } })
-    await expect(h.handlers.err?.(makeError(401, 20002))).rejects.toBeTruthy()
+    const error = makeError(401, 20002)
+    await expect(h.handlers.err?.(error)).rejects.toBe(error)
+    // 请求层给原始 401 打标：refresh 端点非终态失败 → 下游 classifier 保留会话（§3.3 红线）
+    expect((error as { __sessionTransient?: boolean }).__sessionTransient).toBe(true)
 
     expect(getAccessToken()).toBe('old')
     expect(usePermissionStore().isAddRouters).toBe(true)
@@ -199,7 +204,9 @@ describe('响应拦截器 401 分支', () => {
   it('非终态（网络错误）→ 会话与路由状态全保留，不跳登录', async () => {
     seedSession()
     h.post.mockRejectedValue(new Error('down'))
-    await expect(h.handlers.err?.(makeError(401, 20002))).rejects.toBeTruthy()
+    const error = makeError(401, 20002)
+    await expect(h.handlers.err?.(error)).rejects.toBe(error)
+    expect((error as { __sessionTransient?: boolean }).__sessionTransient).toBe(true)
 
     expect(getAccessToken()).toBe('old')
     expect(usePermissionStore().isAddRouters).toBe(true)
@@ -244,6 +251,8 @@ describe('响应拦截器 401 分支', () => {
     await expect(h.handlers.err?.(error)).rejects.toBe(error)
     expect(h.post).not.toHaveBeenCalled()
     expect(h.service).not.toHaveBeenCalled()
+    // 重放仍 401 → _retry 终态路径，同样不得打 transient 标记
+    expect((error as { __sessionTransient?: boolean }).__sessionTransient).toBeUndefined()
   })
 
   it('401+20003 无效令牌 → 直接清会话（不刷新）', async () => {
