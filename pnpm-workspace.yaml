@@ -1,4 +1,4 @@
-packages:
-  - '.'
+# 单仓单 SPA（01 号 §1 拍板）——无 workspace 成员，本文件仅承载 pnpm 12 配置。
+# allowBuilds：安装期构建脚本审批（esbuild postinstall 二进制校验；种子占位符已落定 true）。
 allowBuilds:
-  esbuild: set this to true or false
+  esbuild: true

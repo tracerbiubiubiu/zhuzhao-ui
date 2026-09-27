@@ -1,0 +1,33 @@
+# 最小质量网（对齐 Go 四仓 ci.yml 风格；01 号 §7「CI 分仓：zhuzhao-ui 自己的流水线跑前端门禁」）：
+# lint + typecheck + build / vitest 单测。E2E 打标准三栈 compose（03 号拍板不用 stub），
+# 与 Go 仓 acceptance 同纪律——本地人工执行（AGENTS.md 前端门禁）。
+name: ci
+on:
+  push:
+    branches: [main, "p4-w*", "feature/**"]
+  pull_request:
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4 # 版本取 package.json packageManager
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm build
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test
