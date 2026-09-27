@@ -84,6 +84,12 @@ export default ({ mode }: ConfigEnv): UserConfig => {
           changeOrigin: true
         }
       },
+      // 启动期预热全部源码：依赖优化器一次性完成 element-plus 按需样式发现——
+      // 否则首访页面时逐轮「optimized deps changed. reloading」整页刷新，会打断
+      // E2E 登录途中的在途请求（E2E 首跑假失败的根因）
+      warmup: {
+        clientFiles: ['./index.html', './src/**/*.{vue,ts}']
+      },
       hmr: {
         overlay: false
       },

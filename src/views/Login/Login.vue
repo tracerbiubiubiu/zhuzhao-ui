@@ -4,6 +4,7 @@
   import { useI18n } from 'vue-i18n'
   import { useAppStore } from '@/store/modules/app'
   import { appConfig } from '@/config/app'
+  import LoginForm from './components/LoginForm.vue'
 
   const appStore = useAppStore()
   const { t } = useI18n()
