@@ -33,3 +33,6 @@ coverage/
 # Playwright
 playwright-report/
 test-results/
+
+# E2E 运行态（globalSetup 产物，含本地测试口令——不入库）
+e2e/.state.json
