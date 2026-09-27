@@ -1,5 +1,5 @@
 <script setup lang="ts">
-    import { ThemeSwitch } from '@vea/components'
+  import { ThemeSwitch } from '@vea/components'
   import LocaleDropdown from '@/components/LocaleDropdown/index.vue'
   import { useI18n } from 'vue-i18n'
   import { useAppStore } from '@/store/modules/app'
@@ -8,7 +8,6 @@
 
   const appStore = useAppStore()
   const { t } = useI18n()
-  // RegisterForm removed - always login mode
 </script>
 
 <template>
