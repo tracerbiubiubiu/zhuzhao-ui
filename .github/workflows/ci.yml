@@ -20,6 +20,8 @@ jobs:
       - run: pnpm lint
       - run: pnpm typecheck
       - run: pnpm build
+      # 供应链审计（AGENTS 门禁五件之一；官方源——镜像源无 audit 端点）
+      - run: pnpm audit --prod --registry=https://registry.npmjs.org
   test:
     runs-on: ubuntu-latest
     steps:
