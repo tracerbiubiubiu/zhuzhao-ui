@@ -40,6 +40,9 @@ export function isExemptRoute(to: { path: string; name?: unknown }): boolean {
   const path = to.path
   if (path === '/' || path === '') return true
   if (ROUTE_EXEMPT_PATHS.includes(path)) return true
+  // 工单发起/详情（§3.2④ 静态补充路由+参数路由——route:/tickets/:id 无精确码可校验，
+  // 守卫放行；真实边界在后端 L2/L3，入口可见性由列表页 ticket:create/read 按钮码控制）
+  if (path === '/tickets' || path.startsWith('/tickets/')) return true
   // redirect 中转（/redirect/:path(.*)）——tags 刷新用，不参与权限
   // （精确前缀：'/redirect/' 起——裸 startsWith('/redirect') 会误豁免 '/redirector' 类路径）
   if (path === '/redirect' || path.startsWith('/redirect/')) return true

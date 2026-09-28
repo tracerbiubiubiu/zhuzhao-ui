@@ -20,6 +20,7 @@ const VIEW_NAMES: Array<[string, string]> = [
   ['views/system/org/index.vue', 'system_org'],
   ['views/Profile/index.vue', 'Profile'], // §3.2④ 静态补充路由（常量路由实名）
   ['views/MyOrg/index.vue', 'MyOrg'], // §3.2④ 同款
+  ['views/ticket/detail/index.vue', 'TicketDetail'], // §3.2④ 参数路由（详情）
 ]
 
 test.each(VIEW_NAMES)('%s 声明了与路由名一致的 defineOptions name（%s）', (file, expected) => {

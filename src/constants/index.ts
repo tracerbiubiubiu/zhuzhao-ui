@@ -28,4 +28,4 @@ export const NO_REDIRECT_WHITE_LIST = ['/login']
  * ⚠ 漏登记 = 登出/401 终态后该常量路由被删且不复活（SPA 内 createRouter 只跑一次）——
  * routing.test 有「constantRoutes 实名 ⊆ 白名单」防漂移断言（检视 B-1：/403 曾因此成死路由）。
  */
-export const NO_RESET_WHITE_LIST = ['Login', 'ChangePassword', 'SessionError', 'Forbidden', 'Redirect', 'Profile', 'MyOrg']
+export const NO_RESET_WHITE_LIST = ['Login', 'ChangePassword', 'SessionError', 'Forbidden', 'Redirect', 'Profile', 'MyOrg', 'TicketCreate', 'TicketDetail']
