@@ -51,6 +51,16 @@ describe('user store 权限 getter', () => {
     expect(store.hasAny('button:user:update')).toBe(true)
   })
 
+  it('命名空间直通：route: 码不被误拼 button: 前缀（回归——曾 button:route:/x 恒 miss）', () => {
+    const store = useUserStore()
+    store.permissions = ['route:/system/user', 'button:user:create']
+
+    expect(store.hasAny('route:/system/user')).toBe(true)
+    expect(store.hasPermission('route:/system/user')).toBe(true)
+    expect(store.hasAny('route:/system/role', 'user:create')).toBe(true)
+    expect(store.hasAny('route:/nope')).toBe(false)
+  })
+
   it('hasRoute：route:{path} 精确匹配，不受 button: 匹配影响', () => {
     const store = useUserStore()
     store.permissions = ['route:/system/user', 'button:user:create']
