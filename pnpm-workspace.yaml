@@ -1,5 +1,8 @@
 # 单仓单 SPA（01 号 §1 拍板）——无 workspace 成员，本文件仅承载 pnpm 12 配置。
 # allowBuilds：安装期构建脚本审批（esbuild postinstall 二进制校验；种子占位符已落定 true）。
+# vue-demi=true：@tanstack/vue-query 传递依赖的版本切换 postinstall（Vue 3 环境，
+# 生态标准做法）——pnpm add 落的占位符「set this to true or false」非布尔值，
+# CI --frozen-lockfile 下 ERR_PNPM_IGNORED_BUILDS 致命（run 36430052551）。
 allowBuilds:
   esbuild: true
-  vue-demi: set this to true or false
+  vue-demi: true
