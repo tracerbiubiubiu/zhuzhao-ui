@@ -2177,6 +2177,47 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/user/orgs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 我的组织列表（自服务：当前用户富化组织行——组织名/虚拟组/组内角色/数据范围）
+         * @description 任何已认证用户可达（SelfService）；「我的组织」页数据源——
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["response.Response"] & {
+                            data?: components["schemas"]["github_com_tracerbiubiubiu_zhuzhao_internal_model.MyOrgsResponse"];
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/user/permissions": {
         parameters: {
             query?: never;
@@ -2859,6 +2900,20 @@ export interface components {
         "github_com_tracerbiubiubiu_zhuzhao_internal_model.LogoutRequest": {
             /** @description 与登录时一致；空则使用 default */
             device_id?: string;
+        };
+        "github_com_tracerbiubiubiu_zhuzhao_internal_model.MyOrgItem": {
+            is_primary?: boolean;
+            is_virtual?: boolean;
+            joined_at?: string;
+            org_code?: string;
+            /** @example 0 */
+            org_id?: string;
+            org_member_role?: string;
+            org_name?: string;
+            ticket_scope?: string;
+        };
+        "github_com_tracerbiubiubiu_zhuzhao_internal_model.MyOrgsResponse": {
+            list?: components["schemas"]["github_com_tracerbiubiubiu_zhuzhao_internal_model.MyOrgItem"][];
         };
         "github_com_tracerbiubiubiu_zhuzhao_internal_model.OrgMemberRosterItem": {
             avatar?: string;

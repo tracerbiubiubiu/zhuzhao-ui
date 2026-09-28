@@ -24,13 +24,13 @@ const findRoute = (name: string): RouteRecordRaw => constantRoutes.find((r) => r
 
 /**
  * 复刻 router/index.ts 的 constantRouterMap（根容器 hidden + 常量路由）。
- * ⚠ 从真实 constantRoutes 整表派生（仅 Redirect/Profile 单独挂根容器——带 Layout 的
+ * ⚠ 从真实 constantRoutes 整表派生（仅 Redirect/Profile/MyOrg 单独挂根容器——带 Layout 的
  *   常驻页），杜绝手挑漂移——历史测试手列 Login/ChangePassword 而漏 SessionError，
  *   导致死路由 49/49 假绿。
  */
 const constantRouterMap: RouteRecordRaw[] = [
-  { path: '/', component: Layout, redirect: '/home', meta: { hidden: true }, children: [findRoute('Redirect'), findRoute('Profile')] },
-  ...constantRoutes.filter((r) => r.name !== 'Redirect' && r.name !== 'Profile'),
+  { path: '/', component: Layout, redirect: '/home', meta: { hidden: true }, children: [findRoute('Redirect'), findRoute('Profile'), findRoute('MyOrg')] },
+  ...constantRoutes.filter((r) => r.name !== 'Redirect' && r.name !== 'Profile' && r.name !== 'MyOrg'),
 ]
 
 const buildRouter = (menus: RouteMenuNode[]) => {
@@ -95,6 +95,11 @@ describe('路由装配（内存 history）', () => {
   it('常量路由 /403 可达（守卫 no-code 分支跳入，防死路由回归）', () => {
     const router = buildRouter([homeMenu])
     expect(router.resolve('/403').name).toBe('Forbidden')
+  })
+
+  it('静态补充路由 /my-org 可达（§3.2④——「我的组织」自服务面）', () => {
+    const router = buildRouter([homeMenu])
+    expect(router.resolve('/my-org').name).toBe('MyOrg')
   })
 
   it('静态补充路由 /profile 可达（§3.2④——挂根容器 Layout 下，任何登录用户可达）', () => {
