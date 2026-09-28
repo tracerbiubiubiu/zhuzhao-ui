@@ -2,6 +2,7 @@ export default {
   common: {
     required: '该项为必填项',
     login: '登录',
+    profile: '个人中心',
     loginOut: '退出系统',
     reminder: '温馨提示',
     loginOutMessage: '是否退出本系统？',

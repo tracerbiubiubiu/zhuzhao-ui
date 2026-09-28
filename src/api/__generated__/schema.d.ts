@@ -476,6 +476,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/orgs/members/list": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 委托组成员名册（自服务，L3：owner/admin 或全局管理员可读）
+         * @description 自服务名册（「我的组织」页消费）：与管理面 GET /orgs/:id/members 的区别——
+         */
+        get: {
+            parameters: {
+                query: {
+                    /** @description 组织 ID */
+                    org_id: string;
+                    /** @description 页码 */
+                    page?: number;
+                    /** @description 每页条数 */
+                    page_size?: number;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["response.Response"] & {
+                            data?: components["schemas"]["github_com_tracerbiubiubiu_zhuzhao_internal_model.OrgMemberRosterResponse"];
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/orgs/members/role": {
         parameters: {
             query?: never;
@@ -2811,6 +2859,34 @@ export interface components {
         "github_com_tracerbiubiubiu_zhuzhao_internal_model.LogoutRequest": {
             /** @description 与登录时一致；空则使用 default */
             device_id?: string;
+        };
+        "github_com_tracerbiubiubiu_zhuzhao_internal_model.OrgMemberRosterItem": {
+            avatar?: string;
+            email?: string;
+            employee_no?: string;
+            is_primary?: boolean;
+            /**
+             * @description RFC3339（json 序列化 time.Time）——对齐仓内时间字段惯例；nullable schema 故
+             *     指针+omitempty（检视 P1：曾用 PG ::text 输出空格分隔格式，Safari new Date 不可解析）
+             */
+            joined_at?: string;
+            /** @description 组内角色（000013）：owner（仅 SetOwners 可设）/ admin / member */
+            org_member_role?: string;
+            phone?: string;
+            real_name?: string;
+            /** @description 1=启用 0=禁用 */
+            status?: number;
+            /** @description 数据范围（000012）：assigned / group / all */
+            ticket_scope?: string;
+            /** @example 0 */
+            user_id?: string;
+            username?: string;
+        };
+        "github_com_tracerbiubiubiu_zhuzhao_internal_model.OrgMemberRosterResponse": {
+            list?: components["schemas"]["github_com_tracerbiubiubiu_zhuzhao_internal_model.OrgMemberRosterItem"][];
+            page?: number;
+            page_size?: number;
+            total?: number;
         };
         "github_com_tracerbiubiubiu_zhuzhao_internal_model.RefreshRequest": {
             refresh_token: string;

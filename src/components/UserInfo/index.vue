@@ -12,6 +12,10 @@
 
   const { t } = useI18n()
 
+  const toProfile = () => {
+    router.push('/profile')
+  }
+
   const loginOut = async () => {
     try {
       await ElMessageBox.confirm(t('common.loginOutMessage'), t('common.reminder'), {
@@ -43,6 +47,9 @@
     </div>
     <template #dropdown>
       <ElDropdownMenu>
+        <ElDropdownItem>
+          <div @click="toProfile">{{ t('common.profile') }}</div>
+        </ElDropdownItem>
         <ElDropdownItem divided>
           <div @click="loginOut">{{ t('common.loginOut') }}</div>
         </ElDropdownItem>

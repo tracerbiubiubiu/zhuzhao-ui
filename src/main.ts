@@ -14,6 +14,9 @@ import { setupGlobCom } from '@/components'
 // 引入element-plus
 import { setupElementPlus } from '@/plugins/elementPlus'
 
+// 服务端态（vue-query，01 §4）
+import { setupVueQuery } from '@/plugins/vueQuery'
+
 // 引入全局样式
 import '@vea/styles'
 
@@ -48,6 +51,8 @@ const setupAll = async () => {
   setupGlobCom(app)
 
   setupElementPlus(app)
+
+  setupVueQuery(app)
 
   setupRouter(app)
 

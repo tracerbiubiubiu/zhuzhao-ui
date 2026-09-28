@@ -122,8 +122,9 @@ export const useUserStore = defineStore('user', {
         await logoutApi()
       } finally {
         // 会话拆除收敛为唯一实现（与 401 终态 / 守卫加载失败共用）
-        // TODO: vue-query 接入后在此一并清缓存（queryClient.clear()）——W2 范例页批
         this.resetState()
+        // 服务端态缓存一并清（01 §4：防跨用户残留上一账号的列表/详情缓存）
+        void import('@/plugins/vueQuery').then(({ queryClient }) => queryClient.clear())
       }
     },
 
