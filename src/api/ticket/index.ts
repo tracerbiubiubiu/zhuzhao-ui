@@ -54,8 +54,46 @@ export interface TicketTypeRow {
 }
 
 export async function listTicketTypesApi(): Promise<TicketTypeRow[]> {
+  // 响应为 {types:[...]} 包装（gin.H——与其他裸数组端点不同）
   const data = await request.get('/api/v1/ticket-types')
-  return data as unknown as TicketTypeRow[]
+  return ((data as unknown as { types?: TicketTypeRow[] })?.types ?? [])
+}
+
+/** 自定义字段定义（= model.TicketTypeField 投影；field_type 七枚举） */
+export interface TicketTypeFieldDef {
+  id: string
+  type_code: string
+  field_key: string
+  field_label: string
+  field_type: 'input' | 'textarea' | 'number' | 'date' | 'select' | 'multi_select' | 'tips'
+  /** select/multi_select 的选项（JSON——[{value,label}] 或字符串数组，渲染时归一） */
+  field_options?: unknown
+  required: boolean
+  validate_regex?: string
+  sort_order: number
+}
+
+export async function getTicketTypeFieldsApi(typeCode: string): Promise<TicketTypeFieldDef[]> {
+  // 响应为 {fields:[...]} 包装（gin.H——与 types 端点同款）
+  const data = await request.get(`/api/v1/ticket-types/${typeCode}/fields`)
+  return ((data as unknown as { fields?: TicketTypeFieldDef[] })?.fields ?? [])
+}
+
+/** 发起工单入参（CreateTicketRequest——custom_data 生成类型标 number[] 失真，按实况
+ * 覆写为字段键值对象；assigned_to 拒收[W0 P0-5]前端发起不传） */
+export interface CreateTicketInput {
+  type_code: string
+  title: string
+  org_id: string
+  priority?: number
+  description?: string
+  template_code?: string
+  custom_data?: Record<string, unknown>
+}
+
+export async function createTicketApi(input: CreateTicketInput): Promise<{ id: string }> {
+  const data = await request.post('/api/v1/tickets', input, { _silentError: true })
+  return data as unknown as { id: string }
 }
 
 /** 工单状态（03 S11：六态；in_progress/pending_verify/rejected 经 API 流转不可达——
