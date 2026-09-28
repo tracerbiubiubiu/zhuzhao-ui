@@ -2,3 +2,4 @@
 # allowBuilds：安装期构建脚本审批（esbuild postinstall 二进制校验；种子占位符已落定 true）。
 allowBuilds:
   esbuild: true
+  vue-demi: set this to true or false

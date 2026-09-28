@@ -15,9 +15,10 @@ export const ROUTE_CODE_PREFIX = 'route:'
  * - `/home`：公共工作台，种子 home 对所有登录用户可见
  * - `/login`、`/change-password`、`/session-error`：白名单页（守卫 step 1 已放行，此处双保险）
  * - `/403`：无权限页自身（不豁免会自锁——跳入后再校验永无 route:/403 码）
+ * - `/profile`：个人中心（§3.2④ 菜单外静态补充路由——无 route: 码，任何登录用户可达）
  * redirect 中转、404 页在 isExemptRoute 内另行判定。
  */
-export const ROUTE_EXEMPT_PATHS = ['/home', '/login', '/change-password', '/session-error', '/403']
+export const ROUTE_EXEMPT_PATHS = ['/home', '/login', '/change-password', '/session-error', '/403', '/profile']
 
 /** 404 页自身（catch-all 命中时的路由名）——不参与校验，否则会自锁 */
 const NOT_FOUND_ROUTE_NAME = 'NotFound'
