@@ -22,5 +22,6 @@ const VIEW_NAMES: Array<[string, string]> = [
 
 test.each(VIEW_NAMES)('%s 声明了与路由名一致的 defineOptions name（%s）', (file, expected) => {
   const source = readFileSync(new URL(`../${file}`, import.meta.url), 'utf-8')
-  expect(source).toMatch(new RegExp(`defineOptions\\(\\{\\s*name:\\s*'${expected}'`))
+  // ^\s* 行首锚定（m 标志）：注释行 `// defineOptions(...)` 不得假绿（检视 P3）
+  expect(source).toMatch(new RegExp(`^\\s*defineOptions\\(\\{\\s*name:\\s*'${expected}'`, 'm'))
 })

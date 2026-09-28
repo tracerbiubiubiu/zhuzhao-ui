@@ -61,8 +61,14 @@ export function resolveErrorToast(error: unknown): ErrorToastDecision | null {
 export function notifyError(error: unknown): void {
   const decision = resolveErrorToast(error)
   if (!decision || typeof document === 'undefined') return
-  void import('element-plus')
-    .then(({ ElMessage }) => ElMessage(decision))
+  // 样式须随组件一并动态引入——unplugin-element-plus 只对**静态** import 注入样式，
+  // 动态整包 import 的 ElMessage 不带 .el-message 样式（构建产物实证：仅有静态导入链
+  // 带入的 el-message-box）。grouping：同文案合并（弱网批量失败防 5 连弹）
+  void Promise.all([
+    import('element-plus'),
+    import('element-plus/es/components/message/style/css'),
+  ])
+    .then(([{ ElMessage }]) => ElMessage({ ...decision, grouping: true }))
     .catch(() => {
       /* 组件库加载失败不影响错误传播 */
     })
