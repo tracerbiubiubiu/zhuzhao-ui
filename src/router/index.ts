@@ -9,6 +9,8 @@ const redirectRoute = constantRoutes.find((route) => route.name === 'Redirect') 
 // 个人中心/我的组织挂根容器 Layout 下（§3.2④ 静态补充路由形态——带侧栏的常驻页，非全屏）
 const profileRoute = constantRoutes.find((route) => route.name === 'Profile') as RouteRecordRaw
 const myOrgRoute = constantRoutes.find((route) => route.name === 'MyOrg') as RouteRecordRaw
+const ticketCreateRoute = constantRoutes.find((route) => route.name === 'TicketCreate') as RouteRecordRaw
+const ticketDetailRoute = constantRoutes.find((route) => route.name === 'TicketDetail') as RouteRecordRaw
 
 /**
  * 常量路由组（constantRouterMap，设计 §3.2⑤）
@@ -19,7 +21,7 @@ const myOrgRoute = constantRoutes.find((route) => route.name === 'MyOrg') as Rou
  *   只有在菜单 addRoute 之后才有效（登录后先 ensureDynamicRoutes 再 push，见 §3.1）。
  * - /redirect 挂 Layout 下供 TagsView 刷新；登录/改密/会话失败页为独立全屏页（不挂 Layout）。
  *
- * ⚠ 防漂移：除 Redirect/Profile/MyOrg 需单独挂在根容器下（带 Layout 的常驻页），其余 constantRoutes
+ * ⚠ 防漂移：除 Redirect/Profile/MyOrg/TicketCreate/TicketDetail 需单独挂在根容器下（带 Layout 的常驻页），其余 constantRoutes
  *   **一律整表展开**——Login/ChangePassword/SessionError/Forbidden 及任何新增常量路由自动注册。
  *   历史缺陷：旧实现仅 `.find(name==='Login'|'ChangePassword')` 手挑两条，SessionError
  *   被静默丢弃 → vue-router 无匹配 → RouterView 空白（重试按钮永不挂载）。
@@ -30,9 +32,9 @@ export const constantRouterMap: RouteRecordRaw[] = [
     component: Layout,
     redirect: '/home',
     meta: { hidden: true },
-    children: [redirectRoute, profileRoute, myOrgRoute],
+    children: [redirectRoute, profileRoute, myOrgRoute, ticketCreateRoute, ticketDetailRoute],
   },
-  ...constantRoutes.filter((route) => route.name !== 'Redirect' && route.name !== 'Profile' && route.name !== 'MyOrg'),
+  ...constantRoutes.filter((route) => !['Redirect', 'Profile', 'MyOrg', 'TicketCreate', 'TicketDetail'].includes(route.name as string)),
 ]
 
 const router = createRouter({

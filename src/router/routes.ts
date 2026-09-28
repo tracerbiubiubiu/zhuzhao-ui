@@ -24,6 +24,10 @@ const constantRoutes: RouteRecordRaw[] = [
   { path: '/profile', name: 'Profile', component: () => import('@/views/Profile/index.vue'), meta: { title: '个人中心', hidden: true } },
   // 「我的组织」自服务面（§3.2④——非 admin 委托者唯一可达入口，owner/admin 经 L3 见委托控件）
   { path: '/my-org', name: 'MyOrg', component: () => import('@/views/MyOrg/index.vue'), meta: { title: '我的组织', hidden: true } },
+  // 工单发起/详情（§3.2④——W4：菜单外静态路由，入口按钮挂 ticket:create/read 码；
+  // 详情参数路由的 route:{path} 校验走前缀豁免（routePermission）——真实边界在后端 L2/L3
+  { path: '/tickets/new', name: 'TicketCreate', component: () => import('@/views/ticket/create/index.vue'), meta: { title: '发起工单', hidden: true } },
+  { path: '/tickets/:id', name: 'TicketDetail', component: () => import('@/views/ticket/detail/index.vue'), meta: { title: '工单详情', hidden: true } },
   // Redirect 中转（挂在 Layout 下供 TagsView 刷新——见 router/index.ts）
   { path: '/redirect/:path(.*)', name: 'Redirect', component: () => import('@/views/Redirect/Redirect.vue'), meta: { hidden: true } },
 ]
