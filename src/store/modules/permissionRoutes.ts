@@ -12,6 +12,7 @@
  */
 
 import { Layout } from '@/utils/routerHelper'
+import { resolveMenuIcon } from '@/icons'
 
 /** import.meta.glob 返回的惰性加载函数 */
 export type ViewComponent = () => Promise<unknown>
@@ -85,7 +86,8 @@ const isPage = (menu: RouteMenuNode): boolean => menu.menu_type === 2
 const isPageLike = (menu: RouteMenuNode): boolean => isPage(menu) || (isDirectory(menu) && !!menu.component)
 
 function toMeta(menu: RouteMenuNode): Record<string, unknown> {
-  return { title: menu.name, icon: menu.icon, hidden: !menu.visible }
+  // icon 种子值（裸名）经集中映射表解析（01 §1）——离线 iconify 对未注册名零渲染
+  return { title: menu.name, icon: resolveMenuIcon(menu.icon), hidden: !menu.visible }
 }
 
 /**

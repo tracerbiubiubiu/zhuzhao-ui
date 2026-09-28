@@ -13,10 +13,11 @@ export const ROUTE_CODE_PREFIX = 'route:'
 /**
  * 无条件豁免的路径：
  * - `/home`：公共工作台，种子 home 对所有登录用户可见
- * - `/login`、`/change-password`：白名单页（守卫 step 1 已放行，此处双保险）
+ * - `/login`、`/change-password`、`/session-error`：白名单页（守卫 step 1 已放行，此处双保险）
+ * - `/403`：无权限页自身（不豁免会自锁——跳入后再校验永无 route:/403 码）
  * redirect 中转、404 页在 isExemptRoute 内另行判定。
  */
-export const ROUTE_EXEMPT_PATHS = ['/home', '/login', '/change-password']
+export const ROUTE_EXEMPT_PATHS = ['/home', '/login', '/change-password', '/session-error', '/403']
 
 /** 404 页自身（catch-all 命中时的路由名）——不参与校验，否则会自锁 */
 const NOT_FOUND_ROUTE_NAME = 'NotFound'
@@ -38,7 +39,8 @@ export function isExemptRoute(to: { path: string; name?: unknown }): boolean {
   if (path === '/' || path === '') return true
   if (ROUTE_EXEMPT_PATHS.includes(path)) return true
   // redirect 中转（/redirect/:path(.*)）——tags 刷新用，不参与权限
-  if (path.startsWith('/redirect')) return true
+  // （精确前缀：'/redirect/' 起——裸 startsWith('/redirect') 会误豁免 '/redirector' 类路径）
+  if (path === '/redirect' || path.startsWith('/redirect/')) return true
   return false
 }
 

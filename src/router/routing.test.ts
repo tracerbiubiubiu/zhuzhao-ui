@@ -90,4 +90,9 @@ describe('路由装配（内存 history）', () => {
     const router = buildRouter([homeMenu])
     expect(router.resolve('/session-error').name).toBe('SessionError')
   })
+
+  it('常量路由 /403 可达（守卫 no-code 分支跳入，防死路由回归）', () => {
+    const router = buildRouter([homeMenu])
+    expect(router.resolve('/403').name).toBe('Forbidden')
+  })
 })

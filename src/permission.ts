@@ -143,9 +143,9 @@ export const setupPermission = () => {
       )
     }
     if (!routeCheck.allow) {
-      // 无权限/路由不存在 → 落 404 页（§3.1⑥）。catch-all 已在 ensureDynamicRoutes 内尾注册，
-      // 404 自身走 isExemptRoute 豁免，不会产生重定向循环。
-      next({ name: 'NotFound', replace: true })
+      // 路由存在但无 route: 码 → 403（§3.2⑤）；路由不存在由 catch-all 兜底 404
+      // （routePermission 对 NotFound 豁免，永不入此分支——二者不混）
+      next({ path: '/403', replace: true })
       return
     }
 

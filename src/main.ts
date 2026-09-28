@@ -33,6 +33,12 @@ const setupAll = async () => {
   const app = createApp(App)
   app.directive('permission', vPermission)
 
+  // §6 全局错误兜底：未捕获的渲染/生命周期错误统一上报 console
+  // （Sentry 接入=触发驱动，届时替换上报端、此兜底保留）
+  app.config.errorHandler = (err, _instance, info) => {
+    console.error(`[errorHandler] ${info}:`, err)
+  }
+
   setupStore(app)
 
   await setupPermission()
