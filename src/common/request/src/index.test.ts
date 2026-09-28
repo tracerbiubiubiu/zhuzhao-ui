@@ -21,6 +21,11 @@ import { useTagsViewStore, type TagView } from '@/store/modules/tagsView'
 import { ensureDynamicRoutes } from '@/permission'
 import { singleFlightRefresh, refreshAccessToken } from '@/common/request/src'
 import { setTokens, getAccessToken, clearTokens } from '@/common/auth/tokenStorage'
+import { notifyError } from '@/common/request/errorToast'
+
+// 打桩 errorToast（node 环境其内部 typeof document 短路——不打桩则拦截器接线零断言可抓，
+// 删掉接线处 75/75 仍绿是检视 P2-1 实锤的静默回归洞）
+vi.mock('@/common/request/errorToast', () => ({ notifyError: vi.fn() }))
 
 const h = vi.hoisted(() => {
   const post = vi.fn()
@@ -107,6 +112,7 @@ beforeEach(() => {
   h.service.mockClear()
   routerMock.addRoute.mockClear()
   routerMock.resetRouter.mockClear()
+  vi.mocked(notifyError).mockClear()
 })
 
 afterEach(() => {
@@ -270,5 +276,33 @@ describe('响应拦截器 401 分支', () => {
     expect(getAccessToken()).toBe('old')
     expect(usePermissionStore().isAddRouters).toBe(true)
     expect(useUserStoreWithOut().rawMenus).toHaveLength(1)
+  })
+
+  it('全局提示接线：generic 5xx → notifyError(error)', async () => {
+    const error = makeError(500, 50000)
+    await expect(h.handlers.err?.(error)).rejects.toBe(error)
+    expect(notifyError).toHaveBeenCalledWith(error)
+  })
+
+  it('全局提示接线：401 终态（20003）→ 不走全局提示（会话链路处置）', async () => {
+    seedSession()
+    const error = makeError(401, 20003)
+    await expect(h.handlers.err?.(error)).rejects.toBe(error)
+    expect(notifyError).not.toHaveBeenCalled()
+  })
+
+  it('全局提示接线：refresh 非终态 → notifyError（transient 提示可重试）', async () => {
+    seedSession()
+    h.post.mockRejectedValue({ response: { status: 503, data: { code: 10008 } } })
+    const error = makeError(401, 20002)
+    await expect(h.handlers.err?.(error)).rejects.toBe(error)
+    expect(notifyError).toHaveBeenCalledWith(error)
+  })
+
+  it('全局提示接线：403+20007 → 不走全局提示（跳改密页）', async () => {
+    seedSession()
+    const error = makeError(403, 20007)
+    await expect(h.handlers.err?.(error)).rejects.toBe(error)
+    expect(notifyError).not.toHaveBeenCalled()
   })
 })

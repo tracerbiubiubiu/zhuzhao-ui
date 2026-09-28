@@ -95,4 +95,19 @@ describe('路由装配（内存 history）', () => {
     const router = buildRouter([homeMenu])
     expect(router.resolve('/403').name).toBe('Forbidden')
   })
+
+  it('resetRouter 白名单防漂移：constantRoutes 实名 ⊆ NO_RESET_WHITE_LIST（检视 B-1 回归）', async () => {
+    // 登出/401 终态后 resetRouter 按名清除白名单外全部路由，而常量路由只在
+    // createRouter 时注册一次——漏登记 = 该页在会话拆除后成死路由（/403 曾中招：
+    // Forbidden 未进白名单，重新登录后 no-code 分支 next('/403') 落 catch-all 404）。
+    // resetRouter 对模块单例的行为拆除已由 request/index.test.ts「会话拆除」用例盖，
+    // 此处钉数据面——B-1 根因即清单漂移。
+    const { NO_RESET_WHITE_LIST } = await import('@/constants')
+    for (const route of constantRoutes) {
+      expect(
+        NO_RESET_WHITE_LIST,
+        `常量路由 "${String(route.name)}" 未进 resetRouter 白名单（登出后将被删成死路由）`,
+      ).toContain(route.name as string)
+    }
+  })
 })
