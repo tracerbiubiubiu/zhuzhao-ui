@@ -20,7 +20,8 @@ export default ({ mode }: ConfigEnv): UserConfig => {
     plugins: [
       Vue(),
       VueJsx(),
-      ElementPlus(),
+      // {} 显式传参：unplugin 类型签名无零参重载（运行时等价）
+      ElementPlus({}),
       VueI18nPlugin({
         runtimeOnly: true,
         compositionOnly: true,

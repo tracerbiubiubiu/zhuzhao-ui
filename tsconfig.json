@@ -61,7 +61,12 @@
     "src/**/*.ts",
     "src/**/*.tsx",
     "src/**/*.vue",
-    "types/**/*.d.ts"
+    "types/**/*.d.ts",
+    "e2e/**/*.ts",
+    "playwright.config.ts",
+    "vite.config.ts",
+    "vitest.config.ts",
+    "uno.config.ts"
   ],
   "exclude": [
     "mock"
