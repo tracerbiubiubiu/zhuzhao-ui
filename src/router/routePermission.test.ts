@@ -6,7 +6,7 @@ import { checkRoutePermission, isExemptRoute } from '@/router/routePermission'
 
 describe('checkRoutePermission', () => {
   it('豁免清单：/home、/login、/change-password、/session-error、/403、/profile、/redirect*、根、404 自身', () => {
-    for (const path of ['/home', '/login', '/change-password', '/session-error', '/403', '/profile', '/redirect/system/user', '/']) {
+    for (const path of ['/home', '/login', '/change-password', '/session-error', '/403', '/profile', '/my-org', '/redirect/system/user', '/']) {
       expect(isExemptRoute({ path })).toBe(true)
       expect(checkRoutePermission({ path }, []).reason).toBe('exempt')
     }

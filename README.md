@@ -4,7 +4,7 @@ zhuzhao（Go 模块化单体 IAM + 工单系统）的前端控制台。**全部�
 
 ## 状态
 
-**W2 壳层已交付 + 出口闭合**（2026-09-27）——壳层四件（守卫/请求层/会话管理/权限三件套）+ 登录/改密/首页 + system 四占位页 + vitest 单测基建 + **出口三件**：Playwright E2E（S1 强制改密/S2 工作台冒烟/FE3 viewer 只读，打标准三栈）+ codegen 类型链（`pnpm codegen`）+ CI（lint/typecheck/build + test）。出口后加固三批（2026-09-28）：守卫三段分流 + `/session-error` 可重试页、W3 开工前小修批（hasAny 前缀/keep-alive/错误提示层/useCrud 分页契约）、图标映射表 + 403 页 + errorHandler + noopener（当前 75 例）。**三范例页与个人中心页移入 W3 首批补交付**（主仓 01 §8-W2 修订记录）。下一波 P4-W3 system 域。
+**W3 system 域已交付**（2026-09-28）——四张管理页全功能化（用户/角色[AssignMenus check-strictly+乐观锁]/菜单只读树/组织两面）+ 三范例页（ProTable 列表/表单乐观锁/树管理）+ 个人中心页 + 「我的组织」自服务面（名册+owner 委托控件，后端 GET /user/orgs+GET /orgs/members/list 两自服务端点随批交付）+ vue-query/ProTable 基建 + codegen 类型接线。E2E 9 spec（S1/S2/S3–S7/FE3）打真实三栈全绿，单测 85 例。W2 遗留欠账（个人中心/三范例页）随本波全部清零。下一波 P4-W4 ticket 域。
 
 ## 分支纪律
 

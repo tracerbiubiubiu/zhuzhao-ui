@@ -22,6 +22,8 @@ const constantRoutes: RouteRecordRaw[] = [
   // 个人中心（§3.2④ 菜单外静态补充路由——任何登录用户可达，挂根容器 Layout 下，
   // 与 Redirect 同款装配方式：router/index.ts 单独挂 children、不进顶层整表展开）
   { path: '/profile', name: 'Profile', component: () => import('@/views/Profile/index.vue'), meta: { title: '个人中心', hidden: true } },
+  // 「我的组织」自服务面（§3.2④——非 admin 委托者唯一可达入口，owner/admin 经 L3 见委托控件）
+  { path: '/my-org', name: 'MyOrg', component: () => import('@/views/MyOrg/index.vue'), meta: { title: '我的组织', hidden: true } },
   // Redirect 中转（挂在 Layout 下供 TagsView 刷新——见 router/index.ts）
   { path: '/redirect/:path(.*)', name: 'Redirect', component: () => import('@/views/Redirect/Redirect.vue'), meta: { hidden: true } },
 ]

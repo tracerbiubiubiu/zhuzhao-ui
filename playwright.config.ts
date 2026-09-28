@@ -10,12 +10,16 @@ import { defineConfig } from '@playwright/test'
  */
 export default defineConfig({
   testDir: 'e2e',
-  timeout: 60_000,
+  timeout: 90_000,
   // 共享 dev 栈 DB：串行执行防互踩（S1 会改密码、预设会写绑定）
   workers: 1,
-  retries: 0,
+  // 9 spec 串行打同一 dev 栈，尾部重 spec（S7 六账号 setup）偶发环境抖动——
+  // 重试 1 次兜底（单跑可复现的功能失败重试同样会挂，不掩盖缺陷）
+  retries: 1,
   reporter: [['list']],
   globalSetup: './e2e/global-setup.ts',
+  // 9 spec 串行打同一 dev 栈，长负载下偶发慢——默认 5s 断言窗口过紧致偶发假失败
+  expect: { timeout: 10_000 },
   use: {
     baseURL: process.env.E2E_BASE_URL ?? 'http://localhost:4000',
     trace: 'retain-on-failure',

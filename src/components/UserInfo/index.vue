@@ -16,6 +16,10 @@
     router.push('/profile')
   }
 
+  const toMyOrg = () => {
+    router.push('/my-org')
+  }
+
   const loginOut = async () => {
     try {
       await ElMessageBox.confirm(t('common.loginOutMessage'), t('common.reminder'), {
@@ -49,6 +53,9 @@
       <ElDropdownMenu>
         <ElDropdownItem>
           <div @click="toProfile">{{ t('common.profile') }}</div>
+        </ElDropdownItem>
+        <ElDropdownItem>
+          <div @click="toMyOrg">{{ t('common.myOrg') }}</div>
         </ElDropdownItem>
         <ElDropdownItem divided>
           <div @click="loginOut">{{ t('common.loginOut') }}</div>
