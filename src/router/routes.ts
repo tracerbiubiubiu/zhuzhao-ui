@@ -16,6 +16,9 @@ const constantRoutes: RouteRecordRaw[] = [
   { path: '/change-password', name: 'ChangePassword', component: () => import('@/views/ChangePassword/index.vue'), meta: { title: '修改密码', hidden: true } },
   // 会话加载瞬时失败页（§3.3：5xx/网络抖动不清会话——守卫 transient 分支跳入，白名单放行）
   { path: '/session-error', name: 'SessionError', component: () => import('@/views/Error/SessionError.vue'), meta: { title: '会话加载失败', hidden: true } },
+  // 403 无权限页（§3.2⑤）——守卫 route:{path} 校验未过（路由存在但无码）跳入；
+  // 路由不存在仍由 catch-all 404 兜底（routePermission 对 NotFound 豁免，二者不混）
+  { path: '/403', name: 'Forbidden', component: () => import('@/views/Error/403.vue'), meta: { title: '无权限', hidden: true } },
   // Redirect 中转（挂在 Layout 下供 TagsView 刷新——见 router/index.ts）
   { path: '/redirect/:path(.*)', name: 'Redirect', component: () => import('@/views/Redirect/Redirect.vue'), meta: { hidden: true } },
 ]

@@ -19,6 +19,7 @@ export default {
   },
   error: {
     pageError: '抱歉，您访问的页面不存在。',
+    forbidden: '抱歉，您没有权限访问该页面。',
     returnToHome: '返回首页'
   },
   layout: {

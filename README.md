@@ -4,7 +4,7 @@ zhuzhao（Go 模块化单体 IAM + 工单系统）的前端控制台。**全部�
 
 ## 状态
 
-**W2 壳层已交付 + 出口闭合**（2026-09-27）——壳层四件（守卫/请求层/会话管理/权限三件套）+ 登录/改密/首页 + system 四占位页 + vitest 单测基建（43 例）+ **出口三件**：Playwright E2E（S1 强制改密/S2 工作台冒烟/FE3 viewer 只读，打标准三栈）+ codegen 类型链（`pnpm codegen`）+ CI（lint/typecheck/build + test）。下一波 P4-W3 system 域。
+**W2 壳层已交付 + 出口闭合**（2026-09-27）——壳层四件（守卫/请求层/会话管理/权限三件套）+ 登录/改密/首页 + system 四占位页 + vitest 单测基建 + **出口三件**：Playwright E2E（S1 强制改密/S2 工作台冒烟/FE3 viewer 只读，打标准三栈）+ codegen 类型链（`pnpm codegen`）+ CI（lint/typecheck/build + test）。出口后加固三批（2026-09-28）：守卫三段分流 + `/session-error` 可重试页、W3 开工前小修批（hasAny 前缀/keep-alive/错误提示层/useCrud 分页契约）、图标映射表 + 403 页 + errorHandler + noopener（当前 75 例）。**三范例页与个人中心页移入 W3 首批补交付**（主仓 01 §8-W2 修订记录）。下一波 P4-W3 system 域。
 
 ## 分支纪律
 

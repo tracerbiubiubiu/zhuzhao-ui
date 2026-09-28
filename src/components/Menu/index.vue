@@ -38,7 +38,8 @@
 
       const handleSelect = (index: string) => {
         if (isUrl(index)) {
-          window.open(index)
+          // noopener：外链菜单来自后端下发，防 tabnabbing（window.opener 反向操控）
+          window.open(index, '_blank', 'noopener,noreferrer')
         } else {
           push(index)
         }

@@ -19,6 +19,7 @@ export default {
   },
   error: {
     pageError: 'Sorry, the page you visited does not exist.',
+    forbidden: 'Sorry, you do not have permission to access this page.',
     returnToHome: 'Return to home'
   },
   layout: {

@@ -59,7 +59,8 @@
   const selectPrimary = (route: AppRouteRecordRaw) => {
     const path = firstRoutePath(route)
     if (isUrl(path)) {
-      window.open(path)
+      // noopener：外链菜单来自后端下发，防 tabnabbing（window.opener 反向操控）
+      window.open(path, '_blank', 'noopener,noreferrer')
     } else {
       router.push(path)
     }

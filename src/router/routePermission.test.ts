@@ -5,14 +5,17 @@ import { describe, it, expect } from 'vitest'
 import { checkRoutePermission, isExemptRoute } from '@/router/routePermission'
 
 describe('checkRoutePermission', () => {
-  it('豁免清单：/home、/login、/change-password、/redirect*、根、404 自身', () => {
-    for (const path of ['/home', '/login', '/change-password', '/redirect/system/user', '/']) {
+  it('豁免清单：/home、/login、/change-password、/session-error、/403、/redirect*、根、404 自身', () => {
+    for (const path of ['/home', '/login', '/change-password', '/session-error', '/403', '/redirect/system/user', '/']) {
       expect(isExemptRoute({ path })).toBe(true)
       expect(checkRoutePermission({ path }, []).reason).toBe('exempt')
     }
     // 404 页自身（catch-all 命中）
     expect(isExemptRoute({ path: '/somewhere', name: 'NotFound' })).toBe(true)
     expect(checkRoutePermission({ path: '/somewhere', name: 'NotFound' }, []).allow).toBe(true)
+    // /403 不豁免会自锁（守卫 no-code 分支跳入后再校验永无 route:/403 码）
+    // redirect 前缀精确化：'/redirector' 类近似前缀路径不再被误豁免
+    expect(isExemptRoute({ path: '/redirector' })).toBe(false)
   })
 
   it('有码放行（has-code）', () => {
