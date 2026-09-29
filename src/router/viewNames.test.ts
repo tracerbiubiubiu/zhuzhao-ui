@@ -21,6 +21,15 @@ const VIEW_NAMES: Array<[string, string]> = [
   ['views/Profile/index.vue', 'Profile'], // §3.2④ 静态补充路由（常量路由实名）
   ['views/MyOrg/index.vue', 'MyOrg'], // §3.2④ 同款
   ['views/ticket/detail/index.vue', 'TicketDetail'], // §3.2④ 参数路由（详情）
+  // 审计修复（2026-09-30）：W4/W5/穿插池页面全量补登记——兑现本测试头注承诺
+  ['views/ticket/create/index.vue', 'TicketCreate'], // §3.2④ 静态路由实名
+  ['views/ticket/list/index.vue', 'ticket_list'], // 父 ticket_manage 目录 → 路由名=code
+  ['views/ticket/type/index.vue', 'ticket_type_manage'],
+  ['views/task/list/index.vue', 'task_center'], // 父 task_manage 目录
+  ['views/al/types/index.vue', 'al_types'], // 父 al_manage 目录
+  ['views/al/data/index.vue', 'al_data'],
+  ['views/audit/log/index.vue', 'audit_log_page'], // 顶层页面特例（000025 parent=NULL 显式）
+  ['views/system/dict/index.vue', 'system_dict_page'], // 顶层页面特例（000034 同款）
 ]
 
 test.each(VIEW_NAMES)('%s 声明了与路由名一致的 defineOptions name（%s）', (file, expected) => {

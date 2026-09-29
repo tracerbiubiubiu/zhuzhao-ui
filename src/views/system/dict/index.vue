@@ -17,7 +17,7 @@ import {
 } from '@/api/system/dict'
 
 // keep-alive 契约：name=动态路由名（菜单 code system_dict，组件路径 system/dict/index）
-defineOptions({ name: 'system_dict' })
+defineOptions({ name: 'system_dict_page' })
 
 // ─── 左：类型 ───
 const types = ref<DictTypeRow[]>([])

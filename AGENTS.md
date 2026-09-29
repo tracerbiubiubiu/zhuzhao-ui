@@ -6,7 +6,7 @@
 
 ```bash
 pnpm lint          # ESLint（纯检查；自动修复用 pnpm lint:fix，修复后重跑 lint）
-pnpm typecheck     # vue-tsc --noEmit（api 层已接 codegen 生成类型（W3 起）——契约漂移在此编译期报错；改 API 形状后先 pnpm codegen 再过本门禁）
+pnpm typecheck     # vue-tsc --noEmit（codegen 类型**部分接线**：入参仅 4/14 api 文件引 __generated__（user/role/profile/selfService）、出参全手写——漂移仅接线面编译期报错，勿视为全量守卫；改 API 形状后先 pnpm codegen，补接线随域渐进）
 pnpm test          # Vitest（动态路由解析/请求层单飞刷新/keep-alive 防漂移断言）
 pnpm audit --prod  # npm 供应链（对称 Go 侧 govulncheck；镜像源无 audit 端点时加 --registry=https://registry.npmjs.org）
 pnpm build         # 产物构建
