@@ -61,6 +61,7 @@ const columns: ProTableColumn[] = [
   { prop: 'type_code', label: '类型', width: 130, slot: 'type_code' },
   { prop: 'status', label: '状态', width: 100, align: 'center', slot: 'status' },
   { prop: 'priority', label: '优先级', width: 90, align: 'center', slot: 'priority' },
+  { prop: 'assignee_name', label: '处理人', width: 110, slot: 'assignee' },
   { prop: 'sla_due_at', label: 'SLA 截止', width: 170, slot: 'sla_due_at' },
   { prop: 'created_at', label: '创建时间', width: 170, slot: 'created_at' },
   { prop: 'actions', label: '操作', width: 90, fixed: 'right', slot: 'actions' },
@@ -119,6 +120,11 @@ function typeLabel(code: string): string {
           <el-tag :type="PRIORITY_TYPES[row.priority] ?? 'info'" size="small">
             {{ PRIORITY_LABELS[row.priority] ?? '中' }}
           </el-tag>
+        </template>
+
+        <!-- 处理人：W4 后端姓名回填（assignee_name），未分派/回填缺失降级显 ID -->
+        <template #assignee="{ row }">
+          {{ row.assignee_name ?? row.assigned_to ?? '—' }}
         </template>
 
         <template #sla_due_at="{ row }">

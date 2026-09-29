@@ -57,7 +57,10 @@ function formatTime(iso?: string): string {
         </el-descriptions-item>
         <el-descriptions-item label="创建时间">{{ formatTime(ticket?.created_at) }}</el-descriptions-item>
         <el-descriptions-item label="更新时间">{{ formatTime(ticket?.updated_at) }}</el-descriptions-item>
-        <el-descriptions-item label="处理人">{{ ticket?.assigned_to ?? '未分派' }}</el-descriptions-item>
+        <el-descriptions-item label="处理人">
+          <!-- W4 后端姓名回填：assignee_name 优先，回填缺失降级显裸 ID -->
+          {{ ticket?.assignee_name ?? ticket?.assigned_to ?? '未分派' }}
+        </el-descriptions-item>
       </el-descriptions>
     </el-card>
 

@@ -6,7 +6,9 @@
  */
 import request from '@vea/request'
 
-/** 工单行（= model.Ticket 的 JSON 投影；assigned_to 可空——创建即未分派） */
+/** 工单行（= model.Ticket 的 JSON 投影；assigned_to 可空——创建即未分派；
+ * created_by_name/assignee_name 为 W4 后端回填字段（03 S9——real_name 优先/空回退
+ * username/软删不回填），缺省时调用方降级显 ID） */
 export interface TicketRow {
   id: string
   type_code: string
@@ -15,7 +17,9 @@ export interface TicketRow {
   priority: number
   status: string
   created_by: string
+  created_by_name?: string
   assigned_to?: string
+  assignee_name?: string
   org_id: string
   org_path: string
   custom_data?: unknown
@@ -24,10 +28,12 @@ export interface TicketRow {
   updated_at: string
 }
 
-/** 搜索参数严格对齐 GET /tickets（03 W4：状态筛选可列六态） */
+/** 搜索参数严格对齐 GET /tickets（03 W4：状态筛选可列六态；assignee 仅支持
+ * me（W4 P1-c——工作台待办/已办卡数据源），其余值后端 400） */
 export interface TicketListQuery {
   type_code?: string
   status?: string
+  assignee?: 'me'
 }
 
 export async function listTicketsApi(

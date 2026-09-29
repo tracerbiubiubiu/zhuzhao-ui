@@ -1,10 +1,11 @@
 <script setup lang="ts">
 /**
- * 首页工作台（01 §8-W2 拍板：简单仪表盘——首版零后端改动）
+ * 首页工作台（01 §8-W2 拍板：简单仪表盘）
  *
  * 首版 = 可见工单状态统计卡（按 status 各拉一次 total——权宜，聚合端点=触发驱动）
  * + 最近工单列表（前 10 条）
- * 待办/已办卡随 P4-W4 assignee=me 参数补后点亮
+ * 待办/已办卡已随 P4-W4 `assignee=me` 后端参数点亮（02 §2-W4 随批件）：
+ * 待办=分派给我且未关闭（assigned+in_progress），已办=分派给我且已关闭（closed）
  */
 
 import { ref, onMounted } from 'vue'
@@ -32,6 +33,8 @@ const PRIORITY_TYPES: Array<'primary' | 'success' | 'info' | 'warning' | 'danger
 
 const stats = ref<Record<string, number>>({})
 const recent = ref<TicketSummary[]>([])
+const myTodo = ref(0)
+const myDone = ref(0)
 const loading = ref(true)
 
 const statusCardDefs = [
@@ -58,6 +61,18 @@ onMounted(async () => {
         stats.value[statusCardDefs[i].key] = 0
       }
     })
+    // 我的待办/已办（W4 P1-c：assignee=me——待办=assigned+in_progress，已办=closed）
+    const meQueries = ['assigned', 'in_progress', 'closed']
+    const meResults = await Promise.allSettled(
+      meQueries.map((status) =>
+        request.get('/api/v1/tickets', { params: { status, assignee: 'me', page: 1, page_size: 1 } })
+      )
+    )
+    const meTotals = meResults.map((r) =>
+      r.status === 'fulfilled' ? ((r.value as { total?: number })?.total ?? 0) : 0
+    )
+    myTodo.value = meTotals[0] + meTotals[1]
+    myDone.value = meTotals[2]
     // 最近工单
     const recentResult = await Promise.allSettled([
       request.get('/api/v1/tickets', { params: { page: 1, page_size: 10 } }),
@@ -66,7 +81,6 @@ onMounted(async () => {
     recent.value = ((recentData as { list?: TicketSummary[] })?.list ?? []).map((t) => ({
       ...t,
     }))
-
   } finally {
     loading.value = false
   }
@@ -90,6 +104,36 @@ function formatTime(iso: string): string {
               <div class="text-sm text-gray-500 mt-1">{{ card.label }}</div>
             </div>
             <span class="text-3xl">{{ card.icon }}</span>
+          </div>
+        </el-card>
+      </el-col>
+    </el-row>
+
+    <!-- 我的待办/已办（W4 P1-c assignee=me 点亮） -->
+    <el-row :gutter="16" class="mb-4">
+      <el-col :span="12">
+        <el-card shadow="hover">
+          <div class="flex items-center justify-between">
+            <div>
+              <div class="text-2xl font-bold" style="color: var(--el-color-danger)">
+                {{ loading ? '—' : myTodo }}
+              </div>
+              <div class="text-sm text-gray-500 mt-1">我的待办（分派给我，未关闭）</div>
+            </div>
+            <span class="text-3xl">📋</span>
+          </div>
+        </el-card>
+      </el-col>
+      <el-col :span="12">
+        <el-card shadow="hover">
+          <div class="flex items-center justify-between">
+            <div>
+              <div class="text-2xl font-bold" style="color: var(--el-color-success)">
+                {{ loading ? '—' : myDone }}
+              </div>
+              <div class="text-sm text-gray-500 mt-1">我的已办（分派给我，已关闭）</div>
+            </div>
+            <span class="text-3xl">✅</span>
           </div>
         </el-card>
       </el-col>
