@@ -4,7 +4,7 @@ zhuzhao（Go 模块化单体 IAM + 工单系统）的前端控制台。**全部�
 
 ## 状态
 
-**P4-W4 ticket 域进行中**（2026-09-29 快照）——已交付两批：开工首批=工单列表页（ProTable+状态筛选）+ 详情/发起静态路由骨架（参数路由前缀豁免）+ W4 冒烟；发起表单批=动态字段渲染器（七字段类型+required/regex 预检）+ 组织双源下拉（`GET /user/orgs` 自服务优先、管理面兜底）+ S8 E2E（API 造类型→UI 预检→提交跳详情）。剩余：详情完整批（评论/备注/关联/流转四操作）、类型/字段/模板三件套、后端随批件（`assignee=me` 点亮工作台待办卡+列表姓名回填防 N+1）。此前 W2 壳层、W3 system 域（四管理页+三范例页+个人中心+「我的组织」）已全部交付。E2E 11 spec（S1–S8/FE3/W4 冒烟）打真实三栈全绿，单测 87 例。
+**P4-W5 三域已交付**（2026-09-29 快照）——已交付两批：开工首批=工单列表页（ProTable+状态筛选）+ 详情/发起静态路由骨架（参数路由前缀豁免）+ W4 冒烟；发起表单批=动态字段渲染器（七字段类型+required/regex 预检）+ 组织双源下拉（`GET /user/orgs` 自服务优先、管理面兜底）+ S8 E2E（API 造类型→UI 预检→提交跳详情）。W5=al 两页（类型/数据：cursor 分页+动态 schema 列+导入导出）+task 中心四 Tab（runs 过滤/死信/任务定义/提交）+audit 日志页，附后端随批件（ListRuns submitted_by=me 两仓+提交链三处契约断裂修复）。此前 W2 壳层、W3 system 域、W4 ticket 域均已全部交付。E2E 16 spec 打真实栈全绿（W5 场景五栈：+activelist/taskrunner 上游），单测 91 例。剩 P4-9 部署件+穿插池清线。
 
 ## 分支纪律
 
@@ -31,7 +31,7 @@ pnpm typecheck   # vue-tsc --noEmit（codegen 类型漂移在此报错）
 pnpm test        # Vitest（动态路由/请求层/keep-alive 防漂移 单测 87 例）
 pnpm build       # 生产构建
 pnpm audit --prod # npm 供应链
-pnpm test:e2e    # Playwright（S1–S8/FE3/W4·W5 冒烟 15 spec——运行前提见下）
+pnpm test:e2e    # Playwright（S1–S8/FE3/W4·W5 冒烟 16 spec——运行前提见下）
 ```
 
 ### E2E 运行前提（打标准三栈，不用 stub）
