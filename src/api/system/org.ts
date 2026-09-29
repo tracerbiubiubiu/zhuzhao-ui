@@ -55,9 +55,9 @@ export interface OrgTreeNode {
   created_at?: string
 }
 
-/** 全组织树（GET /orgs，管理面） */
-export async function getOrgTreeApi(): Promise<OrgTreeNode[]> {
-  const data = await request.get('/api/v1/orgs')
+/** 全组织树（GET /orgs，管理面；config 可选——发起页兜底等 403 静默场景传 _silentError） */
+export async function getOrgTreeApi(config?: { _silentError?: boolean }): Promise<OrgTreeNode[]> {
+  const data = await request.get('/api/v1/orgs', config)
   return data as unknown as OrgTreeNode[]
 }
 

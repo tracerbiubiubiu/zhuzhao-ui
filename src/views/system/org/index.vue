@@ -23,7 +23,8 @@ import {
 defineOptions({ name: 'system_org' })
 
 const queryClient = useQueryClient()
-const treeQuery = useQuery({ queryKey: ['system', 'orgs'], queryFn: getOrgTreeApi })
+// 箭头包裹：getOrgTreeApi 现带可选 config——直接引用会把 QueryFunctionContext 误传入参位
+const treeQuery = useQuery({ queryKey: ['system', 'orgs'], queryFn: () => getOrgTreeApi() })
 const orgTree = computed(() => treeQuery.data.value ?? [])
 
 const refresh = () => queryClient.invalidateQueries({ queryKey: ['system', 'orgs'] })

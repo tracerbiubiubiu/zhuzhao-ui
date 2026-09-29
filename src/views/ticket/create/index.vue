@@ -25,8 +25,7 @@ import {
   type TicketTypeFieldDef,
 } from '@/api/ticket'
 import { getMyOrgsApi } from '@/api/org/selfService'
-import request from '@vea/request'
-import type { OrgTreeNode } from '@/api/system/org'
+import { getOrgTreeApi, type OrgTreeNode } from '@/api/system/org'
 
 defineOptions({ name: 'TicketCreate' })
 
@@ -53,10 +52,14 @@ const rules: FormRules = {
 // ─── 类型与字段定义 ───
 const typesQuery = useQuery({ queryKey: ['ticket', 'types'], queryFn: listTicketTypesApi })
 const fields = ref<TicketTypeFieldDef[]>([])
+let fieldsSeq = 0 // 快速切换类型时弃置过期响应（后到的旧 schema 不得覆盖新选中类型）
 
 watch(() => form.type_code, async (code) => {
   form.custom = {}
-  fields.value = code ? await getTicketTypeFieldsApi(code).catch(() => []) : []
+  const seq = ++fieldsSeq
+  const next = code ? await getTicketTypeFieldsApi(code).catch(() => []) : []
+  if (seq !== fieldsSeq) return
+  fields.value = next
 })
 
 /** 字段动态校验规则（required + regex 预检——03 S8） */
@@ -108,7 +111,7 @@ const orgsLoading = ref(true)
       orgOptions.value = mine.map((o) => ({ value: String(o.org_id), label: String(o.org_name ?? '') }))
     } else {
       // admin/未入组：管理面全量兜底（无 Casbin 者此处 403 → 空列表提示）
-      const all = (await request.get('/api/v1/orgs', { _silentError: true }).catch(() => null)) as unknown as OrgTreeNode[] | null
+      const all = await getOrgTreeApi({ _silentError: true }).catch(() => null)
       const flat: Array<{ value: string; label: string }> = []
       const walk = (nodes: OrgTreeNode[] | undefined) => {
         for (const n of nodes ?? []) {
@@ -182,9 +185,10 @@ async function handleSubmit() {
 
         <!-- 动态自定义字段（七类型渲染器；类型切换时重置） -->
         <template v-for="f in fields" :key="f.field_key">
-          <el-form-item v-if="f.field_type === 'tips'" :label="f.field_label">
-            <span class="text-xs text-gray-400">{{ f.field_label }}</span>
-          </el-form-item>
+          <!-- tips=说明块无值：脱离 label 列整行呈现（此前 label/内容双显同文案） -->
+          <div v-if="f.field_type === 'tips'" class="text-xs text-gray-400 -mt-1 mb-3">
+            {{ f.field_label }}
+          </div>
           <el-form-item v-else :label="f.field_label" :prop="`custom.${f.field_key}`" :rules="fieldRules[f.field_key]">
             <el-input
               v-if="f.field_type === 'input'" v-model="(form.custom[f.field_key] as string | undefined)"
