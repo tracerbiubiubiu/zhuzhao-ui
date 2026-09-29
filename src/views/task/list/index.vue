@@ -11,7 +11,7 @@
  * - jobs 写操作挂 task:manage；trigger 对 enabled=false 后端 409——按钮同步禁用
  * - 「只看我提交的」仅运行记录（submitted_by=me 由 zhuzhao 代理换 actor 透传）
  */
-import { reactive, ref } from 'vue'
+import { reactive, ref, watch } from 'vue'
 import {
   ElAlert, ElButton, ElCard, ElDialog, ElForm, ElFormItem, ElInput, ElInputNumber,
   ElMessage, ElMessageBox, ElOption, ElSelect, ElSwitch, ElTabPane, ElTabs, ElTable,
@@ -109,6 +109,11 @@ const deadLoading = ref(false)
 const deadPage = ref(1)
 const deadPageSize = 20
 const deadEmptyPage = ref(false) // 空页=遍历终止（无 total 只能按空判）
+
+// 审计修复（2026-09-30 P1）：死信 Tab 无初始加载触发点——首入惰性拉取（audit 页同款范式）
+watch(activeTab, (t) => {
+  if (t === 'dead' && !deadList.value.length && !deadLoading.value) fetchDead()
+})
 
 async function fetchDead(p = deadPage.value) {
   deadLoading.value = true

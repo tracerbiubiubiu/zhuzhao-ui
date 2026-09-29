@@ -15,7 +15,7 @@ import { listAuditLogsApi, type AuditLogRow } from '@/api/audit'
 import request from '@vea/request'
 
 // keep-alive 契约：name=动态路由名（菜单 code audit_log，组件路径 audit/log/index）
-defineOptions({ name: 'audit_log' })
+defineOptions({ name: 'audit_log_page' })
 
 const tableRef = ref<InstanceType<typeof ProTable>>()
 const search = reactive({ employee_no: '', path: '', range: [] as string[] })
