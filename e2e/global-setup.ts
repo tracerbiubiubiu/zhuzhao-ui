@@ -37,7 +37,7 @@ const S1 = {
 }
 
 /** 业务域顶层菜单 code（system/audit=管理面专属不进预设；home 单独放行） */
-const BIZ_TOP_CODES = new Set(['ticket_manage', 'task_center', 'al_manage'])
+const BIZ_TOP_CODES = new Set(['ticket_manage', 'task_manage', 'al_manage']) // 审计修正：top 取顶层祖先 code——task_center 是 task_manage 的子页（原写致任务域整体被排除出 viewer/operator 预设）
 /** operator 也排除的管理面写权限（02 号 W1 B 案：/jobs* 与类型管理=admin 专属） */
 const ADMIN_ONLY_PERMS = new Set(['task:manage', 'ticket:type:manage'])
 
