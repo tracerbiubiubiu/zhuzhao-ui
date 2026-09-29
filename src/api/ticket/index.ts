@@ -117,3 +117,86 @@ export const TICKET_STATUSES: Array<{ value: string; label: string }> = [
 export const STATUS_LABEL: Record<string, string> = Object.fromEntries(
   TICKET_STATUSES.map((s) => [s.value, s.label]),
 )
+
+// ===== W4 详情批：评论/备注/关联/流转（S10/S11——按钮码 ticket:comment/note/relation/close/assign/update/delete） =====
+
+/** 评论/备注行（= model.TicketComment 投影；作者为裸 user_id——comments 姓名回填
+ * 属后续后端批，前端暂显 ID，勿 N+1 逐条反查） */
+export interface TicketCommentRow {
+  id: string
+  ticket_id: string
+  user_id: string
+  content: string
+  is_internal: boolean
+  created_at: string
+}
+
+/** 评论列表（无分页——01 §8-W4：详情页「全部展示+条数上限提示」，勿假设 page/total） */
+export async function getTicketCommentsApi(id: string): Promise<TicketCommentRow[]> {
+  const data = await request.get(`/api/v1/tickets/${id}/comments`)
+  return ((data as unknown as { comments?: TicketCommentRow[] })?.comments ?? [])
+}
+
+/** 发表公开评论（POST /tickets/comments） */
+export async function createTicketCommentApi(ticketId: string, content: string): Promise<void> {
+  await request.post('/api/v1/tickets/comments', { ticket_id: ticketId, content }, { _silentError: true })
+}
+
+/** 发表内部备注（POST /tickets/notes——仅创建人/处理人/admin 可见，服务端过滤） */
+export async function createTicketNoteApi(ticketId: string, content: string): Promise<void> {
+  await request.post('/api/v1/tickets/notes', { ticket_id: ticketId, content }, { _silentError: true })
+}
+
+/** 关联行（= model.TicketRelation 投影；deleted_at 软删不返回） */
+export interface TicketRelationRow {
+  id: string
+  source_ticket_id: string
+  target_ticket_id: string
+  relation_type: string
+  created_by: string
+  created_at: string
+}
+
+/** 关联列表（正反向均返回——渲染按 source 是否为本单判方向） */
+export async function getTicketRelationsApi(id: string): Promise<TicketRelationRow[]> {
+  const data = await request.get(`/api/v1/tickets/${id}/relations`)
+  return ((data as unknown as { relations?: TicketRelationRow[] })?.relations ?? [])
+}
+
+/** 建立关联（relation_type 缺省 related；自关联 400/正反向判重 409——调用方内联呈现） */
+export async function createTicketRelationApi(
+  sourceTicketId: string,
+  targetTicketId: string,
+  relationType?: string,
+): Promise<void> {
+  await request.post('/api/v1/tickets/relations', {
+    source_ticket_id: sourceTicketId,
+    target_ticket_id: targetTicketId,
+    ...(relationType ? { relation_type: relationType } : {}),
+  }, { _silentError: true })
+}
+
+/** 编辑工单（patch：title/description/priority——后端字段级 COALESCE，nil 不覆盖；
+ * closed 后 409+90004） */
+export async function updateTicketApi(
+  id: string,
+  patch: { title?: string; description?: string; priority?: number },
+): Promise<void> {
+  await request.post('/api/v1/tickets/update', { id, ...patch }, { _silentError: true })
+}
+
+/** 关闭工单（状态机校验；成功无响应体——调用方靠失效刷新，勿依赖返回值） */
+export async function closeTicketApi(id: string, comment?: string): Promise<void> {
+  await request.post('/api/v1/tickets/close', { id, ...(comment ? { comment } : {}) }, { _silentError: true })
+}
+
+/** 分派/取消分派（assignedTo=null 取消分派；open→assigned/assigned→open 自动推状态；
+ * assigned_to 用户存在性校验属后端随手项池——传错 ID 500 兜底，前端仅格式预检） */
+export async function assignTicketApi(id: string, assignedTo: string | null): Promise<void> {
+  await request.post('/api/v1/tickets/assign', { id, ...(assignedTo ? { assigned_to: assignedTo } : { assigned_to: null }) }, { _silentError: true })
+}
+
+/** 删除工单（软删） */
+export async function deleteTicketApi(id: string): Promise<void> {
+  await request.post('/api/v1/tickets/delete', { id }, { _silentError: true })
+}

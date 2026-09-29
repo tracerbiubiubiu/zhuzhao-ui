@@ -12,6 +12,7 @@ import { computed, ref } from 'vue'
 import {
   ElButton, ElCard, ElEmpty, ElMessage, ElMessageBox, ElOption, ElSelect,
   ElTable, ElTableColumn, ElTag,
+  ElAlert,
 } from 'element-plus'
 import {
   getMyOrgsApi, getOrgRosterApi, removeMemberApi, setMemberRoleApi, setMemberScopeApi,
