@@ -7,11 +7,12 @@
  * - offset 分页（ProTable）；行展开显 request_body/user_agent（审计溯源载荷）
  * - P4-8 对账/指标极简查询页：后端本体未开工（穿插池件），本页不含——随本体批交付
  */
-import { reactive, ref } from 'vue'
-import { ElButton, ElCard, ElDatePicker, ElDialog, ElForm, ElFormItem, ElInput, ElTag } from 'element-plus'
+import { reactive, ref, watch } from 'vue'
+import { ElAlert, ElButton, ElCard, ElDatePicker, ElDialog, ElForm, ElFormItem, ElInput, ElTabPane, ElTable, ElTableColumn, ElTabs, ElTag } from 'element-plus'
 import ProTable from '@/components/ProTable/index.vue'
 import type { ProTableColumn } from '@/components/ProTable/types'
 import { listAuditLogsApi, type AuditLogRow } from '@/api/audit'
+import request from '@vea/request'
 
 // keep-alive 契约：name=动态路由名（菜单 code audit_log，组件路径 audit/log/index）
 defineOptions({ name: 'audit_log' })
@@ -82,10 +83,51 @@ function prettyBody(row: AuditLogRow): string {
     return row.request_body
   }
 }
+
+// ─── P4-8：panic 聚合 + 路由对账 ───
+const activeTab = ref('logs')
+const panics = ref<Array<{ id: string; message: string; path: string; count: number; last_at: string }>>([])
+const panicsLoading = ref(false)
+const panicsTotal = ref(0)
+const panicsPage = ref(1)
+watch(activeTab, (t) => { if (t === 'panics' && !panics.value.length) fetchPanics() })
+
+async function fetchPanics(p = panicsPage.value) {
+  panicsLoading.value = true
+  try {
+    const data = await request.get('/api/v1/audit/panics', { params: { page: p, page_size: 20 } }) as unknown as {
+      list: typeof panics.value; total: number; page: number
+    }
+    panics.value = data.list ?? []
+    panicsTotal.value = data.total
+    panicsPage.value = data.page
+  } finally {
+    panicsLoading.value = false
+  }
+}
+
+const reconcileGaps = ref<string[]>([])
+const reconcileLoading = ref(false)
+const reconcileAt = ref('')
+
+async function runReconcile() {
+  reconcileLoading.value = true
+  try {
+    const data = await request.get('/api/v1/audit/reconcile') as unknown as {
+      gaps: string[]; gap_count: number; checked_at: string
+    }
+    reconcileGaps.value = data.gaps ?? []
+    reconcileAt.value = data.checked_at
+  } finally {
+    reconcileLoading.value = false
+  }
+}
 </script>
 
 <template>
   <div class="p-4">
+    <el-tabs v-model="activeTab">
+      <el-tab-pane label="审计日志" name="logs">
     <el-card shadow="never">
       <template #header><span class="font-semibold">审计日志</span></template>
       <ProTable ref="tableRef" :columns="columns" :fetcher="fetcher">
@@ -121,6 +163,43 @@ function prettyBody(row: AuditLogRow): string {
         </template>
       </ProTable>
     </el-card>
+      </el-tab-pane>
+
+      <!-- P4-8 panic 聚合 -->
+      <el-tab-pane label="Panic 聚合" name="panics">
+        <el-card shadow="never">
+          <template #header><span class="font-semibold">Panic 聚合（同指纹计数——最近优先）</span></template>
+          <el-table :data="panics" v-loading="panicsLoading" row-key="id">
+            <el-table-column prop="count" label="次数" width="80" align="center" />
+            <el-table-column prop="path" label="路径" min-width="200" />
+            <el-table-column prop="message" label="消息" min-width="260" show-overflow-tooltip />
+            <el-table-column prop="last_at" label="最近发生" width="170">
+              <template #default="{ row }">{{ formatTime((row as { last_at: string }).last_at) }}</template>
+            </el-table-column>
+          </el-table>
+          <div class="text-xs text-gray-400 mt-2">共 {{ panicsTotal }} 个聚合指纹</div>
+        </el-card>
+      </el-tab-pane>
+
+      <!-- P4-8 路由对账 -->
+      <el-tab-pane label="路由对账" name="reconcile">
+        <el-card shadow="never">
+          <template #header>
+            <div class="flex items-center justify-between">
+              <span class="font-semibold">路由 ↔ menu_apis 双向对账</span>
+              <el-button size="small" :loading="reconcileLoading" @click="runReconcile">立即对账</el-button>
+            </div>
+          </template>
+          <el-alert
+            :type="reconcileGaps.length ? 'error' : 'success'"
+            :title="reconcileGaps.length ? `发现 ${reconcileGaps.length} 项缺口` : '对账通过：无缺口'"
+            :description="reconcileAt ? `检查时间：${reconcileAt}` : ''"
+            show-icon :closable="false" class="mb-3"
+          />
+          <pre v-if="reconcileGaps.length" class="text-xs whitespace-pre-wrap bg-gray-50 dark:bg-gray-800 p-3 rounded">{{ reconcileGaps.join('\n') }}</pre>
+        </el-card>
+      </el-tab-pane>
+    </el-tabs>
 
     <!-- 审计载荷（request_body JSON 美化——溯源） -->
     <el-dialog v-model="payloadVisible" :title="`#${payloadRow?.id ?? ''} 载荷`" width="640px">
