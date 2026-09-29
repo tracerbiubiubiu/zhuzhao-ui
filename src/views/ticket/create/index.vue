@@ -197,9 +197,11 @@ async function handleSubmit() {
             <el-input-number
               v-else-if="f.field_type === 'number'" v-model="form.custom[f.field_key] as number | undefined"
             />
+            <!-- 后端 validateFieldValue 严格校验 YYYY-MM-DD——value-format 直出字符串，
+                 防 Date 对象被序列化成 ISO datetime 而吃 400 -->
             <el-date-picker
               v-else-if="f.field_type === 'date'" v-model="(form.custom[f.field_key] as string | undefined)"
-              type="datetime" class="!w-full"
+              type="date" value-format="YYYY-MM-DD" class="!w-full"
             />
             <el-select
               v-else-if="f.field_type === 'select'" v-model="(form.custom[f.field_key] as string | undefined)"

@@ -91,9 +91,10 @@ export interface CreateTicketInput {
   custom_data?: Record<string, unknown>
 }
 
-export async function createTicketApi(input: CreateTicketInput): Promise<{ id: string }> {
+/** 创建成功返回完整 Ticket 对象（含 id/status/org_path 等——非 {id} 窄形，调用方按需解构） */
+export async function createTicketApi(input: CreateTicketInput): Promise<TicketRow> {
   const data = await request.post('/api/v1/tickets', input, { _silentError: true })
-  return data as unknown as { id: string }
+  return data as unknown as TicketRow
 }
 
 /** 工单状态（03 S11：六态；in_progress/pending_verify/rejected 经 API 流转不可达——
