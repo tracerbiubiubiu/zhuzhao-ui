@@ -1686,6 +1686,8 @@ export interface paths {
                     type_code?: string;
                     /** @description 工单状态 */
                     status?: string;
+                    /** @description 处理人过滤，仅支持 me（当前用户——工作台待办/已办卡数据源） */
+                    assignee?: string;
                 };
                 header?: never;
                 path?: never;
