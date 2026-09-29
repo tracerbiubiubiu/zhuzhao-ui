@@ -4,7 +4,7 @@ zhuzhao（Go 模块化单体 IAM + 工单系统）的前端控制台。**全部�
 
 ## 状态
 
-**W3 system 域已交付**（2026-09-28）——四张管理页全功能化（用户/角色[AssignMenus check-strictly+乐观锁]/菜单只读树/组织两面）+ 三范例页（ProTable 列表/表单乐观锁/树管理）+ 个人中心页 + 「我的组织」自服务面（名册+owner 委托控件，后端 GET /user/orgs+GET /orgs/members/list 两自服务端点随批交付）+ vue-query/ProTable 基建 + codegen 类型接线。E2E 9 spec（S1/S2/S3–S7/FE3）打真实三栈全绿，单测 85 例。W2 遗留欠账（个人中心/三范例页）随本波全部清零。下一波 P4-W4 ticket 域。
+**P4-W4 ticket 域进行中**（2026-09-29 快照）——已交付两批：开工首批=工单列表页（ProTable+状态筛选）+ 详情/发起静态路由骨架（参数路由前缀豁免）+ W4 冒烟；发起表单批=动态字段渲染器（七字段类型+required/regex 预检）+ 组织双源下拉（`GET /user/orgs` 自服务优先、管理面兜底）+ S8 E2E（API 造类型→UI 预检→提交跳详情）。剩余：详情完整批（评论/备注/关联/流转四操作）、类型/字段/模板三件套、后端随批件（`assignee=me` 点亮工作台待办卡+列表姓名回填防 N+1）。此前 W2 壳层、W3 system 域（四管理页+三范例页+个人中心+「我的组织」）已全部交付。E2E 11 spec（S1–S8/FE3/W4 冒烟）打真实三栈全绿，单测 87 例。
 
 ## 分支纪律
 
@@ -28,10 +28,10 @@ Vue 3 + TypeScript strict + Vite 8 ｜ Element Plus 2.14 ｜ Pinia 4（客户端
 ```bash
 pnpm lint        # ESLint（纯检查；修复用 pnpm lint:fix）
 pnpm typecheck   # vue-tsc --noEmit（codegen 类型漂移在此报错）
-pnpm test        # Vitest（buildRoutes/tokenStorage/请求层 单测）
+pnpm test        # Vitest（动态路由/请求层/keep-alive 防漂移 单测 87 例）
 pnpm build       # 生产构建
 pnpm audit --prod # npm 供应链
-pnpm test:e2e    # Playwright（S1/S2/FE3——运行前提见下）
+pnpm test:e2e    # Playwright（S1–S8/FE3/W4 冒烟 11 spec——运行前提见下）
 ```
 
 ### E2E 运行前提（打标准三栈，不用 stub）

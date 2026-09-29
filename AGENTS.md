@@ -6,11 +6,11 @@
 
 ```bash
 pnpm lint          # ESLint（纯检查；自动修复用 pnpm lint:fix，修复后重跑 lint）
-pnpm typecheck     # vue-tsc --noEmit（codegen 类型**接线后**契约漂移在此编译期报错——api 层切 generated 类型随 P4-W3 首个页面批；当前漂移靠 pnpm codegen 重跑零 diff 核对）
-pnpm test          # Vitest（composables/动态路由解析/单飞刷新）
+pnpm typecheck     # vue-tsc --noEmit（api 层已接 codegen 生成类型（W3 起）——契约漂移在此编译期报错；改 API 形状后先 pnpm codegen 再过本门禁）
+pnpm test          # Vitest（动态路由解析/请求层单飞刷新/keep-alive 防漂移断言）
 pnpm audit --prod  # npm 供应链（对称 Go 侧 govulncheck；镜像源无 audit 端点时加 --registry=https://registry.npmjs.org）
 pnpm build         # 产物构建
-pnpm test:e2e      # Playwright（S1/S2/FE3；打标准三栈不用 stub——前提见下）
+pnpm test:e2e      # Playwright（S1–S8/FE3/W4 冒烟 11 spec；打标准三栈不用 stub——前提见下）
 ```
 
 **E2E 运行前提**：主仓 `bash scripts/dev-stack.sh up`（dev PG/Redis）+ `INTERNAL_JOBS_SK=xxx make dev`（app @33333）；vite dev server 由 Playwright webServer 自动拉起。globalSetup 幂等建号（admin 凭据闭环/operator·viewer 预设/S1 重置），可无限重放。浏览器下载被墙时：`PLAYWRIGHT_DOWNLOAD_HOST=https://cdn.npmmirror.com/binaries/playwright pnpm exec playwright install chromium`。
