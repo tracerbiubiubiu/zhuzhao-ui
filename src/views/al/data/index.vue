@@ -41,22 +41,28 @@ const nextCursor = ref<AlCursor | null>(null)
 const cursorStack = ref<AlCursor[]>([])
 const page = computed(() => cursorStack.value.length + 1)
 
+// 审计修复（2026-09-30 P2）：切类型竞态守卫（ticket/create 的 fieldsSeq 同款）——
+// 旧类型在途响应后到不得覆盖新选中类型
+let fetchSeq = 0
 async function fetchPage(cursor: AlCursor | null) {
   if (!selectedType.value) return
+  const seq = ++fetchSeq
   listLoading.value = true
   try {
     const res = await listAlDataApi(selectedType.value, {
       page_size: pageSize.value,
       ...(cursor ? { after_created_at: cursor.after_created_at, after_id: cursor.after_id } : {}),
     })
+    if (seq !== fetchSeq) return // 已切别的类型——弃置过期响应
     list.value = res.list
     pageSize.value = res.page_size
     nextCursor.value = res.next_cursor
   } catch {
+    if (seq !== fetchSeq) return
     list.value = []
     nextCursor.value = null
   } finally {
-    listLoading.value = false
+    if (seq === fetchSeq) listLoading.value = false
   }
 }
 

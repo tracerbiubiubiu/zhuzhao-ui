@@ -31,7 +31,9 @@
       return
     }
 
-  await userStore.logout()
+  // 审计修复（2026-09-30 P2）：logout 内 finally 已 resetState+清缓存，
+  // 出网失败重抛会滞留原页连环 401——吞错保跳转（会话本地已拆净）
+  await userStore.logout().catch(() => {})
   router.push('/login')
   // 跳登录页（request 层 hash redirect 由守卫处理）
   }

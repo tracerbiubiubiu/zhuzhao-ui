@@ -133,9 +133,28 @@ function patStatus(row: PatRow): { label: string; type: 'success' | 'danger' | '
   return { label: '生效中', type: 'success' }
 }
 
-function copySecret() {
-  navigator.clipboard?.writeText(createdSecret.value)
-  ElMessage.success('已复制')
+async function copySecret() {
+  // 审计修复（2026-09-30 P2）：非安全上下文（http 内网域名）clipboard 为 undefined——
+  // 原假成功致凭据永久丢失。兜底 execCommand+失败时明示手选
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(createdSecret.value)
+      ElMessage.success('已复制')
+      return
+    }
+    const ta = document.createElement('textarea')
+    ta.value = createdSecret.value
+    ta.style.position = 'fixed'
+    ta.style.opacity = '0'
+    document.body.appendChild(ta)
+    ta.select()
+    const ok = document.execCommand('copy')
+    document.body.removeChild(ta)
+    if (ok) ElMessage.success('已复制')
+    else ElMessage.warning('复制失败——请手动选中文本复制')
+  } catch {
+    ElMessage.warning('复制失败——请手动选中文本复制')
+  }
 }
 
 function formatTime(iso?: string | null): string {

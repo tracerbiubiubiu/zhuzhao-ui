@@ -26,9 +26,9 @@ describe('classifySessionLoadError（§3.3 会话加载失败分段）', () => {
     expect(classifySessionLoadError(axiosErr(401, 20003))).toBe('terminal')
   })
 
-  it('非 20007 的 403 → terminal', () => {
+  it('非 20007 的 403 → transient（审计修正：裸 403 归 transient，仅带业务码的终态 403 拆会话）', () => {
     expect(classifySessionLoadError(axiosErr(403, 10004))).toBe('terminal')
-    expect(classifySessionLoadError(axiosErr(403))).toBe('terminal')
+    expect(classifySessionLoadError(axiosErr(403))).toBe('transient')
   })
 
   it('无响应（网络断开/超时）与非 axios 形态错误 → transient', () => {
