@@ -31,7 +31,7 @@ pnpm typecheck   # vue-tsc --noEmit（codegen 类型漂移在此报错）
 pnpm test        # Vitest（动态路由/请求层/keep-alive 防漂移 单测 87 例）
 pnpm build       # 生产构建
 pnpm audit --prod # npm 供应链
-pnpm test:e2e    # Playwright（S1–S8/FE3/W4·W5 冒烟 14 spec——运行前提见下）
+pnpm test:e2e    # Playwright（S1–S8/FE3/W4·W5 冒烟 15 spec——运行前提见下）
 ```
 
 ### E2E 运行前提（打标准三栈，不用 stub）
@@ -45,7 +45,12 @@ cd ../activelist && docker compose -f deploy/compose.dev.yaml up -d
 ACTIVELIST_PG_PORT=15432 ACTIVELIST_CALLER_ZHUZHAO_SK=dev-gateway-sk go run ./cmd/apiserver  # @8080
 #    + 主仓 configs/config.yaml 的 gateway target 需指向 127.0.0.1:8080（默认 activelist:8080
 #    为 compose 网络主机名——宿主形态改后跑，勿提交；compose 形态天然可达免改）
-# ③ 前端 dev server（vite @4000，/api、/al 反代 33333）由 Playwright webServer 自动拉起
+# ③ taskrunner 上游（W5 task 场景需五栈；Redis 复用 dev 栈 6379、SQLite 零依赖）
+cd ../taskrunner && TASKRUNNER_HTTP_ADDR=:8081 TASKRUNNER_REDIS_PASSWORD=zhuzhao_dev \
+  TASKRUNNER_CALLER_ZHUZHAO_SK=<sk> TASKRUNNER_SELF_SK=<sk> \
+  TASKRUNNER_CALLBACK_TARGET_URL=http://127.0.0.1:33333/internal/jobs/callback go run ./cmd/taskrunner
+#    + ① 的 make dev 带 env：TASKRUNNER_BASE_URL=http://127.0.0.1:8081 TASKRUNNER_SK=<同上 sk>
+# ④ 前端 dev server（vite @4000，/api、/al 反代 33333）由 Playwright webServer 自动拉起
 cd ../zhuzhao-ui && pnpm test:e2e
 ```
 
