@@ -42,7 +42,9 @@ export function isExemptRoute(to: { path: string; name?: unknown }): boolean {
   if (ROUTE_EXEMPT_PATHS.includes(path)) return true
   // 工单发起/详情（§3.2④ 静态补充路由+参数路由——route:/tickets/:id 无精确码可校验，
   // 守卫放行；真实边界在后端 L2/L3，入口可见性由列表页 ticket:create/read 按钮码控制）
-  if (path === '/tickets' || path.startsWith('/tickets/')) return true
+  // 审计修复（2026-09-30 P2）：收窄三态精确匹配——原前缀放行使 /tickets/types
+  // （admin 写页，000018）绕过 route:{path} 校验
+  if (path === '/tickets' || path === '/tickets/new' || /^\/tickets\/\d+$/.test(path)) return true
   // redirect 中转（/redirect/:path(.*)）——tags 刷新用，不参与权限
   // （精确前缀：'/redirect/' 起——裸 startsWith('/redirect') 会误豁免 '/redirector' 类路径）
   if (path === '/redirect' || path.startsWith('/redirect/')) return true

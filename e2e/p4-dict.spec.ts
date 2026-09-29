@@ -51,7 +51,7 @@ test('P4-3 字典：类型/项 CRUD+消费端点启用过滤', async ({ page }) 
     }
 
     // ── 消费端点：只回启用项（prod）——业务表单选项语义 ──
-    const items = await api(`/api/v1/dicts/${typeCode}/items`, { ...h, method: 'GET' })
+    const items = await api(`/api/v1/user/dicts/${typeCode}/items`, { ...h, method: 'GET' })
     expect(items.env!.code).toBe(0)
     const data = items.env!.data as { items: Array<{ code: string }> }
     expect(data.items.map((i) => i.code)).toEqual(['prod'])

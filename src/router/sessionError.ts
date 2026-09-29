@@ -28,5 +28,8 @@ export function classifySessionLoadError(err: unknown): SessionLoadErrorKind {
   if (status === 403 && bizCode === 20007) return 'change-password'
   // 5xx（Redis 抖动 503+10008 等 fail-closed 可重试）与 429（10007 限流，Retry-After 后重试）
   if (status >= 500 || status === 429) return 'transient'
+  // 审计修复（2026-09-30 P2）：裸 403（无业务码）归 transient——403=已认证但无权，
+  // 会话加载期网关/Casbin 裸 403 不应登出有效会话；带业务码的 403（如 10004）仍终态
+  if (status === 403 && !bizCode) return 'transient'
   return 'terminal'
 }

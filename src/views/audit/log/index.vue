@@ -190,10 +190,13 @@ async function runReconcile() {
               <el-button size="small" :loading="reconcileLoading" @click="runReconcile">立即对账</el-button>
             </div>
           </template>
-          <el-alert
+          <!-- 审计修复（2026-09-30 P2）：未执行不显示通过态（三态：未执行/通过/缺口） -->
+          <el-alert v-if="!reconcileAt" type="info" title="尚未执行——点击「立即对账」"
+            show-icon :closable="false" class="mb-3" />
+          <el-alert v-else
             :type="reconcileGaps.length ? 'error' : 'success'"
             :title="reconcileGaps.length ? `发现 ${reconcileGaps.length} 项缺口` : '对账通过：无缺口'"
-            :description="reconcileAt ? `检查时间：${reconcileAt}` : ''"
+            :description="`检查时间：${reconcileAt}`"
             show-icon :closable="false" class="mb-3"
           />
           <pre v-if="reconcileGaps.length" class="text-xs whitespace-pre-wrap bg-gray-50 dark:bg-gray-800 p-3 rounded">{{ reconcileGaps.join('\n') }}</pre>

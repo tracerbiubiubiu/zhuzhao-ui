@@ -41,7 +41,11 @@ const { state, actions } = useCrud<{ [key: string]: any }>({
 
 defineExpose({
   /** 搜索提交入口（resetPage=true 回第一页）与写操作后刷新共用 */
-  refresh: actions.refresh,
+  refresh: (function (raw: typeof actions.refresh) {
+    return function wrapped(this: unknown, ...args: Parameters<typeof raw>) {
+      void raw.apply(this, args).catch(function noop() {})
+    }
+  })(actions.refresh),
   state,
 })
 </script>
