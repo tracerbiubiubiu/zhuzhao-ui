@@ -65,6 +65,115 @@ export async function listTicketTypesApi(): Promise<TicketTypeRow[]> {
   return ((data as unknown as { types?: TicketTypeRow[] })?.types ?? [])
 }
 
+/** 类型管理行（S12 三件套——= model.TicketType 全量投影；states/transitions 为
+ * JSONB 原文（配置即代码，管理页 JSON 源码模式），version 供 CAS 回传） */
+export interface TicketTypeFullRow extends TicketTypeRow {
+  states?: unknown
+  transitions?: unknown
+  is_active: boolean
+  version: number
+}
+
+/** 字段定义输入（ReplaceTypeFields——field_options 归一为字符串数组，后端
+ * optionValues 兼容字符串数组与 {value,label} 对象数组两种形态） */
+export interface TicketTypeFieldInput {
+  field_key: string
+  field_label: string
+  field_type: 'input' | 'textarea' | 'number' | 'date' | 'select' | 'multi_select' | 'tips'
+  field_options?: string[]
+  required: boolean
+  validate_regex?: string
+  sort_order: number
+}
+
+export async function createTicketTypeApi(input: {
+  code: string
+  name: string
+  description?: string
+  is_active?: boolean
+}): Promise<void> {
+  await request.post('/api/v1/ticket-types', input, { _silentError: true })
+}
+
+/** 更新类型（patch；code 不可改入 body；states/transitions 传 JSONB 原文；
+ * version 可选 CAS——nil 保持旧 patch 行为，管理页应带上收 10006 内联） */
+export async function updateTicketTypeApi(input: {
+  code: string
+  name?: string
+  description?: string
+  states?: unknown
+  transitions?: unknown
+  is_active?: boolean
+  version?: number
+}): Promise<void> {
+  await request.post('/api/v1/ticket-types/update', input, { _silentError: true })
+}
+
+/** 删除类型（有工单禁删 → 409+10005） */
+export async function deleteTicketTypeApi(code: string): Promise<void> {
+  await request.post('/api/v1/ticket-types/delete', { code }, { _silentError: true })
+}
+
+/** 字段全量替换（S12/S23：危险确认弹窗是前端硬要求——整组替换语义） */
+export async function replaceTicketTypeFieldsApi(input: {
+  code: string
+  fields: TicketTypeFieldInput[]
+  version?: number
+}): Promise<TicketTypeFieldDef[]> {
+  const data = await request.post('/api/v1/ticket-types/fields/replace', input, { _silentError: true })
+  return ((data as unknown as { fields?: TicketTypeFieldDef[] })?.fields ?? [])
+}
+
+// ===== S12：模板管理（GET 共享行挂页、写挂 ticket:type:manage——000031 词表重排） =====
+
+/** 模板行（= model.TicketTemplate 的 JSON 投影） */
+export interface TicketTemplateRow {
+  id: string
+  code: string
+  name: string
+  type_code: string
+  default_priority: number
+  default_fields?: unknown
+  default_sla_minutes?: number
+  version: number
+  org_id: string
+  created_at: string
+}
+
+export async function listTicketTemplatesApi(): Promise<TicketTemplateRow[]> {
+  // 响应为 {templates:[...]} 包装（gin.H 同款）
+  const data = await request.get('/api/v1/ticket-templates')
+  return ((data as unknown as { templates?: TicketTemplateRow[] })?.templates ?? [])
+}
+
+export async function createTicketTemplateApi(input: {
+  code: string
+  name: string
+  type_code: string
+  default_priority?: number
+  default_fields?: unknown
+  default_sla_minutes?: number
+  org_id: string
+}): Promise<void> {
+  await request.post('/api/v1/ticket-templates', input, { _silentError: true })
+}
+
+/** 更新模板（patch；code/type_code/org 不可改；version 可选 CAS） */
+export async function updateTicketTemplateApi(input: {
+  code: string
+  name?: string
+  default_priority?: number
+  default_fields?: unknown
+  default_sla_minutes?: number
+  version?: number
+}): Promise<void> {
+  await request.post('/api/v1/ticket-templates/update', input, { _silentError: true })
+}
+
+export async function deleteTicketTemplateApi(code: string): Promise<void> {
+  await request.post('/api/v1/ticket-templates/delete', { code }, { _silentError: true })
+}
+
 /** 自定义字段定义（= model.TicketTypeField 投影；field_type 七枚举） */
 export interface TicketTypeFieldDef {
   id: string

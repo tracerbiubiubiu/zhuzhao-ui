@@ -99,8 +99,11 @@ export const setupPermission = () => {
       try {
         await userStore.loadSession()
         await ensureDynamicRoutes()
-        // 重新导航到目标（addRoute 后路由表已变，需 replace 触发匹配）
-        next({ ...to, replace: true })
+        // 重新导航到目标（addRoute 后路由表已变，需 replace 触发匹配）。
+        // ⚠ 必须按 path 重导航：`{...to}` 会保留 to.name——若初始解析在动态路由
+        // 注册前落进了静态参数路由（如 /tickets/:id 吞掉 /tickets/types），
+        // 按名重导航会再次命中旧匹配，菜单页 reload 后永远渲染成详情壳（S12 实证）。
+        next({ path: to.fullPath, replace: true })
         return
       } catch (err) {
         // §3.3 分段（classifySessionLoadError，与请求层 refreshAccessToken 同一哲学）：
