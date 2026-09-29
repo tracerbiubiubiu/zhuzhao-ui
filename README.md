@@ -31,7 +31,7 @@ pnpm typecheck   # vue-tsc --noEmit（codegen 类型漂移在此报错）
 pnpm test        # Vitest（动态路由/请求层/keep-alive 防漂移 单测 87 例）
 pnpm build       # 生产构建
 pnpm audit --prod # npm 供应链
-pnpm test:e2e    # Playwright（S1–S8/FE3/W4 冒烟 11 spec——运行前提见下）
+pnpm test:e2e    # Playwright（S1–S8/FE3/W4·W5 冒烟 14 spec——运行前提见下）
 ```
 
 ### E2E 运行前提（打标准三栈，不用 stub）
@@ -40,7 +40,12 @@ pnpm test:e2e    # Playwright（S1–S8/FE3/W4 冒烟 11 spec——运行前提�
 # ① 后端栈：主仓 dev PG/Redis + app（宿主进程）
 cd ../zhuzhao && bash scripts/dev-stack.sh up
 INTERNAL_JOBS_SK=dev-e2e-callback-sk make dev        # app @33333
-# ② 前端 dev server（vite @4000，/api、/al 反代 33333）由 Playwright webServer 自动拉起
+# ② activelist 上游（W5 al 场景需四栈）：PG + 服务（验签 SK 须与主仓 gateway.sk 一致）
+cd ../activelist && docker compose -f deploy/compose.dev.yaml up -d
+ACTIVELIST_PG_PORT=15432 ACTIVELIST_CALLER_ZHUZHAO_SK=dev-gateway-sk go run ./cmd/apiserver  # @8080
+#    + 主仓 configs/config.yaml 的 gateway target 需指向 127.0.0.1:8080（默认 activelist:8080
+#    为 compose 网络主机名——宿主形态改后跑，勿提交；compose 形态天然可达免改）
+# ③ 前端 dev server（vite @4000，/api、/al 反代 33333）由 Playwright webServer 自动拉起
 cd ../zhuzhao-ui && pnpm test:e2e
 ```
 
