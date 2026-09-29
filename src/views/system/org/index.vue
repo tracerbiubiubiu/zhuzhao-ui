@@ -11,6 +11,7 @@ import { computed, reactive, ref } from 'vue'
 import {
   ElButton, ElCard, ElDialog, ElForm, ElFormItem, ElInput, ElInputNumber, ElMessage,
   ElMessageBox, ElOption, ElSelect, ElSwitch, ElTag, ElTree, ElTreeSelect,
+  ElAlert,
 } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
 import { useQuery, useQueryClient } from '@tanstack/vue-query'

@@ -2,6 +2,10 @@
  * S8 工单发起（03 号 §2）：动态字段渲染器 + required/regex 客户端预检 + org_id 必填 +
  * 提交成功跳详情。幂等：API 造带字段的临时类型（ticket:type:manage——admin 专属），
  * finally 删类型；发起的工单不清理（无端点级联约束，留作列表数据）。
+ *
+ * 字段类型覆盖（W4 详情批扩）：input(required+regex)/select/tips 之外补
+ * date/number/multi_select 三类型全流程——date 值提交过 G2 后端校验
+ * （validateFieldValue 严格 YYYY-MM-DD）即守住「渲染器须发合规字符串」的回归。
  */
 import { test, expect } from '@playwright/test'
 import { api, apiLogin, loadState } from './helpers'
@@ -30,6 +34,9 @@ test('S8：发起工单（动态字段+校验预检+跳详情）', async ({ page
         { field_key: 'contact', field_label: '联系方式', field_type: 'input', required: true, validate_regex: '^[0-9-]{5,20}$', sort_order: 1 },
         { field_key: 'env', field_label: '环境', field_type: 'select', required: true, field_options: ['生产', '测试'], sort_order: 2 },
         { field_key: 'note', field_label: '提示：请勿填写敏感信息', field_type: 'tips', sort_order: 3 },
+        { field_key: 'due_date', field_label: '期望完成日', field_type: 'date', sort_order: 4 },
+        { field_key: 'impact', field_label: '影响数量', field_type: 'number', sort_order: 5 },
+        { field_key: 'tags', field_label: '影响范围', field_type: 'multi_select', field_options: ['网络', '硬件'], sort_order: 6 },
       ],
     },
   })
@@ -67,6 +74,17 @@ test('S8：发起工单（动态字段+校验预检+跳详情）', async ({ page
     // 种子根组织「集团总部」由主仓迁移固化（S6 同依赖），天然绕开浮层歧义/hover 抖动/过渡态误判
     await page.getByRole('option', { name: '集团总部' }).click({ timeout: 15_000 })
     await expect(orgItem.locator('.el-select__placeholder')).toContainText('集团总部', { timeout: 10_000 })
+
+    // 扩展三类型（W4 详情批）：date（value-format 直出 YYYY-MM-DD）/number/multi_select
+    const dateItem = page.locator('.el-form-item').filter({ hasText: '期望完成日' })
+    await dateItem.locator('input').first().fill('2026-10-01')
+    await page.keyboard.press('Enter')
+    const impactItem = page.locator('.el-form-item').filter({ hasText: '影响数量' })
+    await impactItem.locator('input').fill('3')
+    const tagsItem = page.locator('.el-form-item').filter({ hasText: '影响范围' })
+    await tagsItem.locator('.el-select').click()
+    await page.getByRole('option', { name: '网络', exact: true }).click()
+    await page.keyboard.press('Escape') // 关闭下拉，防撞后续定位
 
     await page.getByRole('button', { name: '提交工单' }).click()
     // 成功跳详情（行为断言：URL 进入 /tickets/:id 且渲染标题）
