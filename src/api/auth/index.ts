@@ -11,6 +11,15 @@ import { getDeviceId, type TokenPair } from '@/common/auth/tokenStorage'
 export interface LoginParams {
   employee_no: string
   password: string
+  /** P4-7 验证码（后端 captcha_enabled 才必填——dev/E2E 关闭态零变化） */
+  captcha_id?: string
+  captcha?: string
+}
+
+/** 验证码获取（P4-7——enabled=false 仅返回开关态，前端据此显隐插槽） */
+export async function getCaptchaApi(): Promise<{ enabled: boolean; captcha_id?: string; image?: string }> {
+  const data = await request.get('/api/v1/auth/captcha')
+  return data as unknown as { enabled: boolean; captcha_id?: string; image?: string }
 }
 
 export async function loginApi(params: LoginParams): Promise<TokenPair> {
