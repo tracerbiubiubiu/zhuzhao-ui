@@ -1,7 +1,8 @@
 /**
  * 字典 API（P4-3——业务枚举运行时化；边界：不碰权限策略面）
  *
- * 类型/项两级+启停+version 乐观锁；消费端点 GET /dicts/:code/items 只回启用项
+ * 类型/项两级+启停+version 乐观锁；消费端点 GET /user/dicts/:code/items 只回启用项
+ * （000038 挪 SelfService——审计修正旧路径 404 潜伏雷）
  * （type 停用返回空）——业务表单选项场景用。
  */
 import request from '@vea/request'
@@ -92,6 +93,6 @@ export async function deleteDictItemApi(id: string): Promise<void> {
 
 /** 消费面：按 type 拉取启用项（业务表单选项——登录可读） */
 export async function getDictItemsByCodeApi(code: string): Promise<DictItemRow[]> {
-  const data = await request.get(`/api/v1/dicts/${encodeURIComponent(code)}/items`)
+  const data = await request.get(`/api/v1/user/dicts/${encodeURIComponent(code)}/items`)
   return ((data as unknown as { items?: DictItemRow[] })?.items ?? [])
 }
