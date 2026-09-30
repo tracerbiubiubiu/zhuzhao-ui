@@ -84,23 +84,27 @@
 <template>
   <el-form :model="values" label-position="top" size="large" @submit.prevent="submit">
     <el-form-item :error="Array.isArray(errors.employee_no) ? errors.employee_no[0] : errors.employee_no">
+      <!-- 四轮审计 #7：字符串 prefix-icon 走 resolveDynamicComponent，未注册名渲染成
+           未知原生元素（不可见）——改 #prefix 插槽 + 全局 Icon（离线 iconify，icons.ts 注册） -->
       <el-input
         v-model="values.employee_no"
         :placeholder="'工号'"
-        prefix-icon="mdi:account-outline"
         autocomplete="username"
-      />
+      >
+        <template #prefix><Icon icon="mdi:account-outline" /></template>
+      </el-input>
     </el-form-item>
     <el-form-item :error="Array.isArray(errors.password) ? errors.password[0] : errors.password">
       <el-input
         v-model="values.password"
         type="password"
         :placeholder="'密码'"
-        prefix-icon="mdi:lock-outline"
         show-password
         autocomplete="current-password"
         @keyup.enter="submit"
-      />
+      >
+        <template #prefix><Icon icon="mdi:lock-outline" /></template>
+      </el-input>
     </el-form-item>
     <!-- P4-7 验证码插槽（后端 enabled 才渲染——关闭态零变化） -->
     <el-form-item v-if="captchaEnabled">
