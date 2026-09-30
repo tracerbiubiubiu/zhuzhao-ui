@@ -8,7 +8,7 @@
  * 链路含 submitted_by=me（zhuzhao 代理换 actor——W5 随批件）的过滤行为断言。
  */
 import { test, expect } from '@playwright/test'
-import { loadState } from './helpers'
+import { api, apiLogin, loadState } from './helpers'
 import { uiLogin } from './ui'
 
 test.setTimeout(120_000)
@@ -38,13 +38,20 @@ test('W5 冒烟：任务中心四 Tab（提交/runs 过滤/死信/jobs）', asyn
   // submitted_by=zhuzhao username（actorOf——admin 账号即 'admin'，非工号）
   await expect(runRow).toContainText('admin')
 
-  // 「只看我提交的」：开开关重查——me→actor 过滤后行仍在
+  // 「只看我提交的」：开开关重查——me→actor 过滤后行仍在 + 阴性对照（operator 的 run 应消失——四轮审计）
+  const opSetup = await apiLogin(state.operator.employeeNo, state.operator.password, 'w5-op')
+  const opH = { token: opSetup.env!.data.access_token } as const
+  await api('/api/v1/tasks', { ...opH, method: 'POST', body: { action: `${action}_other` } })
   await page.locator('.el-form-item').filter({ hasText: '只看我提交的' }).locator('.el-switch').click()
   await page.getByRole('button', { name: '查询' }).click()
   await expect(page.locator('.el-table__row').filter({ hasText: action })).toHaveCount(1, { timeout: 15_000 })
+  await expect(page.locator('.el-table__row').filter({ hasText: `${action}_other` })).toHaveCount(0, { timeout: 5_000 })
 
-  // ── Tab2 死信：只读列表可达（空态或历史行均可——本单只断渲染不炸）──
+  // ── Tab2 死信（四轮审计：原只断表头——watch 修复无回归保护。改为真请求断言）──
+  const deadResp = page.waitForResponse((r) => r.url().includes('/api/v1/dead-letters'), { timeout: 10_000 })
   await page.getByRole('tab', { name: '死信' }).click()
+  const dresp = await deadResp
+  expect(dresp.status()).toBe(200)
   await expect(page.getByRole('columnheader', { name: '任务 ID' })).toBeVisible({ timeout: 10_000 })
 
   // ── Tab3 任务定义：UI 建 manual job（无 cron）→ 列表出现 + 手动触发按钮 ──

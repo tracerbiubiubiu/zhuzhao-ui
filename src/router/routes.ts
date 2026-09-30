@@ -29,7 +29,7 @@ const constantRoutes: RouteRecordRaw[] = [
   { path: '/tickets/new', name: 'TicketCreate', component: () => import('@/views/ticket/create/index.vue'), meta: { title: '发起工单', hidden: true } },
   { path: '/tickets/:id', name: 'TicketDetail', component: () => import('@/views/ticket/detail/index.vue'), meta: { title: '工单详情', hidden: true } },
   // Redirect 中转（挂在 Layout 下供 TagsView 刷新——见 router/index.ts）
-  { path: '/redirect/:path(.*)', name: 'Redirect', component: () => import('@/views/Redirect/Redirect.vue'), meta: { hidden: true } },
+  { path: '/redirect/:path(.*)', name: 'Redirect', component: () => import('@/views/Redirect/Redirect.vue'), meta: { hidden: true, noTagsView: true } } // noTagsView 防刷新幽灵标签（种子原版有——裁剪时丢失）,
 ]
 
 export default constantRoutes

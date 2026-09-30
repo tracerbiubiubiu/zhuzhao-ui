@@ -87,7 +87,7 @@
       <el-input
         v-model="values.employee_no"
         :placeholder="'工号'"
-        prefix-icon="User"
+        prefix-icon="mdi:account-outline"
         autocomplete="username"
       />
     </el-form-item>
@@ -96,7 +96,7 @@
         v-model="values.password"
         type="password"
         :placeholder="'密码'"
-        prefix-icon="Lock"
+        prefix-icon="mdi:lock-outline"
         show-password
         autocomplete="current-password"
         @keyup.enter="submit"

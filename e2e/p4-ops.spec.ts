@@ -14,8 +14,11 @@ test('P4-8 ops：三 Tab 可达+运行时对账零缺口', async ({ page }) => {
   await page.goto('/#/audit')
   await expect(page.getByRole('columnheader', { name: '操作人' })).toBeVisible({ timeout: 15_000 })
 
-  // Panic 聚合 Tab（空态或历史聚合——断言表头渲染）
+  // Panic 聚合 Tab（四轮审计：原表头断言数据永不加载也过——改为真请求+空态文案）
+  const panicResp = page.waitForResponse((r) => r.url().includes('/api/v1/audit/panics'), { timeout: 10_000 })
   await page.getByRole('tab', { name: 'Panic 聚合' }).click()
+  const resp = await panicResp
+  expect(resp.status()).toBe(200)
   await expect(page.getByRole('columnheader', { name: '最近发生' })).toBeVisible({ timeout: 10_000 })
 
   // 路由对账 Tab——立即对账 → 零缺口
