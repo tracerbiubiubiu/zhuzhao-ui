@@ -10,7 +10,7 @@ pnpm typecheck     # vue-tsc --noEmit（codegen 类型**部分接线**：入参�
 pnpm test          # Vitest（动态路由解析/请求层单飞刷新/keep-alive 防漂移断言）
 pnpm audit --prod  # npm 供应链（对称 Go 侧 govulncheck；镜像源无 audit 端点时加 --registry=https://registry.npmjs.org）
 pnpm build         # 产物构建
-pnpm test:e2e      # Playwright（S1–S8/S10/S12/FE3/W4·W5/P4 穿插池 19 spec；打真实栈不用 stub——W5 需 activelist/taskrunner 上游，前提见下）
+pnpm test:e2e      # Playwright（S1–S8/S10/S12/FE3/W4·W5/P4 穿插池 18 spec；打真实栈不用 stub——W5 需 activelist/taskrunner 上游，前提见下）
 ```
 
 **E2E 运行前提**：主仓 `bash scripts/dev-stack.sh up`（dev PG/Redis）+ `INTERNAL_JOBS_SK=xxx make dev`（app @33333）；W5 场景另需两上游：activelist（compose.dev PG@15432 + `ACTIVELIST_CALLER_ZHUZHAO_SK=dev-gateway-sk go run ./cmd/apiserver`@8080 + 主仓 gateway target 暂改 127.0.0.1:8080 勿提交）+ taskrunner（@8081：TASKRUNNER_REDIS_PASSWORD=zhuzhao_dev + CALLER_ZHUZHAO_SK/SELF_SK + CALLBACK_TARGET_URL=http://127.0.0.1:33333/internal/jobs/callback，app 侧带 TASKRUNNER_BASE_URL/TASKRUNNER_SK）；vite dev server 由 Playwright webServer 自动拉起。globalSetup 幂等建号（admin 凭据闭环/operator·viewer 预设/S1 重置），可无限重放。浏览器下载被墙时：`PLAYWRIGHT_DOWNLOAD_HOST=https://cdn.npmmirror.com/binaries/playwright pnpm exec playwright install chromium`。

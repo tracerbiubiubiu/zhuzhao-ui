@@ -93,7 +93,8 @@ export const useUserStore = defineStore('user', {
     /** 刷新后加载 session 三件：profile + menus + permissions（守卫 §3.1 步 3） */
     async loadSession() {
       if (this.sessionLoaded) return
-      const request = (await import('@vea/request')).default
+      // P3-4 修复：静态导入消除 INEFFECTIVE_DYNAMIC_IMPORT（动态导入在 tree-shake 后无效——build 警告根因）
+      const { default: request } = await import('@vea/request')
       const [profile, perms, menus] = await Promise.all([
         request.get('/api/v1/user/profile'),
         request.get('/api/v1/user/permissions'),

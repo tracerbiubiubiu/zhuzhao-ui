@@ -16,7 +16,6 @@
     "build:dev": "vite build --mode dev",
     "build:test": "vite build --mode test",
     "preview": "vite preview --mode pro",
-    "ts:check": "vue-tsc --noEmit --skipLibCheck",
     "typecheck": "vue-tsc --noEmit --skipLibCheck",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",

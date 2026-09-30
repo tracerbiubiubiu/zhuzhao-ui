@@ -86,8 +86,10 @@ onMounted(async () => {
   }
 })
 
-function formatTime(iso: string): string {
-  return iso?.replace('T', ' ').slice(0, 16) ?? ''
+function formatTime(iso?: string): string {
+  if (!iso) return ''
+  // P3-8 修复：对齐仓内范式（toLocaleString zh-CN+hour12:false）——原 replace('T',' ') 无时区转换
+  return new Date(iso).toLocaleString('zh-CN', { hour12: false })
 }
 </script>
 
