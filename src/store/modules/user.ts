@@ -11,6 +11,10 @@ import { loginApi, logoutApi, updatePasswordApi, type LoginParams } from '@/api/
 import {
   clearTokens, setTokens, isLoggedIn, type TokenPair,
 } from '@/common/auth/tokenStorage'
+// 静态导入（复检 P1-2 修）：vueQuery 模块零应用侧依赖（仅 @tanstack/vue-query），
+// 无环；原 logout 内动态导入既漏了 resetState 三路（401 终态/守卫失败不清缓存），
+// 又是 build INEFFECTIVE_DYNAMIC_IMPORT 警告源
+import { queryClient } from '@/plugins/vueQuery'
 import { usePermissionStore } from './permission'
 import { useTagsViewStore } from './tagsView'
 import { resetRouter } from '@/router'
@@ -122,10 +126,8 @@ export const useUserStore = defineStore('user', {
       try {
         await logoutApi()
       } finally {
-        // 会话拆除收敛为唯一实现（与 401 终态 / 守卫加载失败共用）
+        // 会话拆除收敛为唯一实现（与 401 终态 / 守卫加载失败共用——缓存清空在 resetState 内）
         this.resetState()
-        // 服务端态缓存一并清（01 §4：防跨用户残留上一账号的列表/详情缓存）
-        void import('@/plugins/vueQuery').then(({ queryClient }) => queryClient.clear())
       }
     },
 
@@ -154,6 +156,9 @@ export const useUserStore = defineStore('user', {
       // 5. 路由注册表复位（清动态路由 + 允许 catch-all 下次重新尾注册）
       resetRouter()
       resetCatchAll()
+      // 6. 服务端态缓存清空（01 §4：防跨用户残留上一账号的列表/详情缓存——
+      //    复检 P1-2：此前仅在 logout 清，401 终态与守卫失败走本方法不清 → 跨用户串台）
+      queryClient.clear()
     },
   },
 })

@@ -7,6 +7,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
 import { useUserStore } from './user'
+import { queryClient } from '@/plugins/vueQuery'
 
 // 打桩 @/router（避免真实 router 的 createWebHashHistory DOM 依赖——request 单测同款约定）
 vi.mock('@/router', () => ({
@@ -68,5 +69,19 @@ describe('user store 权限 getter', () => {
     expect(store.hasRoute('/system/user')).toBe(true)
     expect(store.hasRoute('/system/role')).toBe(false)
     expect(store.hasPermission('/system/user')).toBe(false)
+  })
+})
+
+describe('resetState 会话拆除（复检 P1-2 回归）', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+  })
+
+  it('清空 vue-query 服务端态缓存——401 终态/守卫失败两路走 resetState，不清=跨用户串台', () => {
+    const store = useUserStore()
+    const clearSpy = vi.spyOn(queryClient, 'clear')
+    store.resetState()
+    expect(clearSpy).toHaveBeenCalledTimes(1)
+    clearSpy.mockRestore()
   })
 })

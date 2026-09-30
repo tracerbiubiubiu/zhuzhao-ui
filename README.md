@@ -4,7 +4,7 @@ zhuzhao（Go 模块化单体 IAM + 工单系统）的前端控制台。**全部�
 
 ## 状态
 
-**Phase 4 完成定义达成（2026-09-29 收官，四轮审计后 2026-09-30 终态）**——主仓 02 §5.2 四条终验全绿：四波（W2 壳层/W3 system/W4 ticket/W5 三域）+P4-9 部署件+穿插池点名五件（通知/字典/导出/验证码/P2 小件）+加成交付（PAT/P4-8 四件套/cron 收归 B-1 根治）。四轮审计 31 项处置：10 解决 / 3 部分解决 / 3 设计取舍 / 13 遗留待办 / 2 撤回——逐项清单见 `outputs/审计复检报告-2026-10-01.md`（E2E 断言加固为真数据级）。E2E 18 spec / 19 用例打真实栈全绿（W5 场景五栈），Vitest 13 文件 / 99 用例。
+**Phase 4 完成定义达成（2026-09-29 收官，四轮审计后 2026-09-30 终态）**——主仓 02 §5.2 四条终验全绿：四波（W2 壳层/W3 system/W4 ticket/W5 三域）+P4-9 部署件+穿插池点名五件（通知/字典/导出/验证码/P2 小件）+加成交付（PAT/P4-8 四件套/cron 收归 B-1 根治）。四轮审计 31 项处置：14 解决（P1-1/P1-2/P1-3/P3-8 于 2026-10-01 补修批闭环）/ 3 设计取舍 / 12 遗留待办 / 2 撤回存疑——逐项基线见 `outputs/审计复检报告-2026-10-01.md`（E2E 断言加固为真数据级）。E2E 18 spec / 19 用例打真实栈全绿（W5 场景五栈），Vitest 13 文件 / 102 用例。
 
 ## 分支纪律
 
@@ -28,7 +28,7 @@ Vue 3 + TypeScript strict + Vite 8 ｜ Element Plus 2.14 ｜ Pinia 4（客户端
 ```bash
 pnpm lint        # ESLint（纯检查；修复用 pnpm lint:fix）
 pnpm typecheck   # vue-tsc --noEmit（codegen 类型**部分接线** 4/14——漂移仅接线面报错，与 AGENTS 同口径）
-pnpm test        # Vitest（动态路由/请求层/keep-alive 防漂移——13 文件 / 99 用例）
+pnpm test        # Vitest（动态路由/请求层/keep-alive 防漂移——13 文件 / 102 用例）
 pnpm build       # 生产构建
 pnpm audit --prod # npm 供应链
 pnpm test:e2e    # Playwright（S1–S8/S10/S12/FE3/W4·W5/P4 穿插池——18 spec / 19 用例，运行前提见下）

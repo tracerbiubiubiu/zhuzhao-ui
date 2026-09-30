@@ -7,7 +7,40 @@
  *  3. settings/setting 近似键并存照抄种子（设计文档 ⚠ 明示勿「纠正」拼写）。
  */
 import { describe, it, expect } from 'vitest'
+import { readFileSync, readdirSync, statSync } from 'node:fs'
+import { join, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { MENU_ICON_MAP, resolveMenuIcon, icons } from './icons'
+
+/** 复检新增缺口（2026-10-01）：视图内直写的 icon="mdi:..." 字面量不在种子链上——
+ *  拼错名（如 lock-outlien）侧栏测试照绿、图标静默零渲染（离线 iconify 未知名不渲染）。
+ *  本用例扫全部视图/布局模板字面量，逐个断言在注册表内。 */
+describe('视图内直写图标名', () => {
+  it('icon="mdi:..." 字面量全部已注册（拼错=静默零渲染）', () => {
+    const root = resolve(join(fileURLToPath(import.meta.url), '../..'))
+    const walk = (dir: string, out: string[] = []): string[] => {
+      for (const name of readdirSync(dir)) {
+        const p = join(dir, name)
+        if (statSync(p).isDirectory()) walk(p, out)
+        else if (name.endsWith('.vue')) out.push(p)
+      }
+      return out
+    }
+    const files = [...walk(join(root, 'src', 'views')), ...walk(join(root, 'src', 'layout'))]
+    const used = new Set<string>()
+    for (const f of files) {
+      for (const m of readFileSync(f, 'utf-8').matchAll(/\bicon="mdi:[a-z0-9-]+"/g)) {
+        used.add(m[0].slice('icon="'.length, -1))
+      }
+    }
+    // 扫描器自检：一个都扫不到=目录挪了/正则失效（防测试自身假绿）
+    expect(used.size, '未扫到任何视图 mdi: 字面量——检查 views/layout 目录与正则').toBeGreaterThan(0)
+    const registry = icons as unknown as Record<string, unknown>
+    for (const name of used) {
+      expect(registry[name], `视图直写图标 "${name}" 未在 icons.ts 注册——将静默零渲染`).toBeDefined()
+    }
+  })
+})
 
 /** 主仓菜单种子 icon 裸名全集（000002/000010/000018/000022/000024/000025/000034——新迁移加菜单须同步） */
 const SEED_ICON_NAMES = [
