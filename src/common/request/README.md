@@ -1,6 +1,6 @@
-# @vea/request
+# @vea/request — 与 UI 无关的 axios 请求封装
 
-UI-independent Axios client for shared request behavior.
+为共享请求行为提供与 UI 解耦的 axios 客户端。
 
 ```ts
 import { createRequest } from '@vea/request'
@@ -18,4 +18,4 @@ const request = createRequest({
 const user = await request.get<User>({ url: '/users/1' })
 ```
 
-Use `AbortSignal` for local cancellation, `cancelRequest` for a request key and `cancelAllRequest` for application-wide teardown. Authentication stores, UI messages, business success codes and logout behavior belong to the consuming application.
+取消请求三种形态：`AbortSignal`（局部取消）、`cancelRequest`（按请求键取消）、`cancelAllRequest`（应用级整体拆除）。认证存储、UI 消息、业务成功码与登出行为归消费方应用层（本仓实现在 `src/common/request/src/index.ts`——zhuzhao 信封/401 分码/单飞刷新契约版）。
