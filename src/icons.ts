@@ -1,4 +1,6 @@
 import accountGroup from '@iconify-icons/mdi/account-group'
+import bellOutline from '@iconify-icons/mdi/bell-outline'
+import bookAlphabet from '@iconify-icons/mdi/book-alphabet'
 import account from '@iconify-icons/mdi/account'
 import accountMultiple from '@iconify-icons/mdi/account-multiple'
 import cart from '@iconify-icons/mdi/cart'
@@ -39,6 +41,8 @@ import type { IconRegistry } from '@vea/components'
 
 export const icons = {
   'mdi:account-group': accountGroup,
+  'mdi:bell-outline': bellOutline,
+  'mdi:book-alphabet': bookAlphabet,
   'mdi:account': account,
   'mdi:account-multiple': accountMultiple,
   'mdi:cart': cart,
@@ -102,6 +106,8 @@ export const MENU_ICON_MAP: Readonly<Record<string, string>> = {
   'task-list': 'mdi:playlist-check',
   // 000024 al 域
   al: 'mdi:account-multiple',
+  dict: 'mdi:book-alphabet',
+  notification: 'mdi:bell-outline',
   'al-data': 'mdi:table',
   'al-types': 'mdi:tag-outline',
   // 000025 audit 域
