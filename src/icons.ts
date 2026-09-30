@@ -21,6 +21,7 @@ import folderOutline from '@iconify-icons/mdi/folder-outline'
 import formatListBulleted from '@iconify-icons/mdi/format-list-bulleted'
 import helpCircle from '@iconify-icons/mdi/help-circle'
 import home from '@iconify-icons/mdi/home'
+import keyOutline from '@iconify-icons/mdi/key-outline'
 import menu from '@iconify-icons/mdi/menu'
 import menuOpen from '@iconify-icons/mdi/menu-open'
 import playlistCheck from '@iconify-icons/mdi/playlist-check'
@@ -65,6 +66,7 @@ export const icons = {
   'mdi:format-list-bulleted': formatListBulleted,
   'mdi:help-circle': helpCircle,
   'mdi:home': home,
+  'mdi:key-outline': keyOutline,
   'mdi:menu': menu,
   'mdi:menu-open': menuOpen,
   'mdi:message-text': messageText,

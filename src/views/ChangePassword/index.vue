@@ -77,13 +77,20 @@ async function handleSubmit() {
       <el-alert v-if="errorMsg" :title="errorMsg" type="error" show-icon class="mb-4" :closable="false" />
       <el-form ref="formRef" :model="form" :rules="rules" label-position="top" size="large">
         <el-form-item label="当前密码" prop="oldPassword">
-          <el-input v-model="form.oldPassword" type="password" show-password prefix-icon="Lock" placeholder="请输入当前密码" />
+          <!-- 同 LoginForm #7：字符串 prefix-icon 未注册不渲染——#prefix 插槽 + 全局 Icon -->
+          <el-input v-model="form.oldPassword" type="password" show-password placeholder="请输入当前密码">
+            <template #prefix><Icon icon="mdi:lock-outline" /></template>
+          </el-input>
         </el-form-item>
         <el-form-item label="新密码" prop="newPassword">
-          <el-input v-model="form.newPassword" type="password" show-password prefix-icon="Key" placeholder="至少 8 位" />
+          <el-input v-model="form.newPassword" type="password" show-password placeholder="至少 8 位">
+            <template #prefix><Icon icon="mdi:key-outline" /></template>
+          </el-input>
         </el-form-item>
         <el-form-item label="确认新密码" prop="confirmPassword">
-          <el-input v-model="form.confirmPassword" type="password" show-password prefix-icon="Key" placeholder="再次输入新密码" @keyup.enter="handleSubmit" />
+          <el-input v-model="form.confirmPassword" type="password" show-password placeholder="再次输入新密码" @keyup.enter="handleSubmit">
+            <template #prefix><Icon icon="mdi:key-outline" /></template>
+          </el-input>
         </el-form-item>
         <el-form-item>
           <el-button type="primary" class="w-[100%]" :loading="loading" :disabled="!canSubmit" @click="handleSubmit">
