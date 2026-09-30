@@ -81,7 +81,7 @@ test('W5 冒烟：al 类型注册/数据写入/cursor 分页/软删恢复', asyn
     await expect(uiRow).toHaveCount(0, { timeout: 10_000 }) // 行从列表消失
 
     // API 恢复 → UI 刷新行回来（行为闭环）
-    const restored = await api('/al/api/v1/data/restore', { ...h, method: 'POST', body: { type_name: typeName, id: Number(writtenId) } })
+    const restored = await api('/al/api/v1/data/restore', { ...h, method: 'POST', body: { type_name: typeName, id: writtenId } })
     expect(restored.env!.code).toBe(0)
     await page.reload()
     // reload 重置组件态（类型选择丢失）——重选后断言行回来
