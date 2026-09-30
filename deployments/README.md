@@ -1,4 +1,4 @@
-# zhuzhao-ui 部署件（P4-9）
+# deployments — zhuzhao-ui 部署件（P4-9：nginx 静态容器 + 反代）
 
 ## 形态
 

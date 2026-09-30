@@ -1,4 +1,4 @@
-# @vea/hooks
+# @vea/hooks — CRUD/表单控制器（与 UI、请求库、业务模型无关）
 
 ## useCrud
 
@@ -12,6 +12,7 @@ type UserQuery = { keyword?: string }
 type CreateUser = Pick<User, 'name'>
 type UpdateUser = Partial<CreateUser>
 
+// ⚠ 示例按 zhuzhao standards §3-1「全仓仅 GET/POST」风格书写（写操作 = POST 动作段端点）
 const service: CrudService<User, User, UserQuery, CreateUser, UpdateUser, number> = {
   list: async (params, { signal }) => {
     const result = await request.get('/users', { params, signal })
@@ -19,8 +20,8 @@ const service: CrudService<User, User, UserQuery, CreateUser, UpdateUser, number
   },
   detail: (id, { signal }) => request.get(`/users/${id}`, { signal }),
   create: (input, { signal }) => request.post('/users', input, { signal }),
-  update: (id, input, { signal }) => request.put(`/users/${id}`, input, { signal }),
-  remove: (ids, { signal }) => request.delete('/users', { data: ids, signal })
+  update: (id, input, { signal }) => request.post('/users/update', { id, ...input }, { signal }),
+  remove: (ids, { signal }) => request.post('/users/delete', { ids }, { signal })
 }
 
 const { state, actions } = useCrud({
