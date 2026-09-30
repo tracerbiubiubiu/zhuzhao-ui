@@ -32,7 +32,11 @@ function generateUUID(): string {
 /** 获取或创建浏览器级 device_id（白名单 [a-zA-Z0-9_-]{1,64}——UUID 天然合规） */
 export function getDeviceId(): string {
   if (cachedDeviceId) return cachedDeviceId
-  cachedDeviceId = localStorage.getItem(DEVICE_KEY)
+  try {
+    cachedDeviceId = localStorage.getItem(DEVICE_KEY)
+  } catch {
+    cachedDeviceId = null // Safari 隐私模式可抛 SecurityError——与 setItem 降级一致
+  }
   if (!cachedDeviceId) {
     cachedDeviceId = generateUUID()
     try {
