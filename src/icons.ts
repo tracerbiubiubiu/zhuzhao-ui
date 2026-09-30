@@ -1,4 +1,6 @@
 import accountGroup from '@iconify-icons/mdi/account-group'
+import accountOutline from '@iconify-icons/mdi/account-outline'
+import lockOutline from '@iconify-icons/mdi/lock-outline'
 import bellOutline from '@iconify-icons/mdi/bell-outline'
 import bookAlphabet from '@iconify-icons/mdi/book-alphabet'
 import account from '@iconify-icons/mdi/account'
@@ -41,6 +43,8 @@ import type { IconRegistry } from '@vea/components'
 
 export const icons = {
   'mdi:account-group': accountGroup,
+  'mdi:account-outline': accountOutline,
+  'mdi:lock-outline': lockOutline,
   'mdi:bell-outline': bellOutline,
   'mdi:book-alphabet': bookAlphabet,
   'mdi:account': account,

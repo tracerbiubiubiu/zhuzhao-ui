@@ -3,11 +3,13 @@
  * （详情完整交互随 W4 详情批；发起表单随 form-create 批）
  */
 import { test, expect } from '@playwright/test'
-import { loadState } from './helpers'
+import { api, apiLogin, loadState } from './helpers'
 import { uiLogin } from './ui'
 
 test('W4 冒烟：工单列表渲染+状态筛选+详情静态路由可达', async ({ page }) => {
   const state = loadState()
+  const setup = await apiLogin(state.admin.employeeNo, state.admin.password, 'w4-setup')
+  const h = { token: setup.env!.data.access_token } as const
   await uiLogin(page, state.admin.employeeNo, state.admin.password)
   await page.goto('/#/tickets')
 
@@ -20,9 +22,15 @@ test('W4 冒烟：工单列表渲染+状态筛选+详情静态路由可达', asy
   await expect(page.getByRole('option', { name: '已关闭' })).toBeVisible()
   await page.keyboard.press('Escape')
 
-  // 详情静态路由：无工单时直接手输一个 ID——参数路由可达（渲染详情壳，404 由接口层表达）
-  await page.goto('/#/tickets/1')
-  await expect(page.getByText('#1').first()).toBeVisible()
+  // 四轮审计：原断言 '#1' 是路由参直出（404 也过）——改为造真单+断言标题文本
+  const created = await api('/api/v1/tickets', {
+    ...h, method: 'POST',
+    body: { type_code: 'incident', title: 'W4 冒烟单据', org_id: '1', priority: 3 },
+  })
+  expect(created.env!.code).toBe(0)
+  const tid = (created.env!.data as { id: string }).id
+  await page.goto(`/#/tickets/${tid}`)
+  await expect(page.getByText('W4 冒烟单据').first()).toBeVisible({ timeout: 10_000 })
 
   // 发起页占位可达
   await page.goto('/#/tickets/new')

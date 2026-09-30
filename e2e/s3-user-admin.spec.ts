@@ -22,11 +22,12 @@ test('S3 admin：表格渲染 + 搜索命中 + 无假搜索项 + 分页器 + 新
   await page.getByRole('button', { name: '查询' }).click()
   await expect(page.getByRole('cell', { name: 'admin', exact: true })).toBeVisible()
 
-  // employee_no 精确命中（admin=E000001）
+  // employee_no 精确命中（admin=E000001）+ 阴性对照（viewer 行应消失——四轮审计：原断言过滤器 no-op 不可区分）
   await page.getByPlaceholder('用户名（模糊）').fill('')
   await page.getByPlaceholder('工号（精确）').fill('E000001')
   await page.getByRole('button', { name: '查询' }).click()
   await expect(page.getByRole('cell', { name: 'admin', exact: true })).toBeVisible()
+  await expect(page.locator('.el-table__row').filter({ hasText: 'viewer' })).toHaveCount(0, { timeout: 5_000 })
 
   // 无假搜索项：端点不支持 org/real_name 过滤——搜索区不得出现对应控件（假搜索）
   await expect(page.getByPlaceholder('真实姓名')).toHaveCount(0)
