@@ -46,6 +46,8 @@ pnpm test:e2e      # Playwright（S1–S8/S10/S12/FE3/W4·W5/P4 穿插池——1
 
 ## 前端契约速查（详细见主仓 01 号）
 
+> 本节为**主仓 `docs/standards.md` §3（API 设计约定）的前端消费摘编**——信封/方法/int64/时间/错误码等公约以 standards 为 SSOT（2026-10-01 起本仓列入其适用范围；date-only 字段 `YYYY-MM-DD` 例外与「ID 数组元素发送侧仍 string」口径见其 §3-12）。
+
 - 信封：`{code:0, message, data, request_id}`——按 HTTP 状态分流（code≠0 恒非 2xx）
 - 登录：`employee_no` + `password` + `device_id`（浏览器级 UUID 必传）
 - 401 分码：20002 过期→静默刷新 / 20003 无效→跳登录 / 5xx 不清会话；403+20007→跳改密页不清会话
