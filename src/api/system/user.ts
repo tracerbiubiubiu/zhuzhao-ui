@@ -82,6 +82,16 @@ export async function getUserOrgsApi(userId: string): Promise<UserOrgRow[]> {
   return ((data as unknown as { orgs?: UserOrgRow[] })?.orgs ?? [])
 }
 
+/**
+ * 用户已绑角色 ID 集（P2-5 新端点 GET /users/:id/roles → {role_ids:[...]}——
+ * 裸 number 数组出参（同 menu_ids 形态），消费侧勾选按 string 处理）。
+ * 替代「工号精确+角色过滤」N+1 反查（旧法每角色一次请求且无工号用户不可回显）。
+ */
+export async function getUserRoleIdsApi(userId: string): Promise<string[]> {
+  const data = await request.get(`/api/v1/users/${userId}/roles`, { _silentError: true })
+  return ((data as unknown as { role_ids?: number[] })?.role_ids ?? []).map(String)
+}
+
 /** 全量设置用户组织（org_ids 整体替换；primary_org_id 可选——须 ∈ org_ids） */
 export async function setUserOrgsApi(userId: string, orgIds: string[], primaryOrgId?: string | null): Promise<void> {
   await request.post('/api/v1/users/orgs', {

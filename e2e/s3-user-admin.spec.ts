@@ -57,7 +57,12 @@ test('S3 分配组织（P2-12）：树勾选全量替换 + 主组织 + API 断�
     await uiLogin(page, state.admin.employeeNo, state.admin.password)
     await page.goto('/#/system/user')
 
+    // 列表 id ASC + E2E 历史建号累积（total 可远超首页）——先按 username 模糊搜索收敛，
+    // 目标行必回首页（本用例建号带唯一 suffix，无歧义）
+    await page.getByPlaceholder('用户名（模糊）').fill(`s3_orguser_${suffix}`)
+    await page.getByRole('button', { name: '查询' }).click()
     const row = page.locator('tr', { hasText: `s3_orguser_${suffix}` })
+    await expect(row).toBeVisible({ timeout: 10_000 })
     await row.getByRole('button', { name: '分配组织' }).click()
     const dlg = page.locator('.el-dialog').filter({ hasText: '分配组织' })
     await expect(dlg).toBeVisible()
