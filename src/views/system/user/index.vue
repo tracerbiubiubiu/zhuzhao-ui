@@ -234,7 +234,7 @@ function openRoles(row: UserRow) {
 async function submitRoles() {
   rolesLoading.value = true
   try {
-    await setUserRolesApi(rolesForm.userId, rolesForm.selected.map((id) => Number(id)))
+    await setUserRolesApi(rolesForm.userId, rolesForm.selected) // string[] 直传（P3-6：ID 数组发送侧勿 Number 化）
     ElMessage.success(`已更新「${rolesForm.username}」的角色（整体替换）`)
     rolesVisible.value = false
     tableRef.value?.refresh()

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { classifySessionLoadError } from './sessionError'
+import { classifySessionLoadError, isSafeRedirect } from './sessionError'
 
 /** 仿 axios 错误形态：{ response: { status, data } } */
 const axiosErr = (status: number, code?: number) => ({
@@ -40,5 +40,22 @@ describe('classifySessionLoadError（§3.3 会话加载失败分段）', () => {
   it('携带 __sessionTransient 标记的 401 → transient（refresh 端点 5xx/网络失败，§3.3 红线）', () => {
     // 请求层在 refresh 非终态失败时给原始 401 打标——缺此分支则一次 503 仍会登出（跨层分歧）
     expect(classifySessionLoadError({ ...axiosErr(401, 20002), __sessionTransient: true })).toBe('transient')
+  })
+})
+
+describe('isSafeRedirect 回跳目标校验（复检 P3-5/P3-9）', () => {
+  it('站内相对路径放行', () => {
+    expect(isSafeRedirect('/home')).toBe(true)
+    expect(isSafeRedirect('/system/user?tab=1')).toBe(true)
+  })
+  it('协议相对 URL 拒绝（开放重定向面——SessionError 重试与改密回跳共用）', () => {
+    expect(isSafeRedirect('//evil.com')).toBe(false)
+    expect(isSafeRedirect('///evil.com')).toBe(false)
+  })
+  it('绝对 URL/非字符串/缺省拒绝', () => {
+    expect(isSafeRedirect('https://evil.com')).toBe(false)
+    expect(isSafeRedirect('home')).toBe(false)
+    expect(isSafeRedirect(undefined)).toBe(false)
+    expect(isSafeRedirect(['/', 'x'])).toBe(false)
   })
 })

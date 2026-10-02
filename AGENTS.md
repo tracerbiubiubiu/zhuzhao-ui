@@ -7,7 +7,7 @@
 ```bash
 pnpm lint          # ESLint（纯检查；自动修复用 pnpm lint:fix，修复后重跑 lint）
 pnpm typecheck     # vue-tsc --noEmit（codegen 类型**部分接线**：入参仅 4/14 api 文件引 __generated__（user/role/profile/selfService）、出参全手写——漂移仅接线面编译期报错，勿视为全量守卫；改 API 形状后先 pnpm codegen，补接线随域渐进）
-pnpm test          # Vitest（动态路由解析/请求层单飞刷新/keep-alive 防漂移断言——13 文件 / 102 用例）
+pnpm test          # Vitest（动态路由解析/请求层单飞刷新/keep-alive 防漂移断言——13 文件 / 105 用例）
 pnpm audit --prod  # npm 供应链（对称 Go 侧 govulncheck；镜像源无 audit 端点时加 --registry=https://registry.npmjs.org）
 pnpm build         # 产物构建
 pnpm test:e2e      # Playwright（S1–S8/S10/S12/FE3/W4·W5/P4 穿插池——18 spec / 19 用例；打真实栈不用 stub——W5 需 activelist/taskrunner 上游，前提见下）
@@ -42,8 +42,8 @@ pnpm test:e2e      # Playwright（S1–S8/S10/S12/FE3/W4·W5/P4 穿插池——1
 - **语言**：中文（代码标识符/命令/路径除外）；子模块 README 同口径
 - **日期**：一律 `YYYY-MM-DD`
 - **标题**：H1 = `# <文档名> — <一句话定位>`，章节用 H2、不编号
-- **计数口径**（随实际增长同步，禁止两处不同值）：E2E「18 spec / 19 用例」、单测「13 文件 / 102 用例」、E2E 范围串「S1–S8/S10/S12/FE3/W4·W5/P4 穿插池」、门禁统称「六件门禁」（lint/typecheck/test/audit/build/test:e2e）
-- **存放**：Phase 设计文档住主仓 `zhuzhao/docs/`（SSOT）；本仓放操作文档（README/AGENTS/子模块说明）；审计/复检类时点报告住 `outputs/`，命名 `<类型>-<YYYY-MM-DD>.md`
+- **计数口径**（随实际增长同步，禁止两处不同值）：E2E「18 spec / 19 用例」、单测「13 文件 / 105 用例」、E2E 范围串「S1–S8/S10/S12/FE3/W4·W5/P4 穿插池」、门禁统称「六件门禁」（lint/typecheck/test/audit/build/test:e2e）
+- **存放**：Phase 设计文档住主仓 `zhuzhao/docs/`（SSOT）；本仓放操作文档（README/AGENTS/子模块说明）；时点报告住 `outputs/`，命名 `<类型>-<范围>-<YYYY-MM-DD>.md`（类型受控词表：审计复检报告/复核报告/验证报告）
 - **计数/状态声明须与实测一致**：改 E2E/单测数量或修复状态时，同批更新 README 与 AGENTS 两处；「全部修复」类表述须有逐项证据（outputs/ 报告为凭）
 
 ## 前端契约速查（详细见主仓 01 号）

@@ -54,7 +54,7 @@ export async function getRoleMenuIdsApi(roleId: string): Promise<number[]> {
   return ((data as unknown as { menu_ids?: number[] })?.menu_ids ?? [])
 }
 
-/** 分配菜单（整体替换；check-strictly 精确勾选集直传） */
-export async function assignRoleMenusApi(roleId: string, menuIds: number[]): Promise<void> {
+/** 分配菜单（整体替换；check-strictly 精确勾选集直传。P3-6：menu_ids 发送侧 string——standards §3-12②） */
+export async function assignRoleMenusApi(roleId: string, menuIds: string[]): Promise<void> {
   await request.post('/api/v1/roles/menus', { role_id: roleId, menu_ids: menuIds })
 }

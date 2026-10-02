@@ -33,3 +33,11 @@ export function classifySessionLoadError(err: unknown): SessionLoadErrorKind {
   if (status === 403 && !bizCode) return 'transient'
   return 'terminal'
 }
+
+/**
+ * redirect 回跳目标安全校验（01 §3.1「防开放重定向」的统一实现，复检 P3-5/P3-9 共用）：
+ * 仅接受站内相对路径——以 `/` 开头且非 `//`（协议相对 URL 会被解析为外站）。
+ */
+export function isSafeRedirect(target: unknown): target is string {
+  return typeof target === 'string' && target.startsWith('/') && !target.startsWith('//')
+}
