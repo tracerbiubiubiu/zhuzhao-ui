@@ -15,7 +15,7 @@ pnpm test:e2e      # Playwright（S1–S8/S10/S12/FE3/W4·W5/P4 穿插池——1
 
 **E2E 运行前提**：主仓 `bash scripts/dev-stack.sh up`（dev PG/Redis）+ `INTERNAL_JOBS_SK=xxx make dev`（app @33333）；W5 场景另需两上游：activelist（compose.dev PG@15432 + `ACTIVELIST_CALLER_ZHUZHAO_SK=dev-gateway-sk go run ./cmd/apiserver`@8080 + 主仓 gateway target 暂改 127.0.0.1:8080 勿提交）+ taskrunner（@8081：TASKRUNNER_REDIS_PASSWORD=zhuzhao_dev + CALLER_ZHUZHAO_SK/SELF_SK + CALLBACK_TARGET_URL=http://127.0.0.1:33333/internal/jobs/callback，app 侧带 TASKRUNNER_BASE_URL/TASKRUNNER_SK）；vite dev server 由 Playwright webServer 自动拉起。globalSetup 幂等建号（admin 凭据闭环/operator·viewer 预设/S1 重置），可无限重放。浏览器下载被墙时：`PLAYWRIGHT_DOWNLOAD_HOST=https://cdn.npmmirror.com/binaries/playwright pnpm exec playwright install chromium`。
 
-**纪律**：门禁不全绿不得标记完成；E2E 打真后端（菜单可见性/权限码必须打真实数据）；CI（`.github/workflows/ci.yml`）跑 lint/typecheck/build/test——E2E 与 Go 仓 acceptance 同口径走本地人工验收。
+**纪律**：门禁不全绿不得标记完成；E2E 打真后端（菜单可见性/权限码必须打真实数据）；CI（`.github/workflows/ci.yml`）跑 lint/typecheck/build/test——E2E 与 Go 仓 acceptance 同口径走本地人工验收；**推送后核实 CI run 转绿才算交付闭环**（`gh run list`/`gh run watch`——本地绿≠CI 绿：CI 单仓 checkout/全新安装等环境差曾致挂（2026-10-02 三连挂教训），README badge 仅为被动入口，跨仓依赖的测试改动合入前先过一遍「CI 无同级仓」假设）。
 
 ## 类型生成（codegen，随契约批）
 
