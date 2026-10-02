@@ -26,15 +26,17 @@ describe('视图内直写图标名', () => {
       }
       return out
     }
-    const files = [...walk(join(root, 'src', 'views')), ...walk(join(root, 'src', 'layout'))]
+    // 10-02 复核扩面：components 亦纳入（TagsView 有 3 处直写实例曾在盲区）；
+    // 双/单引号字面量都认；:icon="'mdi:x'" 表达式形态全仓零用例不扩（扩则需处理拼接误报）
+    const files = [...walk(join(root, 'src', 'views')), ...walk(join(root, 'src', 'layout')), ...walk(join(root, 'src', 'components'))]
     const used = new Set<string>()
     for (const f of files) {
-      for (const m of readFileSync(f, 'utf-8').matchAll(/\bicon="mdi:[a-z0-9-]+"/g)) {
+      for (const m of readFileSync(f, 'utf-8').matchAll(/\bicon=(["'])mdi:[a-z0-9-]+\1/g)) {
         used.add(m[0].slice('icon="'.length, -1))
       }
     }
     // 扫描器自检：一个都扫不到=目录挪了/正则失效（防测试自身假绿）
-    expect(used.size, '未扫到任何视图 mdi: 字面量——检查 views/layout 目录与正则').toBeGreaterThan(0)
+    expect(used.size, '未扫到任何视图 mdi: 字面量——检查 views/layout/components 目录与正则').toBeGreaterThan(0)
     const registry = icons as unknown as Record<string, unknown>
     for (const name of used) {
       expect(registry[name], `视图直写图标 "${name}" 未在 icons.ts 注册——将静默零渲染`).toBeDefined()

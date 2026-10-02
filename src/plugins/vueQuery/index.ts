@@ -1,8 +1,8 @@
 /**
  * vue-query 接入（01 §4 状态分界：服务端态 = 一切列表/详情/树数据）
  *
- * QueryClient 单例导出——登出时会话拆除须 queryClient.clear()（userStore.logout 调用，
- * 防跨用户残留上一账号的缓存数据，与 Pinia resetState 同语义）。
+ * QueryClient 单例导出——会话拆除须 queryClient.clear()（userStore.resetState 调用，
+ * 登出/401 终态/守卫失败三路共用——防跨用户残留上一账号的缓存数据，复检 P1-2）。
  */
 import type { App } from 'vue'
 import { VueQueryPlugin, QueryClient } from '@tanstack/vue-query'
