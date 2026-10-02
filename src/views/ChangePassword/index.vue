@@ -10,10 +10,12 @@
 import { ref, computed, reactive } from 'vue'
 import { ElForm, ElFormItem, ElInput, ElButton, ElCard, ElAlert } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { useUserStore } from '@/store/modules/user'
+import { isSafeRedirect } from '@/router/sessionError'
 
 const router = useRouter()
+const route = useRoute()
 const userStore = useUserStore()
 const formRef = ref<FormInstance>()
 const loading = ref(false)
@@ -54,8 +56,10 @@ async function handleSubmit() {
   errorMsg.value = ''
   try {
     await userStore.changePassword(form.oldPassword, form.newPassword)
-    // 改密成功 → 跳首页（TokenPair 已轮换+mustChangePassword 已清）
-    router.push('/')
+    // 改密成功 → 回跳原目标（TokenPair 已轮换+mustChangePassword 已清）。
+    // 19 项线 P3-9：redirect 回跳（站内校验拒 //——与 SessionError 共用 isSafeRedirect）；
+    // 无 redirect（自愿改密入口）落首页
+    router.push(isSafeRedirect(route.query.redirect) ? route.query.redirect : '/')
   } catch (err: unknown) {
     const resp = (err as { response?: { data?: { message?: string } } })?.response?.data
     errorMsg.value = resp?.message ?? '修改密码失败，请稍后重试'

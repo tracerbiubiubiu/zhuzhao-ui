@@ -207,7 +207,7 @@ async function submitAssignMenus() {
   menusLoading.value = true
   menusError.value = ''
   try {
-    await assignRoleMenusApi(menusForm.roleId, keys.map(Number))
+    await assignRoleMenusApi(menusForm.roleId, keys.map(String)) // 发送侧 string（P3-6——el-tree 键形态无关，后端 Int64Slice 双兼容）
     ElMessage.success(`已更新「${menusForm.roleName}」的菜单（整体替换）`)
     menusVisible.value = false
     tableRef.value?.refresh()

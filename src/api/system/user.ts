@@ -62,7 +62,8 @@ export async function resetUserPasswordApi(userId: string, password: string): Pr
   await request.post('/api/v1/users/password/reset', { user_id: userId, password }, { _silentError: true })
 }
 
-export async function setUserRolesApi(userId: string, roleIds: number[]): Promise<void> {
+/** 角色分配（P3-6：ID 数组元素发送侧一律 string——standards §3-12②；Int64Slice 双兼容仅收方宽容） */
+export async function setUserRolesApi(userId: string, roleIds: string[]): Promise<void> {
   await request.post('/api/v1/users/roles', { user_id: userId, role_ids: roleIds })
 }
 

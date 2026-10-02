@@ -1,6 +1,7 @@
 <script setup lang="ts">
   import { ElButton, ElResult } from 'element-plus'
   import { useRoute } from 'vue-router'
+  import { isSafeRedirect } from '@/router/sessionError'
 
   /**
    * 会话加载瞬时失败页（§3.3：5xx/网络抖动/限流不清会话）
@@ -10,9 +11,8 @@
   const route = useRoute()
 
   const retry = () => {
-    const target = typeof route.query.redirect === 'string' && route.query.redirect.startsWith('/')
-      ? route.query.redirect
-      : '/'
+    // 复检 P3-5：拒协议相对 URL（//evil.com 形态的开放重定向面）——isSafeRedirect 统一实现
+    const target = isSafeRedirect(route.query.redirect) ? route.query.redirect : '/'
     window.location.hash = `#${target}`
     window.location.reload()
   }
