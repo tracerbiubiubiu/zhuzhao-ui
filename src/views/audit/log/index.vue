@@ -11,8 +11,7 @@ import { reactive, ref, watch } from 'vue'
 import { ElAlert, ElButton, ElCard, ElDatePicker, ElDialog, ElForm, ElFormItem, ElInput, ElTabPane, ElTable, ElTableColumn, ElTabs, ElTag } from 'element-plus'
 import ProTable from '@/components/ProTable/index.vue'
 import type { ProTableColumn } from '@/components/ProTable/types'
-import { listAuditLogsApi, type AuditLogRow } from '@/api/audit'
-import request from '@vea/request'
+import { listAuditLogsApi, type AuditLogRow, listPanicsApi, reconcileAuditApi, type PanicRow } from '@/api/audit'
 
 // keep-alive 契约：name=动态路由名（菜单 code audit_log，组件路径 audit/log/index）
 defineOptions({ name: 'audit_log_page' })
@@ -86,7 +85,7 @@ function prettyBody(row: AuditLogRow): string {
 
 // ─── P4-8：panic 聚合 + 路由对账 ───
 const activeTab = ref('logs')
-const panics = ref<Array<{ id: string; message: string; path: string; count: number; last_at: string }>>([])
+const panics = ref<PanicRow[]>([])
 const panicsLoading = ref(false)
 const panicsTotal = ref(0)
 const panicsPage = ref(1)
@@ -95,9 +94,7 @@ watch(activeTab, (t) => { if (t === 'panics' && !panics.value.length) fetchPanic
 async function fetchPanics(p = panicsPage.value) {
   panicsLoading.value = true
   try {
-    const data = await request.get('/api/v1/audit/panics', { params: { page: p, page_size: 20 } }) as unknown as {
-      list: typeof panics.value; total: number; page: number
-    }
+    const data = await listPanicsApi(p, 20)
     panics.value = data.list ?? []
     panicsTotal.value = data.total
     panicsPage.value = data.page
@@ -113,9 +110,7 @@ const reconcileAt = ref('')
 async function runReconcile() {
   reconcileLoading.value = true
   try {
-    const data = await request.get('/api/v1/audit/reconcile') as unknown as {
-      gaps: string[]; gap_count: number; checked_at: string
-    }
+    const data = await reconcileAuditApi()
     reconcileGaps.value = data.gaps ?? []
     reconcileAt.value = data.checked_at
   } finally {
@@ -177,7 +172,16 @@ async function runReconcile() {
               <template #default="{ row }">{{ formatTime((row as { last_at: string }).last_at) }}</template>
             </el-table-column>
           </el-table>
-          <div class="text-xs text-gray-400 mt-2">共 {{ panicsTotal }} 个聚合指纹</div>
+          <div class="mt-3 flex items-center justify-between">
+            <span class="text-xs text-gray-400">共 {{ panicsTotal }} 个聚合指纹</span>
+            <el-pagination
+              :total="panicsTotal"
+              :current-page="panicsPage"
+              :page-size="20"
+              layout="prev, pager, next"
+              @current-change="(p: number) => fetchPanics(p)"
+            />
+          </div>
         </el-card>
       </el-tab-pane>
 
