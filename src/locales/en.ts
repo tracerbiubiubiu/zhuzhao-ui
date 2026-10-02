@@ -1,3 +1,5 @@
+// i18n 口径（2026-10-02 拍板）：英文面显式暂不启用（触发器=英文用户出现，未命中）——
+// 本词包为预留基建勿删；启用方案见主仓 02 号 §5.4（key 映射层+e2e/ui.ts 锚点迁移）。
 export default {
   common: {
     required: 'This is required',

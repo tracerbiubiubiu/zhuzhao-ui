@@ -17,6 +17,8 @@ pnpm test:e2e      # Playwright（S1–S8/S10/S12/FE3/W4·W5/P4 穿插池——1
 
 **纪律**：门禁不全绿不得标记完成；E2E 打真后端（菜单可见性/权限码必须打真实数据）；CI（`.github/workflows/ci.yml`）跑 lint/typecheck/build/test——E2E 与 Go 仓 acceptance 同口径走本地人工验收；**推送后核实 CI run 转绿才算交付闭环**（`gh run list`/`gh run watch`——本地绿≠CI 绿：CI 单仓 checkout/全新安装等环境差曾致挂（2026-10-02 三连挂教训），README badge 仅为被动入口，跨仓依赖的测试改动合入前先过一遍「CI 无同级仓」假设）。
 
+**i18n 口径（2026-10-02 拍板，主仓 02 §5.4 检查点结论文）**：英文面**显式暂不启用**——触发器=外部协作者/英文用户出现（未命中）。`src/locales/` 骨架与 en 词包为**预留基建勿删**（含 `login.*Placeholder` 闲置键）；新页面文案直接中文，勿新增半成品键。翻案时方案见 02 §5.4（key 映射层），需连带迁移 `e2e/ui.ts` 登录锚点（18 spec 依赖）。
+
 ## 类型生成（codegen，随契约批）
 
 后端改 API 形状时：主仓 `make swag` → 本仓 `pnpm codegen`（swagger2openapi 2.0→3.0 + openapi-typescript 7.13 → `src/api/__generated__/`）。**生成物不手改、随仓提交**；主仓路径非 `../zhuzhao` 时设 `ZHUZHAO_REPO`。
