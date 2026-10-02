@@ -1,3 +1,5 @@
+// i18n 口径（2026-10-02 拍板）：英文面显式暂不启用（触发器=英文用户出现，未命中）——
+// 本文件与 en.ts 为预留基建勿删；login.*Placeholder 等键为闲置预留，勿当缺口翻修。
 export default {
   common: {
     required: '该项为必填项',
