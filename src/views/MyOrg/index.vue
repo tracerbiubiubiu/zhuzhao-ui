@@ -10,12 +10,12 @@
  */
 import { computed, ref } from 'vue'
 import {
-  ElButton, ElCard, ElEmpty, ElMessage, ElMessageBox, ElOption, ElSelect,
+  ElButton, ElCard, ElEmpty, ElMessage, ElMessageBox, ElOption, ElPagination, ElSelect,
   ElTable, ElTableColumn, ElTag,
   ElAlert,
 } from 'element-plus'
 import {
-  getMyOrgsApi, getOrgRosterApi, removeMemberApi, setMemberRoleApi, setMemberScopeApi,
+  getMyOrgsApi, getOrgRosterApi, removeMemberApi, setMemberRoleApi, setMemberScopeApi, setOwnersApi,
   type MyOrgItem, type OrgMemberRosterItem,
 } from '@/api/org/selfService'
 
@@ -40,9 +40,12 @@ async function loadOrgs() {
 }
 void loadOrgs()
 
-// ─── 名册（L3 判定驱动可见性）───
+// ─── 名册（L3 判定驱动可见性；P2-7 翻页——后端 PageData 带 total）───
 const roster = ref<OrgMemberRosterItem[]>([])
 const rosterLoading = ref(false)
+const rosterPage = ref(1)
+const rosterPageSize = ref(20)
+const rosterTotal = ref(0)
 /** 普通成员：名册 403 → 只读组织信息（owner/admin 控件不渲染） */
 const readonlyMode = ref(false)
 
@@ -51,13 +54,15 @@ async function loadRoster() {
   rosterLoading.value = true
   readonlyMode.value = false
   try {
-    const resp = await getOrgRosterApi(selectedOrgId.value)
+    const resp = await getOrgRosterApi(selectedOrgId.value, rosterPage.value, rosterPageSize.value)
     roster.value = resp.list ?? []
+    rosterTotal.value = resp.total ?? 0
   } catch (err: unknown) {
     const status = (err as { response?: { status?: number } })?.response?.status
     if (status === 403) {
       readonlyMode.value = true // 普通成员——L3 判定结果，非错误
       roster.value = []
+      rosterTotal.value = 0
     } else {
       throw err // 其他错误走全局 toast
     }
@@ -68,6 +73,7 @@ async function loadRoster() {
 
 function onSelectOrg(id: string) {
   selectedOrgId.value = id
+  rosterPage.value = 1 // 切组织回首页（P2-7）
   void loadRoster()
 }
 
@@ -109,6 +115,37 @@ async function onRemove(row: OrgMemberRosterItem) {
   await removeMemberApi(selectedOrgId.value, String(row.user_id))
   ElMessage.success('已移除')
   await loadRoster()
+}
+
+// ─── 设为负责人（P2-11：仅 owner 可见；SetOwners 整体替换语义需全量 owner 预取）───
+/** 当前用户在选中组织的角色=owner（GET /user/orgs 富化行——L3 真边界在后端） */
+const iAmOwner = computed(() => selectedOrg.value?.org_member_role === 'owner')
+
+async function onPromoteOwner(row: OrgMemberRosterItem) {
+  const orgName = selectedOrg.value?.org_name ?? ''
+  try {
+    await ElMessageBox.confirm(
+      `确认将「${row.username}」设为「${orgName}」负责人？其将与现有负责人并存（SetOwners 整体替换语义，已保留全部现任）。`,
+      '设为负责人', { type: 'warning', confirmButtonText: '确认' },
+    )
+  } catch {
+    return
+  }
+  try {
+    // 全量预取 owner 集（名册 pageSize 硬顶 100——超员组织禁用入口，防替换丢 owner）
+    const all = await getOrgRosterApi(selectedOrgId.value, 1, 100)
+    if ((all.total ?? 0) > (all.list?.length ?? 0)) {
+      ElMessage.warning('组织成员超过 100：为防负责人集不完整已禁用自助设置，请联系全局管理员')
+      return
+    }
+    const owners = (all.list ?? []).filter((m) => m.org_member_role === 'owner').map((m) => String(m.user_id))
+    await setOwnersApi(selectedOrgId.value, [...new Set([...owners, String(row.user_id)])])
+    ElMessage.success(`已将「${row.username}」设为负责人`)
+    await loadRoster()
+  } catch (err: unknown) {
+    const resp = (err as { response?: { data?: { message?: string } } })?.response?.data
+    ElMessage.error(resp?.message ?? '操作失败')
+  }
 }
 </script>
 
@@ -178,8 +215,12 @@ async function onRemove(row: OrgMemberRosterItem) {
         <el-table-column prop="joined_at" label="加入时间" width="170">
           <template #default="{ row }">{{ row.joined_at ? new Date(row.joined_at).toLocaleString('zh-CN', { hour12: false }) : '—' }}</template>
         </el-table-column>
-        <el-table-column v-if="!readonlyMode" label="操作" width="90" fixed="right">
+        <el-table-column v-if="!readonlyMode" label="操作" width="150" fixed="right">
           <template #default="{ row }">
+            <el-button
+              v-if="iAmOwner && row.org_member_role !== 'owner'" link type="primary" size="small"
+              @click="onPromoteOwner(row)"
+            >设为负责人</el-button>
             <el-button
               v-if="row.org_member_role !== 'owner'" link type="danger" size="small"
               @click="onRemove(row)"
@@ -187,6 +228,16 @@ async function onRemove(row: OrgMemberRosterItem) {
           </template>
         </el-table-column>
       </el-table>
+      <!-- P2-7：名册翻页（后端 PageData 带 total；切换回首页随组织切换） -->
+      <div v-if="!readonlyMode" class="mt-3 flex justify-end">
+        <el-pagination
+          :total="rosterTotal"
+          :current-page="rosterPage"
+          :page-size="rosterPageSize"
+          layout="total, prev, pager, next"
+          @current-change="(p: number) => { rosterPage = p; void loadRoster() }"
+        />
+      </div>
     </el-card>
   </div>
 </template>
