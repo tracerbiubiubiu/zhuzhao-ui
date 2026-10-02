@@ -23,7 +23,7 @@ import ProTable from '@/components/ProTable/index.vue'
 import type { ProTableColumn } from '@/components/ProTable/types'
 import { listRolesApi } from '@/api/system/role'
 import {
-  createUserApi, deleteUserApi, getUserOrgsApi, listUsersApi, resetUserPasswordApi,
+  createUserApi, deleteUserApi, getUserOrgsApi, getUserRoleIdsApi, listUsersApi, resetUserPasswordApi,
   setUserOrgsApi, setUserRolesApi, updateUserApi, updateUserStatusApi, type UserRow,
 } from '@/api/system/user'
 
@@ -212,24 +212,22 @@ async function submitReset() {
 const rolesVisible = ref(false)
 const rolesLoading = ref(false)
 const rolesChecking = ref(false)
+/** 回显竞态守卫序号（P2-5）：连开多行对话框时仅最后一次打开的响应生效 */
+let rolesCheckSeq = 0
 const rolesForm = reactive({ userId: '', username: '', employeeNo: '', selected: [] as string[] })
 
 function openRoles(row: UserRow) {
   Object.assign(rolesForm, { userId: row.id, username: row.username, employeeNo: row.employee_no, selected: [] })
   rolesVisible.value = true
-  // 初始勾选回显：后端无 user→roles 读端点（B13 盲区），按「工号精确+角色过滤」反查
-  // （每角色一次请求，角色量级小；无工号则无法反查——提示整体替换语义）
-  if (row.employee_no && roleOptions.value.length) {
-    rolesChecking.value = true
-    void Promise.all(
-      roleOptions.value.map(async (role) => {
-        const res = await listUsersApi({ page: 1, page_size: 1, role: role.code, employee_no: row.employee_no })
-        return res.list.some((u) => u.id === row.id) ? role.id : null
-      }),
-    )
-      .then((ids) => { rolesForm.selected = ids.filter((id): id is string => id !== null) })
-      .finally(() => { rolesChecking.value = false })
-  }
+  // 初始勾选回显：GET /users/:id/roles 单发反查（P2-5 新端点——替代「工号精确+
+  // 角色过滤」N+1 反查；无工号用户自此也可回显）。竞态守卫：快速连开多行对话框时
+  // 仅最后一次打开的响应生效（audit 指出的对话框竞态面）
+  rolesChecking.value = true
+  const seq = ++rolesCheckSeq
+  getUserRoleIdsApi(row.id)
+    .then((ids) => { if (seq === rolesCheckSeq) rolesForm.selected = ids })
+    .catch(() => { /* 403/404 静默——留空勾选集，保存仍为显式整体替换 */ })
+    .finally(() => { if (seq === rolesCheckSeq) rolesChecking.value = false })
 }
 
 async function submitRoles() {

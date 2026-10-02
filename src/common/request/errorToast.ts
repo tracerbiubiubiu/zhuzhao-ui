@@ -32,7 +32,7 @@ export function resolveErrorToast(error: unknown): ErrorToastDecision | null {
   if (typeof error !== 'object' || error === null) return null
   const e = error as AxiosError<ErrorBody> & { __sessionTransient?: boolean; code?: string }
   if (e.config?._silentError) return null // 调用方自管（登录/改密表单）
-  if (e.code === 'ERR_CANCELED') return null // 主动取消不是错误（useCrud 竞态 abort）
+  if (e.code === 'ERR_CANCELED') return null // 主动取消不是错误——P3-4 定性（2026-10-03 闭账）：分支【可达】（useCrud 竞态 abort 的旧请求经请求层 notifyError 到此），保留=合理防御，非死代码
   // refresh 链路非终态（5xx/网络抖动）：原始 401 语义不成立，提示可重试而非「登录过期」
   if (e.__sessionTransient === true) {
     return { type: 'warning', message: '服务暂时不可用，请稍后重试' }
