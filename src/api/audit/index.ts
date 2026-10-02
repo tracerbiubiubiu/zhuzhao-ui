@@ -36,3 +36,32 @@ export async function listAuditLogsApi(
   const data = await request.get('/api/v1/audit/logs', { params })
   return data as unknown as { list: AuditLogRow[]; total: number }
 }
+
+// ===== P4-8：panic 聚合 + 路由对账（P2-9：视图直连 request 收归 API 层） =====
+
+/** panic 聚合行（同指纹计数——最近优先） */
+export interface PanicRow {
+  id: string
+  message: string
+  path: string
+  count: number
+  last_at: string
+}
+
+export interface PanicPage {
+  list: PanicRow[]
+  total: number
+  page: number
+}
+
+/** panic 聚合列表（offset 分页） */
+export async function listPanicsApi(page = 1, pageSize = 20): Promise<PanicPage> {
+  const data = await request.get('/api/v1/audit/panics', { params: { page, page_size: pageSize } })
+  return data as unknown as PanicPage
+}
+
+/** 路由对账（对账缺口清单——审计溯源） */
+export async function reconcileAuditApi(): Promise<{ gaps: string[]; gap_count: number; checked_at: string }> {
+  const data = await request.get('/api/v1/audit/reconcile')
+  return data as unknown as { gaps: string[]; gap_count: number; checked_at: string }
+}

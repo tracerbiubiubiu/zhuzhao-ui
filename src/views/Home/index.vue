@@ -10,7 +10,7 @@
 
 import { ref, onMounted } from 'vue'
 import { ElCard, ElCol, ElRow, ElTable, ElTableColumn, ElTag, ElEmpty } from 'element-plus'
-import request from '@vea/request'
+import { listTicketsApi } from '@/api/ticket'
 
 // keep-alive 契约：name=最深匹配路由名（home 菜单为 type=1 带 component 特例——
 // §3.2③ 渲染子路由名 `${code}_page`，tagsView.cachedViews 存的即它）
@@ -50,7 +50,7 @@ onMounted(async () => {
     // 并行拉状态统计（权宜：每状态一次 total——后端无聚合端点）
     const statResults = await Promise.allSettled(
       statusCardDefs.map(({ key }) =>
-        request.get(`/api/v1/tickets`, { params: { status: key, page: 1, page_size: 1 } })
+        listTicketsApi({ status: key, page: 1, page_size: 1 })
       )
     )
     statResults.forEach((result, i) => {
@@ -65,7 +65,7 @@ onMounted(async () => {
     const meQueries = ['assigned', 'in_progress', 'closed']
     const meResults = await Promise.allSettled(
       meQueries.map((status) =>
-        request.get('/api/v1/tickets', { params: { status, assignee: 'me', page: 1, page_size: 1 } })
+        listTicketsApi({ status, assignee: 'me', page: 1, page_size: 1 })
       )
     )
     const meTotals = meResults.map((r) =>
@@ -75,7 +75,7 @@ onMounted(async () => {
     myDone.value = meTotals[2]
     // 最近工单
     const recentResult = await Promise.allSettled([
-      request.get('/api/v1/tickets', { params: { page: 1, page_size: 10 } }),
+      listTicketsApi({ page: 1, page_size: 10 }),
     ])
     const recentData = recentResult[0].status === 'fulfilled' ? recentResult[0].value : null
     recent.value = ((recentData as { list?: TicketSummary[] })?.list ?? []).map((t) => ({

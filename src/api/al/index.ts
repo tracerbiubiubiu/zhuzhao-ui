@@ -138,12 +138,6 @@ export async function deleteAlDataApi(typeName: string, id: string): Promise<AlD
   return data as unknown as AlDataDoc
 }
 
-/** 恢复软删（body 携带标识——000032 整改后形态） */
-export async function restoreAlDataApi(typeName: string, id: string): Promise<AlDataDoc> {
-  const data = await request.post('/al/api/v1/data/restore', { type_name: typeName, id: Number(id) }, { _silentError: true })
-  return data as unknown as AlDataDoc
-}
-
 // ─── 导入导出（blob 流式旁路——响应非信封，拦截器透传 Blob）───
 
 /** 导出=裸 JSON 数组流（全量遍历；文本量可能大——走 blob 下载不占内存解析） */
