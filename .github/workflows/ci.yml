@@ -26,6 +26,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # viewNames.test 期望名单从主仓迁移种子派生（P1-1/P3-8）——CI 须同级拉主仓
+      # （ZHUZHAO_REPO 口径同 codegen.sh；两仓 public，默认 GITHUB_TOKEN 可读）
+      - uses: actions/checkout@v4
+        with:
+          repository: tracerbiubiubiu/zhuzhao
+          path: zhuzhao
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
@@ -33,3 +39,5 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm test
+        env:
+          ZHUZHAO_REPO: ${{ github.workspace }}/zhuzhao
