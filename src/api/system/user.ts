@@ -67,6 +67,30 @@ export async function setUserRolesApi(userId: string, roleIds: string[]): Promis
   await request.post('/api/v1/users/roles', { user_id: userId, role_ids: roleIds })
 }
 
+// ===== P2-12：分配组织（GET /users/:id/orgs + POST /users/orgs 全量替换） =====
+
+/** 用户已绑组织行（= model.UserOrg 投影——无 org_name，名称由组织树侧供给） */
+export interface UserOrgRow {
+  user_id: string
+  org_id: string
+  is_primary: boolean
+  joined_at: string
+}
+
+export async function getUserOrgsApi(userId: string): Promise<UserOrgRow[]> {
+  const data = await request.get(`/api/v1/users/${userId}/orgs`, { _silentError: true })
+  return ((data as unknown as { orgs?: UserOrgRow[] })?.orgs ?? [])
+}
+
+/** 全量设置用户组织（org_ids 整体替换；primary_org_id 可选——须 ∈ org_ids） */
+export async function setUserOrgsApi(userId: string, orgIds: string[], primaryOrgId?: string | null): Promise<void> {
+  await request.post('/api/v1/users/orgs', {
+    user_id: userId,
+    org_ids: orgIds,
+    ...(primaryOrgId ? { primary_org_id: primaryOrgId } : {}),
+  }, { _silentError: true })
+}
+
 export async function deleteUserApi(userId: string): Promise<void> {
   await request.post('/api/v1/users/delete', { user_id: userId })
 }

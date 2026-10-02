@@ -14,16 +14,17 @@
 import { computed, reactive, ref } from 'vue'
 import {
   ElButton, ElCard, ElDialog, ElForm, ElFormItem, ElInput, ElMessage,
-  ElMessageBox, ElOption, ElSelect, ElTag,
+  ElMessageBox, ElOption, ElSelect, ElTag, ElTree,
 } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
+import { getOrgTreeApi, type OrgTreeNode } from '@/api/system/org'
 import { useQuery } from '@tanstack/vue-query'
 import ProTable from '@/components/ProTable/index.vue'
 import type { ProTableColumn } from '@/components/ProTable/types'
 import { listRolesApi } from '@/api/system/role'
 import {
-  createUserApi, deleteUserApi, listUsersApi, resetUserPasswordApi,
-  setUserRolesApi, updateUserApi, updateUserStatusApi, type UserRow,
+  createUserApi, deleteUserApi, getUserOrgsApi, listUsersApi, resetUserPasswordApi,
+  setUserOrgsApi, setUserRolesApi, updateUserApi, updateUserStatusApi, type UserRow,
 } from '@/api/system/user'
 
 // keep-alive 契约：name=动态路由名（tagsView.cachedViews 存路由名，include 按组件名匹配）
@@ -70,7 +71,7 @@ const columns: ProTableColumn[] = [
   { prop: 'phone', label: '手机号', width: 120 },
   { prop: 'status', label: '状态', width: 80, align: 'center', slot: 'status' },
   { prop: 'created_at', label: '创建时间', width: 170, slot: 'created_at' },
-  { prop: 'actions', label: '操作', width: 250, fixed: 'right', slot: 'actions' },
+  { prop: 'actions', label: '操作', width: 320, fixed: 'right', slot: 'actions' },
 ]
 
 function formatTime(iso: string): string {
@@ -243,6 +244,94 @@ async function submitRoles() {
   }
 }
 
+// ─── 分配组织（P2-12：树勾选全量替换 + 主组织可选）───
+const orgsVisible = ref(false)
+const orgsLoading = ref(false)
+const orgsChecking = ref(false)
+const orgsError = ref('')
+const orgTreeRef = ref<OrgTreeInstance>()
+const orgTreeData = ref<OrgTreeNode[]>([])
+const orgsForm = reactive({ userId: '', username: '' })
+const primaryOrgId = ref('')
+/** 树勾选态（el-tree 勾选非响应式——经 @check 事件镜像，供主组织下拉与校验用） */
+const checkedOrgIds = ref<string[]>([])
+
+/** id → 组织名（树扁平化；含虚拟组标注） */
+const orgNameMap = computed(() => {
+  const map = new Map<string, OrgTreeNode>()
+  const walk = (nodes: OrgTreeNode[] | undefined) => {
+    for (const n of nodes ?? []) {
+      map.set(String(n.id), n)
+      walk(n.children)
+    }
+  }
+  walk(orgTreeData.value)
+  return map
+})
+const orgLabelOf = (id: string): string => {
+  const n = orgNameMap.value.get(id)
+  return n ? (n.is_virtual ? `${n.name}（虚拟组）` : n.name) : id
+}
+
+function onOrgCheck() {
+  checkedOrgIds.value = (orgTreeRef.value?.getCheckedKeys(false) ?? []).map(String)
+  // 主组织被取消勾选 → 同步清空，防提交悬空引用
+  if (primaryOrgId.value && !checkedOrgIds.value.includes(primaryOrgId.value)) primaryOrgId.value = ''
+}
+
+/** el-tree 最小接口（role 页同款，避开组件类型体操） */
+interface OrgTreeInstance {
+  setCheckedKeys: (keys: Array<string | number>, leafOnly?: boolean) => void
+  getCheckedKeys: (leafOnly?: boolean) => Array<string | number>
+}
+
+async function openOrgs(row: UserRow) {
+  Object.assign(orgsForm, { userId: row.id, username: row.username })
+  orgsVisible.value = true
+  orgsError.value = ''
+  orgsChecking.value = true
+  try {
+    const [tree, userOrgs] = await Promise.all([getOrgTreeApi(), getUserOrgsApi(row.id)])
+    orgTreeData.value = tree
+    primaryOrgId.value = userOrgs.find((o) => o.is_primary)?.org_id ?? ''
+    // 等树渲染后回填勾选（树数据同帧到，直接 set）
+    orgTreeRef.value?.setCheckedKeys(userOrgs.map((o) => o.org_id), false)
+    checkedOrgIds.value = userOrgs.map((o) => o.org_id)
+  } catch (err: unknown) {
+    orgsError.value = (err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '加载组织信息失败'
+  } finally {
+    orgsChecking.value = false
+  }
+}
+
+async function submitOrgs() {
+  const keys = checkedOrgIds.value
+  if (primaryOrgId.value && !keys.includes(primaryOrgId.value)) {
+    orgsError.value = '主组织须在已勾选组织内'
+    return
+  }
+  try {
+    await ElMessageBox.confirm(`保存将整体替换「${orgsForm.username}」的组织归属（勾选 ${keys.length} 个）。确认？`, '整体替换', {
+      type: 'warning', confirmButtonText: '保存',
+    })
+  } catch {
+    return
+  }
+  orgsLoading.value = true
+  orgsError.value = ''
+  try {
+    await setUserOrgsApi(orgsForm.userId, keys, primaryOrgId.value || null)
+    ElMessage.success('组织归属已更新（整体替换）')
+    orgsVisible.value = false
+    tableRef.value?.refresh()
+  } catch (err: unknown) {
+    const resp = (err as { response?: { data?: { code?: number; message?: string } } })?.response?.data
+    orgsError.value = resp?.message ?? '保存失败，请稍后重试'
+  } finally {
+    orgsLoading.value = false
+  }
+}
+
 // ─── 删除 ───
 async function onDelete(row: UserRow) {
   try {
@@ -310,6 +399,7 @@ async function onDelete(row: UserRow) {
           </el-button>
           <el-button v-permission="'user:reset_password'" link type="primary" size="small" @click="openReset(row)">重置密码</el-button>
           <el-button v-permission="'user:assign_role'" link type="primary" size="small" @click="openRoles(row)">分配角色</el-button>
+          <el-button v-permission="'user:assign_org'" link type="primary" size="small" @click="openOrgs(row)">分配组织</el-button>
           <el-button v-permission="'user:delete'" link type="danger" size="small" @click="onDelete(row)">删除</el-button>
         </template>
       </ProTable>
@@ -375,6 +465,47 @@ async function onDelete(row: UserRow) {
       <template #footer>
         <el-button @click="rolesVisible = false">取消</el-button>
         <el-button type="primary" :loading="rolesLoading" @click="submitRoles">保存</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 分配组织（P2-12：全量替换 + 主组织） -->
+    <el-dialog :model-value="orgsVisible" title="分配组织" width="520px" @update:model-value="orgsVisible = $event">
+      <el-form label-width="80px" @submit.prevent>
+        <el-form-item label="用户">
+          <el-input :model-value="orgsForm.username" disabled />
+        </el-form-item>
+        <el-form-item label="组织">
+          <el-tree
+            ref="orgTreeRef"
+            v-loading="orgsChecking"
+            :data="orgTreeData"
+            node-key="id"
+            :props="{ label: 'name', children: 'children' }"
+            show-checkbox
+            check-strictly
+            default-expand-all
+            class="max-h-[300px] overflow-auto border rounded p-2 w-full"
+            @check="onOrgCheck"
+          >
+            <template #default="{ data }">
+              <span class="flex items-center gap-2">
+                <span>{{ data.name }}</span>
+                <el-tag v-if="data.is_virtual" size="small" type="info">虚拟组</el-tag>
+              </span>
+            </template>
+          </el-tree>
+        </el-form-item>
+        <el-form-item label="主组织">
+          <el-select v-model="primaryOrgId" clearable placeholder="（不指定）" class="!w-full">
+            <el-option v-for="id in checkedOrgIds" :key="id" :label="orgLabelOf(id)" :value="id" />
+          </el-select>
+        </el-form-item>
+      </el-form>
+      <p class="text-xs text-gray-400 px-4">保存将整体替换该用户的全部组织归属；主组织须在勾选内。</p>
+      <el-alert v-if="orgsError" :title="orgsError" type="error" show-icon class="mt-2" :closable="false" />
+      <template #footer>
+        <el-button @click="orgsVisible = false">取消</el-button>
+        <el-button type="primary" :loading="orgsLoading" @click="submitOrgs">保存</el-button>
       </template>
     </el-dialog>
   </div>

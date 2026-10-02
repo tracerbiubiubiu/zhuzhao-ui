@@ -60,3 +60,12 @@ export async function setMemberScopeApi(input: SetMemberScopeInput): Promise<voi
 export async function removeMemberApi(orgId: string, userId: string): Promise<void> {
   await request.post('/api/v1/orgs/members/delete', { org_id: orgId, user_id: userId }, { _silentError: true })
 }
+
+/**
+ * 设置组织负责人（P2-11：POST /orgs/owners——owner_user_ids **整体替换**，L3 owner/全局判定）。
+ * ⚠ 调用方须先取全量 owner 集（名册端点 pageSize 硬顶 100——超员组织需后端补 owners
+ * 读端点后再放开，见视图注记）。
+ */
+export async function setOwnersApi(orgId: string, ownerUserIds: string[]): Promise<void> {
+  await request.post('/api/v1/orgs/owners', { org_id: orgId, owner_user_ids: ownerUserIds }, { _silentError: true })
+}
