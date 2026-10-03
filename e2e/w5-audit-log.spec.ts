@@ -34,4 +34,28 @@ test('W5 冒烟：审计日志页渲染+工号过滤+载荷弹窗', async ({ pag
   await expect(dlg).toBeVisible()
   const preText = await dlg.locator('pre').innerText({ timeout: 10_000 })
   expect(preText.trim().length, '载荷 pre 内容为空——美化区未渲染').toBeGreaterThan(0)
+  // 关弹窗（防遮罩挡 Tab 切换）
+  await dlg.getByRole('button', { name: /关闭|×/ }).click().catch(() => page.keyboard.press('Escape'))
+  await expect(dlg).not.toBeVisible({ timeout: 5_000 })
+
+  // ── Panic 聚合 Tab（复核报告建议：唯一零覆盖且带新 UI 的面）──
+  await page.getByRole('tab', { name: 'Panic 聚合' }).click()
+  await expect(page.getByText('Panic 聚合（同指纹计数——最近优先）')).toBeVisible({ timeout: 10_000 })
+  // 数据面：有 panic 则断言行渲染+路径列非空+分页器在位（P2-8）；无则断言空表+计数 0
+  const panicPane = page.locator('.el-tab-pane').filter({ hasText: 'Panic 聚合' })
+  const panicRows = panicPane.locator('.el-table__row')
+  await page.waitForTimeout(1_000) // 首入惰性拉取（watch 触发 fetchPanics）
+  const panicCount = await panicRows.count()
+  if (panicCount > 0) {
+    await expect(panicRows.first()).toBeVisible()
+    const pathText = await panicRows.first().locator('td').nth(1).innerText()
+    expect(pathText.trim().length, 'panic 行路径列为空').toBeGreaterThan(0)
+    await expect(panicPane.locator('.el-pagination')).toBeVisible({ timeout: 5_000 })
+  } else {
+    await expect(page.getByText(/共 0 个聚合指纹/)).toBeVisible({ timeout: 5_000 })
+  }
+
+  // ── 路由对账 Tab（同页覆盖）──
+  await page.getByRole('tab', { name: '路由对账' }).click()
+  await expect(page.getByRole('button', { name: '立即对账' })).toBeVisible({ timeout: 10_000 })
 })
