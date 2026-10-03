@@ -43,8 +43,8 @@ pnpm test:e2e      # Playwright（S1–S8/S10/S12/FE3/W4·W5/P4 穿插池——1
 - **日期**：一律 `YYYY-MM-DD`
 - **标题**：H1 = `# <文档名> — <一句话定位>`，章节用 H2、不编号
 - **计数口径**（随实际增长同步，禁止两处不同值）：E2E「18 spec / 19 用例」、单测「13 文件 / 106 用例」、E2E 范围串「S1–S8/S10/S12/FE3/W4·W5/P4 穿插池」、门禁统称「六件门禁」（lint/typecheck/test/audit/build/test:e2e）
-- **存放**：Phase 设计文档住主仓 `zhuzhao/docs/`（SSOT）；本仓放操作文档（README/AGENTS/子模块说明）；时点报告住 `outputs/`，命名 `<类型>-<范围>-<YYYY-MM-DD>.md`（类型受控词表：审计复检报告/复核报告/验证报告）
-- **计数/状态声明须与实测一致**：改 E2E/单测数量或修复状态时，同批更新 README 与 AGENTS 两处；「全部修复」类表述须有逐项证据（outputs/ 报告为凭）
+- **存放**：Phase 设计文档住主仓 `zhuzhao/docs/`（SSOT）；本仓放操作文档（README/AGENTS/子模块说明）；时点报告住 `deliverables/`，命名 `<topic-kebab>-<YYYY-MM-DD>.md`（对齐主仓 deliverables/ 惯例）
+- **计数/状态声明须与实测一致**：改 E2E/单测数量或修复状态时，同批更新 README 与 AGENTS 两处；「全部修复」类表述须有逐项证据（deliverables/ 报告为凭）
 
 ## 前端契约速查（详细见主仓 01 号）
 

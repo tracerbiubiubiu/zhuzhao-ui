@@ -12,7 +12,7 @@
 
 ### 1. 本仓改动：只有一个文件
 
-`git diff --stat 4ad3bbf9..HEAD` → 仅 `outputs/复核报告-CI修复与E2E加固-2026-10-02.md`（+65，`1503c0e7` 入库）。提交信息记录对报告做了 **3 处计数勘误**：提交数 10→11、merge 4→5、i18n 落点三处→五处。
+`git diff --stat 4ad3bbf9..HEAD` → 仅 `deliverables/review-ci-e2e-fixes-2026-10-02.md`（+65，`1503c0e7` 入库）。提交信息记录对报告做了 **3 处计数勘误**：提交数 10→11、merge 4→5、i18n 落点三处→五处。
 
 ### 2. 主仓同期推进（与前端有耦合，须核）
 
@@ -20,7 +20,7 @@
 - `docs/standards.md` §3 新增**条 12**（四仓联合验证批）：
   - ① **date-only 业务字段须发 `YYYY-MM-DD`**（后端 `time.Parse("2006-01-02")` 硬校验；「前端曾以 datetime 控件直发 ISO 恒 400」的实测教训入册）
   - ② **ID 数组元素与标量同规——发送侧一律 string**；`jsonutil.Int64Slice` 双形态兼容仅为收方宽容，**明确点名「存量 `.map(Number)` 属违反本公约的欠账」**
-- `2d1e608` 将 zhuzhao-ui 入册 standards 适用范围；时点报告口径定为：主仓 `deliverables/`、前端 `outputs/`，命名 `<类型>-<YYYY-MM-DD>.md`。
+- `2d1e608` 将 zhuzhao-ui 入册 standards 适用范围；时点报告口径定为：主仓 `deliverables/`、前端 `outputs/`，命名 `<类型>-<YYYY-MM-DD>.md`。（后续 2026-10-03 统一为各仓 `deliverables/` + 英文 kebab-case）
 
 ### 3. 新风险面主动核查：date-only 合规性
 
