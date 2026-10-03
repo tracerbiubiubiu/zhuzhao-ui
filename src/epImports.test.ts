@@ -7,9 +7,13 @@
  * （功能静默失效：分页器隐形/对话框退化为内联块/错误提示不显示）。
  *
  * 静态门禁（eslint/vue-tsc/build）**均不检查模板组件是否已导入**——
- * 本测试是唯一的自动捕获层（此前 5 处+3 处=8 处缺陷全部静默溜过：
- * 5 处=四轮审计 #7 批 fc027b8e——LoginForm×2+ChangePassword×3；3 处=复核
- * 报告 review-missing-el-imports-2026-10-03——audit/log+al/types+system/user）。
+ * 本测试是「模板 el-* 缺 import」一类的唯一自动捕获层（已捕获并修复 3 处：
+ * 复核报告 review-missing-el-imports-2026-10-03 的 audit/log+al/types+system/user）。
+ *
+ * **不含**另一类「字符串 prefix-icon/suffix-icon 未注册名」缺陷——根因不同
+ * （EP input 字符串值经 resolveDynamicComponent 把未注册名当标签渲成未知原生元素
+ * =死图标），由本文件第二个用例（字符串闸，2026-10-03 增）覆盖；该类历史已修 5 处
+ * （四轮审计 #7 批 fc027b8e：LoginForm×2 + ChangePassword×3）。
  *
  * 排除：ElMessage/ElMessageBox/ElNotification 等函数式调用（无模板标签）；
  * ElLoading 全局注册；keep-alive/transition 等 Vue 内置。
@@ -83,5 +87,26 @@ describe('EP 组件导入完整性（防静默失效）', () => {
     }
 
     expect(violations.join('\n'), 'EP 组件导入缺失（全仓扫描）').toBe('')
+  })
+
+  it('模板内无字符串 prefix-icon/suffix-icon（未注册名 → 死图标，静默失效）', () => {
+    // 与上例**不同类**：prefix-icon 是属性而非标签，缺 import 扫描器覆盖不到。
+    // 根因（EP 2.14.4 input）：字符串值经 resolveDynamicComponent 解析，未注册名以
+    // 字符串为标签渲染未知原生元素（空、不可见）。正解 = #prefix/#suffix 插槽 +
+    // 全局 <Icon>（fc027b8e 批 5 处已改）。绑定写法 `:prefix-icon="<组件>"` 不受影响。
+    const files = walkVue(ROOT)
+    expect(files.length, '扫描 .vue 文件数').toBeGreaterThanOrEqual(48)
+
+    const violations: string[] = []
+    for (const f of files) {
+      // 去 HTML 注释，避免注释里提及的写法（如「字符串 prefix-icon 不渲染」）误报
+      const src = readFileSync(f, 'utf-8').replace(/<!--[\s\S]*?-->/g, '')
+      // 负向断言排除绑定写法：:prefix-icon="…" / v-bind:prefix-icon="…"
+      for (const m of src.matchAll(/(?<![:\w-])(prefix|suffix)-icon\s*=\s*"/g)) {
+        violations.push(`${f}: 字符串 ${m[1]}-icon="…"（应改 #${m[1]} 插槽 + <Icon>）`)
+      }
+    }
+
+    expect(violations.join('\n'), 'prefix-icon/suffix-icon 字符串残留（死图标）').toBe('')
   })
 })

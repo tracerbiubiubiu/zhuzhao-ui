@@ -19,6 +19,7 @@
 | [archive/review-closing-batch-gap-fills-2026-10-03.md](./archive/review-closing-batch-gap-fills-2026-10-03.md) | 跟进 | 遗留①②补齐（路由回归+回显路径）+E2E 计数 19→20 |
 | [archive/review-missing-el-imports-2026-10-03.md](./archive/review-missing-el-imports-2026-10-03.md) | 跟进 | 3 处 EP 缺失导入（Panic 分页器/类型编辑器/错误提示静默失效）+扫描测试固化 |
 | [archive/review-ep-fix-closeout-2026-10-03.md](./archive/review-ep-fix-closeout-2026-10-03.md) | 复核确认 | 三处 EP 修复端到端验证（真 E2E + 探针）+ 扫描测试变异证明有牙 + 门禁全绿 |
+| [archive/review-ep-scan-nits-2026-10-03.md](./archive/review-ep-scan-nits-2026-10-03.md) | 复核确认 | `eea5b8e5` nit① 变异验证生效；nit②「8 处」口径误标纠正 + 新增 prefix-icon/suffix-icon 字符串闸（双向变异） |
 
 ## 终态
 
