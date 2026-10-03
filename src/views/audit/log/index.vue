@@ -8,7 +8,7 @@
  * - P4-8 对账/指标极简查询页：后端本体未开工（穿插池件），本页不含——随本体批交付
  */
 import { reactive, ref, watch } from 'vue'
-import { ElAlert, ElButton, ElCard, ElDatePicker, ElDialog, ElForm, ElFormItem, ElInput, ElTabPane, ElTable, ElTableColumn, ElTabs, ElTag } from 'element-plus'
+import { ElAlert, ElButton, ElCard, ElDatePicker, ElDialog, ElForm, ElFormItem, ElInput, ElPagination, ElTabPane, ElTable, ElTableColumn, ElTabs, ElTag } from 'element-plus'
 import ProTable from '@/components/ProTable/index.vue'
 import type { ProTableColumn } from '@/components/ProTable/types'
 import { listAuditLogsApi, type AuditLogRow, listPanicsApi, reconcileAuditApi, type PanicRow } from '@/api/audit'
