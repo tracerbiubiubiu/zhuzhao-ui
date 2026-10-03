@@ -33,7 +33,7 @@ pnpm typecheck   # vue-tsc --noEmit（codegen 类型**部分接线** 4/14——�
 pnpm test        # Vitest（动态路由/请求层/keep-alive 防漂移——13 文件 / 106 用例）
 pnpm build       # 生产构建
 pnpm audit --prod # npm 供应链
-pnpm test:e2e    # Playwright（S1–S8/S10/S12/FE3/W4·W5/P4 穿插池——19 spec / 21 用例，运行前提见下）
+pnpm test:e2e    # Playwright（S1–S8/S10/S12/S16/FE3/W4·W5/P4 穿插池——19 spec / 21 用例，运行前提见下）
 ```
 
 ### E2E 运行前提（打标准三栈，不用 stub）
