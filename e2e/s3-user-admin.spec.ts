@@ -87,6 +87,17 @@ test('S3 分配组织（P2-12）：树勾选全量替换 + 主组织 + API 断�
     const bound = orgs.orgs.find((o) => o.org_id === rootOrgId)
     expect(bound, '根组织应已绑定').toBeDefined()
     expect(bound?.is_primary, '根组织应为主组织').toBe(true)
+
+    // 回显路径（复核报告-收尾批 遗留②）：再次打开对话框 → 已有绑定预勾选 + 主组织回填
+    await row.getByRole('button', { name: '分配组织' }).click()
+    await expect(dlg).toBeVisible()
+    const rootCheck = dlg.locator('.el-tree-node__content').filter({ hasText: '集团总部' }).locator('.el-checkbox')
+    await expect(rootCheck).toHaveClass(/is-checked/, { timeout: 10_000 })
+    // 主组织回填：EP select 选中态经 input value 或 wrapper 文本（两形态兼容——
+    // .first() 捕 input wrapper 时空文本，改打 wrapper 整体）
+    const primaryShown = dlg.locator('.el-select').last().locator('.el-select__wrapper')
+    await expect(primaryShown).toContainText('集团总部', { timeout: 10_000 })
+    await dlg.getByRole('button', { name: '取消' }).click()
   } finally {
     await api('/api/v1/users/delete', { ...h, method: 'POST', body: { user_id: userId } }).catch(() => {})
   }

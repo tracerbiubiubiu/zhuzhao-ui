@@ -103,6 +103,24 @@ describe('路由装配（内存 history）', () => {
     expect(router.resolve('/tickets/123').name).toBe('TicketDetail')
   })
 
+  it('动态菜单页 /tickets/types 压过静态参数路由 /tickets/:id（复核报告-收尾批 遗留①）', () => {
+    // 场景：常量路由已注册 /tickets/:id（TicketDetail），后端菜单动态注册 /tickets/types
+    // （ticket_type_manage 页面挂在 ticket_manage 目录下）——静态段优先，菜单页不被
+    // 参数路由吞掉渲染成详情壳（S12 批曾因「按名重导航」竞态实证过此面）。
+    const ticketMenu: RouteMenuNode = {
+      code: 'ticket_manage', name: '工单管理', menu_type: 1, path: '/tickets', component: '', icon: 'ticket', sort_order: 2, visible: true,
+      children: [
+        { code: 'ticket_list', name: '工单列表', menu_type: 2, path: '/tickets', component: 'ticket/list/index', icon: 'ticket-list', sort_order: 1, visible: true },
+        { code: 'ticket_type_manage', name: '类型配置', menu_type: 2, path: '/tickets/types', component: 'ticket/type/index', icon: 'setting', sort_order: 3, visible: true },
+      ],
+    }
+    const router = buildRouter([homeMenu, ticketMenu])
+    expect(router.resolve('/tickets/types').name).toBe('ticket_type_manage')
+    expect(router.resolve('/tickets/new').name).toBe('TicketCreate')
+    expect(router.resolve('/tickets/123').name).toBe('TicketDetail')
+    expect(router.resolve('/tickets').name).toBe('ticket_list')
+  })
+
   it('静态补充路由 /my-org 可达（§3.2④——「我的组织」自服务面）', () => {
     const router = buildRouter([homeMenu])
     expect(router.resolve('/my-org').name).toBe('MyOrg')
