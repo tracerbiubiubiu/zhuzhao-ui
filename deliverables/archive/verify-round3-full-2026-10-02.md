@@ -12,7 +12,7 @@
 
 ### 1. 本仓改动：只有一个文件
 
-`git diff --stat 4ad3bbf9..HEAD` → 仅 `deliverables/review-ci-e2e-fixes-2026-10-02.md`（+65，`1503c0e7` 入库）。提交信息记录对报告做了 **3 处计数勘误**：提交数 10→11、merge 4→5、i18n 落点三处→五处。
+`git diff --stat 4ad3bbf9..HEAD` → 仅 `deliverables/archive/review-ci-e2e-fixes-2026-10-02.md`（+65，`1503c0e7` 入库）。提交信息记录对报告做了 **3 处计数勘误**：提交数 10→11、merge 4→5、i18n 落点三处→五处。
 
 ### 2. 主仓同期推进（与前端有耦合，须核）
 
