@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { execSync } from 'node:child_process'
 
 // 本仓 "type": "module"（ESM）——无 __dirname，用 import.meta 定位
 const here = fileURLToPath(new URL('.', import.meta.url))
@@ -63,4 +64,29 @@ export async function apiLogin(employeeNo: string, password: string, deviceId: s
     method: 'POST',
     body: { employee_no: employeeNo, password, device_id: deviceId },
   })
+}
+
+// ─── 直写 DB（panic 预造等无 API 触发面的场景——复核①：容器名/凭据 env 可覆盖）───
+
+/** PG 容器名（env 覆盖：换容器名/远程 DB 时设 E2E_PG_CONTAINER） */
+export const PG_CONTAINER = process.env.E2E_PG_CONTAINER ?? 'zhuzhao-dev-postgres'
+const PG_USER = process.env.E2E_PG_USER ?? 'zhuzhao'
+const PG_DB = process.env.E2E_PG_DB ?? 'zhuzhao'
+
+/** docker exec psql 单条 SQL（同步——造数/清理场景无并发诉求） */
+export function psql(sql: string): string {
+  return execSync(
+    `docker exec ${PG_CONTAINER} psql -U ${PG_USER} -d ${PG_DB} -qt -A -c ${JSON.stringify(sql)}`,
+    { timeout: 10_000 },
+  ).toString().trim()
+}
+
+/** PG 容器是否可达（不可达→调用方 test.skip 而非 fail——复核①优雅降级） */
+export function pgAvailable(): boolean {
+  try {
+    psql('SELECT 1')
+    return true
+  } catch {
+    return false
+  }
 }
