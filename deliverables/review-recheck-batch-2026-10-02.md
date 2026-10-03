@@ -2,7 +2,7 @@
 
 - **对象**：zhuzhao-ui `main` @ `d70cebb3`（工作树干净，与 `origin/main` 同步）
 - **批次**：`b25beafc`（+ 合并 `526fcf4b`）→ `eb5ffb24` / `d70cebb3`
-- **对照**：`outputs/审计复检报告-四轮审计全量-2026-10-01.md` 的建议第一批（P1-2 真修 / viewNames 种子派生 / 视图图标扫描）
+- **对照**：`deliverables/audit-recheck-4rounds-2026-10-01.md` 的建议第一批（P1-2 真修 / viewNames 种子派生 / 视图图标扫描）
 - **方法**：逐文件读代码 + 复跑门禁 + **变异测试**（本仓有「假绿断言 / 假修」前科，故验证门禁是否真有牙）
 
 ---
