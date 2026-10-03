@@ -85,6 +85,21 @@ test('S7：owner 过「我的组织」名册+委托操作；普通成员只读',
     // 行为断言：保存后名册刷新，成员行角色 select 值=管理员
     await expect(memRow.getByText('管理员')).toBeVisible()
 
+    // ── 设为负责人（P2-11 正向 UI——复核覆盖缺口②）──
+    // 提升 mem（admin→owner）；mem2 保持 member 作后续只读对照
+    await memRow.getByRole('button', { name: '设为负责人' }).click()
+    const promoteBox = page.locator('.el-message-box').filter({ hasText: '负责人并存' })
+    await expect(promoteBox).toBeVisible({ timeout: 10_000 })
+    await promoteBox.getByRole('button', { name: /确认/ }).click()
+    // 行为断言（S4 立规：不依赖瞬态 toast）：名册刷新后 mem 行角色 tag 变「负责人」
+    await expect(memRow.locator('.el-tag').filter({ hasText: '负责人' })).toBeVisible({ timeout: 15_000 })
+
+    // ── 名册翻页（P2-7——复核覆盖缺口③）──
+    const rosterPagination = page.locator('.el-tab-pane, .el-card').filter({ hasText: '成员名册' }).locator('.el-pagination')
+    // 3 成员 < pageSize 20 → EP total ≤ page_size 时分页器仍渲染（有 total 文本即可）
+    await expect(rosterPagination).toBeVisible({ timeout: 5_000 })
+    await expect(rosterPagination).toContainText(/共 3/)
+
     // ── UI：普通成员视角（只读降级）──
     // 独立 context：同页二次登录会复用 owner 的 keep-alive 实例（产品路径登出必清缓存，
     // E2E 直连登录页属捷径——新 context 模拟干净浏览器）
