@@ -1,7 +1,7 @@
 /**
  * W5 冒烟：审计日志页（audit:read——admin 专属面）打真实后端。
  * 数据源=审计中间件落库的业务 API 调用——登录/查询行为本身即产生审计行，
- * 无需造数：按自身工号过濤断言非空（含本页 GET /audit/logs 自身）。
+ * 无需造数：按自身工号过滤断言非空（含本页 GET /audit/logs 自身）。
  * Panic Tab：预造 2 行 panic_logs（直插 DB——panic 只能由 Go recovery 中间件
  * 产生，无 API 触发面；finally 清理不留残留）。
  */
@@ -61,7 +61,7 @@ test('W5 冒烟：审计日志页渲染+工号过滤+载荷弹窗', async ({ pag
     // 全 disabled 零尺寸——改断兄弟 total 文本而非 pagination 可见性）
     await expect(page.getByText(/共 [1-9]\d* 个聚合指纹/)).toBeVisible({ timeout: 5_000 })
   } finally {
-    execSync(`${PSQL} "DELETE FROM panic_logs WHERE fingerprint LIKE 'e2e_panic_%'"`)
+    execSync(`${PSQL} "DELETE FROM panic_logs WHERE fingerprint LIKE 'e2e\\\\_panic\\\\_%' ESCAPE '\\\\'"`)
   }
 
   // ── 路由对账 Tab（同页覆盖）──
