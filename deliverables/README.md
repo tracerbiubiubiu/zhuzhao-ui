@@ -12,6 +12,7 @@
 | 文件 | 性质 | 一句话 |
 |---|---|---|
 | [audit-recheck-4rounds-2026-10-01.md](./audit-recheck-4rounds-2026-10-01.md) | **基线** | 四轮审计 31 项处置（10 解决/3 部分/3 取舍/13 遗留/2 撤回）；P1-2 假修实锤 |
+| [phase4-implementation-summary-2026-10-03.md](./phase4-implementation-summary-2026-10-03.md) | **实现整理** | W2–W5+穿插池实现全貌（架构分层/23 视图/测试资产/取舍边界），数字全实测 |
 | [archive/review-recheck-batch-2026-10-02.md](./archive/review-recheck-batch-2026-10-02.md) | 跟进 | P1-2 真修+viewNames 种子派生+图标扫描——变异测试证明门禁有牙 |
 | [archive/review-ci-e2e-fixes-2026-10-02.md](./archive/review-ci-e2e-fixes-2026-10-02.md) | 跟进 | CI 修复（主仓 checkout）+E2E 加固+i18n 拍板 zh-only |
 | [archive/verify-round3-full-2026-10-02.md](./archive/verify-round3-full-2026-10-02.md) | 验证 | 第三轮全量——date-only 合规/主仓对账/遗留抽样 |
