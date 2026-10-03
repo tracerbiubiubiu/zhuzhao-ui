@@ -7,7 +7,9 @@
  * （功能静默失效：分页器隐形/对话框退化为内联块/错误提示不显示）。
  *
  * 静态门禁（eslint/vue-tsc/build）**均不检查模板组件是否已导入**——
- * 本测试是唯一的自动捕获层（此前 5 处+3 处=8 处缺陷全部静默溜过）。
+ * 本测试是唯一的自动捕获层（此前 5 处+3 处=8 处缺陷全部静默溜过：
+ * 5 处=四轮审计 #7 批 fc027b8e——LoginForm×2+ChangePassword×3；3 处=复核
+ * 报告 review-missing-el-imports-2026-10-03——audit/log+al/types+system/user）。
  *
  * 排除：ElMessage/ElMessageBox/ElNotification 等函数式调用（无模板标签）；
  * ElLoading 全局注册；keep-alive/transition 等 Vue 内置。
@@ -49,13 +51,10 @@ function walkVue(dir: string, out: string[] = []): string[] {
 
 describe('EP 组件导入完整性（防静默失效）', () => {
   it('全仓 .vue 模板内 el-* 标签均有对应 ElXxx import', () => {
-    const files = [
-      ...walkVue(join(ROOT, 'views')),
-      ...walkVue(join(ROOT, 'layout')),
-      ...walkVue(join(ROOT, 'components')),
-      ...walkVue(join(ROOT, 'common/components')),
-    ]
-    expect(files.length, '扫描 .vue 文件数').toBeGreaterThan(30)
+    // walkVue(ROOT) 从 src/ 根起扫——覆盖含 App.vue 在内的全部 .vue（48 文件），
+    // 此前四目录拼装漏了根级 App.vue（复核报告 nit①；App.vue 现无 el-* 但根级是盲区）
+    const files = walkVue(ROOT)
+    expect(files.length, '扫描 .vue 文件数').toBeGreaterThanOrEqual(48)
 
     const violations: string[] = []
     for (const f of files) {

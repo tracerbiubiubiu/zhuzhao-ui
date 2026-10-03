@@ -18,6 +18,7 @@
 | [archive/review-closing-batch-2026-10-03.md](./archive/review-closing-batch-2026-10-03.md) | 跟进 | 收尾批（P2-5 端点+P3-4 定性+P3-12 骨架）——31 项全清账 |
 | [archive/review-closing-batch-gap-fills-2026-10-03.md](./archive/review-closing-batch-gap-fills-2026-10-03.md) | 跟进 | 遗留①②补齐（路由回归+回显路径）+E2E 计数 19→20 |
 | [archive/review-missing-el-imports-2026-10-03.md](./archive/review-missing-el-imports-2026-10-03.md) | 跟进 | 3 处 EP 缺失导入（Panic 分页器/类型编辑器/错误提示静默失效）+扫描测试固化 |
+| [archive/review-ep-fix-closeout-2026-10-03.md](./archive/review-ep-fix-closeout-2026-10-03.md) | 复核确认 | 三处 EP 修复端到端验证（真 E2E + 探针）+ 扫描测试变异证明有牙 + 门禁全绿 |
 
 ## 终态
 
