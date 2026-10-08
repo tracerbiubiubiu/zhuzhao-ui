@@ -1,8 +1,10 @@
 /**
  * ticket 域 API（P4-W4 工单域）
  *
- * 列表搜索严格对齐端点：type_code/status（无 keyword/assignee——assignee=me 随 W4 后端
- * 随批件，到时再加）。Ticket 行无 version（乐观锁三件套=用户/组织/角色，工单除外）。
+ * 列表搜索严格对齐端点（无假搜索项）：type_code/status/priority/assignee=me/
+ * created_by=me/keyword/created_from/to（2026-10-08 批——priority 存量即支持，
+ * keyword/时间/me 为本批后端同补；keyword=标题 ILIKE 子串，纯数字 OR 工单 ID）。
+ * Ticket 行无 version（乐观锁三件套=用户/组织/角色，工单除外）。
  */
 import request from '@vea/request'
 
@@ -28,12 +30,17 @@ export interface TicketRow {
   updated_at: string
 }
 
-/** 搜索参数严格对齐 GET /tickets（03 W4：状态筛选可列六态；assignee 仅支持
- * me（W4 P1-c——工作台待办/已办卡数据源），其余值后端 400） */
+/** 搜索参数严格对齐 GET /tickets（03 W4：状态筛选可列六态；assignee/created_by 仅支持
+ * me（字面量，其余后端 400）；keyword 最长 50 字符；created_from/to=YYYY-MM-DD UTC 切日） */
 export interface TicketListQuery {
   type_code?: string
   status?: string
+  priority?: number
   assignee?: 'me'
+  created_by?: 'me'
+  keyword?: string
+  created_from?: string
+  created_to?: string
 }
 
 export async function listTicketsApi(

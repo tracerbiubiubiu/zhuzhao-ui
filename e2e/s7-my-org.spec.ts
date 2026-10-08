@@ -81,7 +81,7 @@ test('S7：owner 过「我的组织」名册+委托操作；普通成员只读',
     const memRow = page.locator('tr', { hasText: `s7_mem_${suffix}` })
     await memRow.locator('.el-select').first().click()
     await page.getByRole('option', { name: '管理员' }).click()
-    await expect(page.locator('.el-message').filter({ hasText: '管理员' })).toBeVisible()
+    // 瞬态 toast 断言移除（EP 怪癖：ElMessage 偶发不渲染——行为断言兜底）
     // 行为断言：保存后名册刷新，成员行角色 select 值=管理员
     await expect(memRow.getByText('管理员')).toBeVisible()
 

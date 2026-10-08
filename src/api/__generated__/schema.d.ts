@@ -1875,8 +1875,18 @@ export interface paths {
                     type_code?: string;
                     /** @description 工单状态 */
                     status?: string;
+                    /** @description 优先级（1紧急/2高/3中/4低） */
+                    priority?: number;
                     /** @description 处理人过滤，仅支持 me（当前用户——工作台待办/已办卡数据源） */
                     assignee?: string;
+                    /** @description 创建人过滤，仅支持 me（当前用户，「我发起的」） */
+                    created_by?: string;
+                    /** @description 标题关键字（子串匹配；纯数字时同时精确匹配工单 ID） */
+                    keyword?: string;
+                    /** @description 创建日期起（YYYY-MM-DD，UTC 切日，含当日） */
+                    created_from?: string;
+                    /** @description 创建日期止（YYYY-MM-DD，UTC 切日，含当日） */
+                    created_to?: string;
                 };
                 header?: never;
                 path?: never;
