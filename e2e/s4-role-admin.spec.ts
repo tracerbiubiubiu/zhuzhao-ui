@@ -7,7 +7,7 @@ import { test, expect } from '@playwright/test'
 import { loadState } from './helpers'
 import { uiLogin } from './ui'
 
-test('S4：角色页冒烟 + 分配菜单 check-strictly（只勾页面可保存，无级联虚增）', async ({ page }) => {
+test('S4：角色页冒烟 + 分配菜单勾选树（目录联动子孙 + 只勾页面可保存无虚增）', async ({ page }) => {
   const state = loadState()
   const suffix = Date.now().toString(36)
   const roleCode = `e2e_s4_${suffix}`
@@ -38,6 +38,15 @@ test('S4：角色页冒烟 + 分配菜单 check-strictly（只勾页面可保存
   // 勾选「用户管理」页面节点（check-strictly：不级联勾子按钮）
   // 定位用 __content 行（el-tree 节点 DOM 嵌套子孙，.el-tree-node+hasText 会误中祖先目录行）
   const userRow = dialog.locator('.el-tree-node__content').filter({ hasText: '用户管理' })
+  // 目录级联动（应用层批量糖）：勾「系统管理」目录→子页面连带勾选；取消→连带取消。
+  // 断言完复位，后续只勾页面的主流程不受污染
+  const dirRow = dialog.locator('.el-tree-node__content').filter({ hasText: '系统管理' })
+  await dirRow.locator('.el-checkbox__inner').click()
+  await expect(dirRow.locator('.el-checkbox.is-checked')).toBeVisible()
+  await expect(userRow.locator('.el-checkbox.is-checked')).toBeVisible()
+  await dirRow.locator('.el-checkbox__inner').click()
+  await expect(dirRow.locator('.el-checkbox.is-checked')).toHaveCount(0)
+  await expect(userRow.locator('.el-checkbox.is-checked')).toHaveCount(0)
   await userRow.locator('.el-checkbox__inner').click()
   // 分步归因：勾选必须先生效（check-strictly 下无级联）
   await expect(userRow.locator('.el-checkbox.is-checked')).toBeVisible()

@@ -6,7 +6,9 @@
  * - 表单：el-form+rules+**version 乐观锁回传**（update 必带）；10006 冲突 → 关框刷新
  *   提示重试（§3.3 非 toast 路径，与用户页同范式）
  * - AssignMenus 勾选树：el-tree **check-strictly=true 硬要求**（B 案词表拆分 UI 前提——
- *   级联勾选会让「只勾页面、不勾按钮」的只读授权选不出来）；保存=整体替换精确勾选集
+ *   页面勾选不得级联带出按钮，「只勾页面不勾按钮」的只读授权必须选得出来）；目录勾选
+ *   经应用层联动全部子孙（目录=归类容器无授权语义，纯逻辑见 ./menuTreeCascade）；
+ *   保存=整体替换精确勾选集
  * - 按钮权限码（000002 种子）：role:create/update/delete/assign_menu（⚠ assign_menu 单数）
  * - 角色复制（随手项池排 W3）：预填源角色字段开创建框
  * - 菜单树走 vue-query（queryKey=['system','menus']）
@@ -21,7 +23,8 @@ import type { FormInstance, FormRules } from 'element-plus'
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
 import ProTable from '@/components/ProTable/index.vue'
 import type { ProTableColumn } from '@/components/ProTable/types'
-import { getMenuTreeApi } from '@/api/system/menu'
+import { getMenuTreeApi, type MenuTreeNode } from '@/api/system/menu'
+import { dirCascadeKeys } from './menuTreeCascade'
 import {
   assignRoleMenusApi, createRoleApi, deleteRoleApi, getRoleMenuIdsApi,
   listRolesApi, updateRoleApi, type RoleRow,
@@ -191,6 +194,12 @@ async function openAssignMenus(row: RoleRow) {
   }
 }
 
+/** 目录级联动接线：@check 交给纯逻辑重算（页面/按钮点击原样返回 null，不动勾选集） */
+function onMenuCheck(data: MenuTreeNode, info: { checkedKeys: Array<string | number> }) {
+  const next = dirCascadeKeys(menuTreeQuery.data.value ?? [], data.id, info.checkedKeys)
+  if (next) menuTreeRef.value?.setCheckedKeys(next, false)
+}
+
 async function submitAssignMenus() {
   // check-strictly：getCheckedKeys 即用户精确勾选集（无级联半选）——整体替换
   const keys = (menuTreeRef.value?.getCheckedKeys(false) ?? []) as Array<string | number>
@@ -298,7 +307,7 @@ async function onDelete(row: RoleRow) {
     <el-dialog v-model="menusVisible" :title="`分配菜单 — ${menusForm.roleName}`" width="520px">
       <el-alert
         type="info" :closable="false" class="mb-2"
-        title="勾选独立于父子层级（check-strictly）：可只勾页面不勾其按钮（只读授权），保存为整体替换。"
+        title="勾选/取消目录会联动其下全部页面与按钮；页面与按钮之间勾选相互独立（可只勾页面不勾按钮=只读授权），保存为整体替换。"
       />
       <el-alert v-if="menusError" :title="menusError" type="error" show-icon class="mb-2" :closable="false" />
       <el-tree
@@ -312,6 +321,7 @@ async function onDelete(row: RoleRow) {
         default-expand-all
         :expand-on-click-node="false"
         class="max-h-[420px] overflow-auto border rounded p-2"
+        @check="onMenuCheck"
       >
         <template #default="{ data }">
           <span class="flex items-center gap-2">
