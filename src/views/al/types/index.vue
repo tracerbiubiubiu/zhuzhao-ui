@@ -24,6 +24,7 @@ import {
 defineOptions({ name: 'al_types' })
 
 const queryClient = useQueryClient()
+import { useTableFit } from '@vea/hooks'
 const typesQuery = useQuery({ queryKey: ['al', 'types'], queryFn: listAlTypesApi })
 const rows = computed(() => typesQuery.data.value?.list ?? [])
 
@@ -158,6 +159,9 @@ function formatTime(iso?: string): string {
   if (!iso) return '—'
   return new Date(iso).toLocaleString('zh-CN', { hour12: false })
 }
+
+const typesTable = ref()
+useTableFit(typesTable, () => rows.value)
 </script>
 
 <template>
@@ -171,7 +175,7 @@ function formatTime(iso?: string): string {
       </template>
 
       <div class="min-h-0 flex-initial">
-        <el-table :data="rows" v-loading="typesQuery.isLoading.value" row-key="type_name" height="100%">
+        <el-table ref="typesTable" :data="rows" v-loading="typesQuery.isLoading.value" row-key="type_name" height="100%">
         <el-table-column prop="type_name" label="类型名" min-width="160" />
         <el-table-column label="状态" width="100" align="center">
           <template #default="{ row }">

@@ -26,6 +26,8 @@ overflow-y-auto 仅为兜底——正常页面不该用到它）→ 页面根 .f
 - tabs 型列表页：`el-tabs` 加 `fill-tabs`（每签独立成填充链），签内工具条加 `flex-none`。
 - 复合页不想拉伸的直接子卡片：加 `!flex-none`（important 压过全局 `.fill-page > .el-card`）。
 - 对话框/抽屉内长内容：`max-h-[420px] overflow-auto` 或 el-scrollbar，高度值不强制统一。
+- **横向同理**：表内横向滚动量在常用宽度（≥1024）应为 0（靠 `minWidth` 列吸收）；极窄屏溢出属
+  兜底，且拉宽后必须自愈（useTableFit 保证）。横向滚动条对用户操作不友好，能不出现在不出现。
 
 ## 表格规范
 
@@ -66,6 +68,10 @@ overflow-y-auto 仅为兜底——正常页面不该用到它）→ 页面根 .f
 5. 填充语义 = **紧凑+按需封顶**：行少时表格贴内容、分页紧跟（留白在页底背景，不是表格框内的洞）；
    行多时封顶内滚。不要回退「无脑拉满」——高屏会露框内死区。
 6. 全局卡类等页面级 CSS 改动后，六张已填列表页+四张内容页都要回归（DOM 探针最便宜）。
+7. **EP 2.14 el-table 列宽拟合不随容器变化重排**（侧栏异步收起/窗口面板调整/数据晚到后，表格保持
+   首次拟合宽度——右侧残留死区或表内横向滚动条，window resize 也不自愈）。兜底=`useTableFit`
+   （`@vea/hooks`，ResizeObserver 盯表格父容器+window resize→`doLayout`，数据晚到传 watchSource）；
+   **ProTable 已内置**，手动 el-table 必须自行挂接（用法见 composable 头注释）。
 
 ## 新增页面 checklist
 
@@ -83,5 +89,6 @@ overflow-y-auto 仅为兜底——正常页面不该用到它）→ 页面根 .f
 | system/user · role · ticket/list · audit/log · task/list · al/data · al/types · system/ticket-type | 列表页（单表/tabs） | ✅ 表格内滚 |
 | system/dict | 双栏列表 | ✅ 双栏等高各自内滚 |
 | MyOrg | 复合页（组织卡+名册） | ✅ 名册内滚、组织卡 flex-none |
+| system/org · menu | 内容页（树） | ✅ 内容区内滚（漏网补齐批 2026-10-08） |
 | ticket/detail · ticket/create · Profile · Home | 内容页 | ✅ 内容区内滚（本批） |
 | 登录/改密/403/404 | 独立布局 | ➖ 不适用 |

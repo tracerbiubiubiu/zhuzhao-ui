@@ -12,6 +12,7 @@ import { ElAlert, ElButton, ElCard, ElDatePicker, ElDialog, ElForm, ElFormItem, 
 import ProTable from '@/components/ProTable/index.vue'
 import type { ProTableColumn } from '@/components/ProTable/types'
 import { listAuditLogsApi, type AuditLogRow, listPanicsApi, reconcileAuditApi, type PanicRow } from '@/api/audit'
+import { useTableFit } from '@vea/hooks'
 
 // keep-alive 契约：name=动态路由名（菜单 code audit_log，组件路径 audit/log/index）
 defineOptions({ name: 'audit_log_page' })
@@ -117,6 +118,9 @@ async function runReconcile() {
     reconcileLoading.value = false
   }
 }
+
+const panicsTable = ref()
+useTableFit(panicsTable, () => panics.value)
 </script>
 
 <template>
@@ -165,7 +169,7 @@ async function runReconcile() {
         <el-card shadow="never">
           <template #header><span class="font-semibold">Panic 聚合（同指纹计数——最近优先）</span></template>
           <div class="min-h-0 flex-initial">
-            <el-table :data="panics" v-loading="panicsLoading" row-key="id" height="100%">
+            <el-table ref="panicsTable" :data="panics" v-loading="panicsLoading" row-key="id" height="100%">
               <el-table-column prop="count" label="次数" width="80" align="center" />
               <el-table-column prop="path" label="路径" min-width="200" />
               <el-table-column prop="message" label="消息" min-width="260" show-overflow-tooltip />

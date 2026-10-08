@@ -8,8 +8,9 @@
  * - 搜索区/工具栏走 slot，搜索提交由页面调 tableRef.refresh({ resetPage: true })
  * - 请求失败：全局 toast（请求层 errorToast）+ 表格空态；本组件不重复提示
  */
+import { ref } from 'vue'
 import { ElTable, ElTableColumn, ElPagination } from 'element-plus'
-import { useCrud } from '@vea/hooks'
+import { useCrud, useTableFit } from '@vea/hooks'
 import type { ProTableColumn, ProTableFetcher } from './types'
 
 // 动态具名列 slot（名=column.slot??prop）：行类型由消费页面自行收窄（封装不做行泛型，
@@ -41,6 +42,11 @@ const { state, actions } = useCrud<{ [key: string]: any }>({
   },
 })
 
+// EP 2.14 缺陷兜底：容器尺寸变化（侧栏收起/窗口面板调整/数据晚到）列宽不自动重排——
+// ResizeObserver+resize 触发 doLayout（frontend-standard.md 踩坑⑦）
+const tableEl = ref<{ doLayout: () => void; $el?: HTMLElement }>()
+useTableFit(tableEl, () => state.items.value)
+
 defineExpose({
   /** 搜索提交入口（resetPage=true 回第一页）与写操作后刷新共用 */
   refresh: (function (raw: typeof actions.refresh) {
@@ -49,6 +55,8 @@ defineExpose({
     }
   })(actions.refresh),
   state,
+  /** 手动触发列宽重排（容器尺寸被外力改变时的兜底口） */
+  doLayout: () => tableEl.value?.doLayout(),
 })
 </script>
 
@@ -62,6 +70,7 @@ defineExpose({
     </div>
     <div class="pro-table__table" :class="{ 'pro-table__table--fill': fill }">
       <el-table
+        ref="tableEl"
         v-loading="state.listLoading.value"
         :data="state.items.value"
         :row-key="rowKey"

@@ -42,6 +42,7 @@ const FIELD_TYPES: Array<{ value: TicketTypeFieldInput['field_type']; label: str
 ]
 
 // ─── 类型 Tab ───
+import { useTableFit } from '@vea/hooks'
 const typesQuery = useQuery({ queryKey: ['ticket', 'types'], queryFn: listTicketTypesApi })
 const typeColumns = [
   { prop: 'code', label: '编码', width: 160 },
@@ -356,6 +357,12 @@ async function onDeleteTpl(row: TicketTemplateRow) {
     ElMessage.error((err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '删除失败')
   }
 }
+
+const ttTable = ref()
+useTableFit(ttTable, () => typesQuery.data.value)
+
+const tplTable = ref()
+useTableFit(tplTable, () => templatesQuery.data.value)
 </script>
 
 <template>
@@ -367,7 +374,7 @@ async function onDeleteTpl(row: TicketTemplateRow) {
             <el-button v-permission="'ticket:type:manage'" type="primary" @click="openTypeCreate">新建类型</el-button>
           </div>
           <div class="min-h-0 flex-initial">
-          <el-table v-loading="typesQuery.isLoading.value" :data="typesQuery.data.value ?? []" row-key="id" stripe height="100%">
+          <el-table ref="ttTable" v-loading="typesQuery.isLoading.value" :data="typesQuery.data.value ?? []" row-key="id" stripe height="100%">
             <el-table-column v-for="col in typeColumns" :key="col.prop" :prop="col.prop" :label="col.label" :width="col.width" :min-width="col.minWidth" :align="col.align">
               <template #default="{ row }">
                 <template v-if="col.prop === 'has_custom_fields'">
@@ -396,7 +403,7 @@ async function onDeleteTpl(row: TicketTemplateRow) {
             <el-button v-permission="'ticket:type:manage'" type="primary" @click="openTplCreate">新建模板</el-button>
           </div>
           <div class="min-h-0 flex-initial">
-          <el-table v-loading="templatesQuery.isLoading.value" :data="templatesQuery.data.value ?? []" row-key="id" stripe height="100%">
+          <el-table ref="tplTable" v-loading="templatesQuery.isLoading.value" :data="templatesQuery.data.value ?? []" row-key="id" stripe height="100%">
             <el-table-column prop="code" label="编码" width="160" />
             <el-table-column prop="name" label="名称" min-width="160" />
             <el-table-column prop="type_code" label="类型" width="140" />

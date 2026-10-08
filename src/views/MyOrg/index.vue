@@ -45,6 +45,7 @@ const roster = ref<OrgMemberRosterItem[]>([])
 const rosterLoading = ref(false)
 const rosterPage = ref(1)
 const rosterPageSize = ref(20)
+import { useTableFit } from '@vea/hooks'
 const rosterTotal = ref(0)
 /** 普通成员：名册 403 → 只读组织信息（owner/admin 控件不渲染） */
 const readonlyMode = ref(false)
@@ -147,10 +148,13 @@ async function onPromoteOwner(row: OrgMemberRosterItem) {
     ElMessage.error(resp?.message ?? '操作失败')
   }
 }
+
+const rosterTable = ref()
+useTableFit(rosterTable, () => roster.value)
 </script>
 
 <template>
-  <!-- 填充链(docs/table-standard.md):组织卡 flex-none 不参与拉伸,名册卡吃满剩余高度内滚 -->
+  <!-- 填充链(docs/frontend-standard.md):组织卡 flex-none 不参与拉伸,名册卡吃满剩余高度内滚 -->
   <div class="fill-page p-4">
     <el-card shadow="never" class="mb-4 !flex-none">
       <template #header><span class="font-semibold">我的组织</span></template>
@@ -189,7 +193,7 @@ async function onPromoteOwner(row: OrgMemberRosterItem) {
         title="你是本组织普通成员：仅可见组织信息，成员管理与组内授权由组织负责人/管理员操作。"
       />
       <div v-else class="min-h-0 flex-initial">
-        <el-table v-loading="rosterLoading" :data="roster" row-key="user_id" stripe height="100%">
+        <el-table ref="rosterTable" v-loading="rosterLoading" :data="roster" row-key="user_id" stripe height="100%">
         <el-table-column prop="username" label="用户名" min-width="110" />
         <el-table-column prop="real_name" label="姓名" min-width="90" />
         <el-table-column prop="employee_no" label="工号" width="100" />

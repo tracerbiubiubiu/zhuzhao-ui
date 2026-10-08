@@ -10,6 +10,7 @@ import {
   ElAlert, ElButton, ElCard, ElDialog, ElForm, ElInput, ElInputNumber, ElMessage, ElMessageBox,
   ElSwitch, ElTable, ElTableColumn, ElTag,
 } from 'element-plus'
+import { useTableFit } from '@vea/hooks'
 import {
   createDictItemApi, createDictTypeApi, deleteDictItemApi, deleteDictTypeApi,
   listDictItemsApi, listDictTypesApi, updateDictItemApi, updateDictTypeApi,
@@ -178,10 +179,16 @@ async function onDeleteItem(row: DictItemRow) {
     ElMessage.error(resp?.message ?? '删除失败')
   }
 }
+
+const typesTable = ref()
+useTableFit(typesTable, () => types.value)
+
+const itemsTable = ref()
+useTableFit(itemsTable, () => items.value)
 </script>
 
 <template>
-  <!-- 填充链(docs/table-standard.md):双栏等高,两表各自内部滚动 -->
+  <!-- 填充链(docs/frontend-standard.md):双栏等高,两表各自内部滚动 -->
   <div class="fill-page p-4">
     <div class="flex flex-1 gap-4 min-h-0">
       <!-- 左：类型 -->
@@ -198,6 +205,7 @@ async function onDeleteItem(row: DictItemRow) {
         </el-form>
         <div class="min-h-0 flex-initial">
         <el-table
+          ref="typesTable"
           :data="types" v-loading="typesLoading" row-key="id" highlight-current-row height="100%"
           @current-change="(r: DictTypeRow | null) => r && selectType(r)"
         >
@@ -227,7 +235,7 @@ async function onDeleteItem(row: DictItemRow) {
         </template>
         <el-alert v-if="!selectedType" title="选择左侧类型查看字典项" type="info" show-icon :closable="false" />
         <div v-else class="min-h-0 flex-initial">
-        <el-table :data="items" v-loading="itemsLoading" row-key="id" height="100%">
+        <el-table ref="itemsTable" :data="items" v-loading="itemsLoading" row-key="id" height="100%">
           <el-table-column prop="sort_order" label="序" width="60" align="center" />
           <el-table-column prop="code" label="code" min-width="110" />
           <el-table-column prop="label" label="标签" min-width="110" />
@@ -282,7 +290,7 @@ async function onDeleteItem(row: DictItemRow) {
 </template>
 
 <style scoped>
-/* 双栏等高填充(docs/table-standard.md):卡片弹性列,卡片体弹性化,表格区由页内 wrap 控高 */
+/* 双栏等高填充(docs/frontend-standard.md):卡片弹性列,卡片体弹性化,表格区由页内 wrap 控高 */
 .dict-pane {
   display: flex;
   flex: 1;

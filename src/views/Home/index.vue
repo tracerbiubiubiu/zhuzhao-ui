@@ -11,6 +11,7 @@
 import { ref, onMounted } from 'vue'
 import { ElCard, ElCol, ElRow, ElTable, ElTableColumn, ElTag, ElEmpty } from 'element-plus'
 import { listTicketsApi } from '@/api/ticket'
+import { useTableFit } from '@vea/hooks'
 
 // keep-alive 契约：name=最深匹配路由名（home 菜单为 type=1 带 component 特例——
 // §3.2③ 渲染子路由名 `${code}_page`，tagsView.cachedViews 存的即它）
@@ -91,6 +92,9 @@ function formatTime(iso?: string): string {
   // P3-8 修复：对齐仓内范式（toLocaleString zh-CN+hour12:false）——原 replace('T',' ') 无时区转换
   return new Date(iso).toLocaleString('zh-CN', { hour12: false })
 }
+
+const homeTable = ref()
+useTableFit(homeTable, () => recent.value)
 </script>
 
 <template>
@@ -146,7 +150,7 @@ function formatTime(iso?: string): string {
       <template #header>
         <span class="font-semibold">最近工单</span>
       </template>
-      <el-table v-if="recent.length" :data="recent" stripe size="default">
+      <el-table ref="homeTable" v-if="recent.length" :data="recent" stripe size="default">
         <el-table-column prop="id" label="ID" width="80" />
         <el-table-column prop="title" label="标题" min-width="200" show-overflow-tooltip />
         <el-table-column label="状态" width="100" align="center">

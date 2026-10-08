@@ -55,6 +55,7 @@ function fieldTypeLabel(t: AlFieldDef['type']): string {
 const list = ref<AlDataDoc[]>([])
 const listLoading = ref(false)
 const pageSize = ref(20)
+import { useTableFit } from '@vea/hooks'
 const nextCursor = ref<AlCursor | null>(null)
 /** 页栈：stack[k-1]=第 k 页末 cursor——上一页弹栈、下一页压栈（纯函数见 cursorPager） */
 const cursorStack = ref<AlCursor[]>([])
@@ -321,6 +322,9 @@ function openDetail(row: AlDataDoc) {
   detailRow.value = row
   detailVisible.value = true
 }
+
+const dataTable = ref()
+useTableFit(dataTable, () => list.value)
 </script>
 
 <template>
@@ -387,7 +391,7 @@ function openDetail(row: AlDataDoc) {
         <template v-else>
           <!-- min-h-0 flex-1 + height 100%：表格吃满剩余视口内部滚动（fill 链，与 ProTable 同款） -->
           <div class="min-h-0 flex-initial">
-            <el-table :data="list" v-loading="listLoading" row-key="id" :row-class-name="rowClass" height="100%" @row-click="openDetail">
+            <el-table ref="dataTable" :data="list" v-loading="listLoading" row-key="id" :row-class-name="rowClass" height="100%" @row-click="openDetail">
             <el-table-column prop="id" label="ID" width="90" />
             <el-table-column label="状态" width="76" align="center">
               <template #default="{ row }">

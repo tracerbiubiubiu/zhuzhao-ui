@@ -25,3 +25,4 @@ export type {
   FormValidatorResult,
   UseFormOptions
 } from './useForm'
+export { useTableFit } from './useTableFit'

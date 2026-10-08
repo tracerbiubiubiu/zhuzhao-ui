@@ -108,6 +108,7 @@ const deadList = ref<DeadLetterRow[]>([])
 const deadLoading = ref(false)
 const deadPage = ref(1)
 const deadPageSize = 20
+import { useTableFit } from '@vea/hooks'
 const deadEmptyPage = ref(false) // 空页=遍历终止（无 total 只能按空判）
 
 // 审计修复（2026-09-30 P1）：死信 Tab 无初始加载触发点——首入惰性拉取（audit 页同款范式）
@@ -280,6 +281,9 @@ function formatTime(iso?: string | null): string {
   if (!iso) return '—'
   return new Date(iso).toLocaleString('zh-CN', { hour12: false })
 }
+
+const deadTable = ref()
+useTableFit(deadTable, () => deadList.value)
 </script>
 
 <template>
@@ -337,7 +341,7 @@ function formatTime(iso?: string | null): string {
         <!-- ── Tab2 死信（只读+重试；无 total 按页号翻） ── -->
         <el-tab-pane label="死信" name="dead">
           <div class="min-h-0 flex-initial">
-            <el-table :data="deadList" v-loading="deadLoading" row-key="task_id" height="100%">
+            <el-table ref="deadTable" :data="deadList" v-loading="deadLoading" row-key="task_id" height="100%">
             <el-table-column prop="task_id" label="任务 ID" min-width="210" show-overflow-tooltip />
             <el-table-column prop="action" label="动作" width="150" show-overflow-tooltip />
             <el-table-column prop="error" label="最后错误" min-width="220" show-overflow-tooltip />
