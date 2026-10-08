@@ -93,3 +93,49 @@ test('W5 冒烟：al 类型注册/数据写入/cursor 分页/软删恢复', asyn
     await api('/al/api/v1/admin/types/deprecate', { ...h, method: 'POST', body: { type_name: typeName } }).catch(() => {})
   }
 })
+
+
+test('活动列表：废弃类型只读视图（分组可选/写入隐藏/导出保留/行详情抽屉）', async ({ page }) => {
+  const state = loadState()
+  const suffix = Date.now().toString(36)
+  const typeName = `e2e_al_dep_${suffix}`
+
+  // ── API setup：注册类型+写 1 行 → 立即废弃（数据留存只读——gateType 对读/软删放行）──
+  const admin = await apiLogin(state.admin.employeeNo, state.admin.password, 'w5-al-dep')
+  const h = { token: admin.env!.data.access_token } as const
+  const created = await api('/al/api/v1/admin/types', {
+    ...h, method: 'POST',
+    body: { type_name: typeName, fields: [{ name: 'name', type: 'string', required: true }] },
+  })
+  expect(created.env!.code).toBe(0)
+  const written = await api(`/al/api/v1/data/${typeName}`, {
+    ...h, method: 'POST', body: { data: { name: 'dep_row_1' } },
+  })
+  expect(written.env!.code).toBe(0)
+  const dep = await api('/al/api/v1/admin/types/deprecate', { ...h, method: 'POST', body: { type_name: typeName } })
+  expect(dep.env!.code).toBe(0)
+
+  await uiLogin(page, state.admin.employeeNo, state.admin.password)
+  await expect(page.getByRole('menuitem', { name: '名单管理' })).toBeVisible({ timeout: 15_000 })
+  await page.goto('/#/al/data')
+  await page.locator('.el-select').first().click()
+  await page.getByRole('option', { name: typeName }).click()
+
+  // 只读态：废弃 alert + 写入/导入隐藏 + 导出（存档）保留 + 数据行可见
+  await expect(page.getByText('该类型已废弃')).toBeVisible()
+  await expect(page.getByRole('button', { name: '写入' })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: '导入' })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: '导出' })).toBeVisible()
+  const row = page.locator('.el-table__row').filter({ hasText: 'dep_row_1' })
+  await expect(row).toBeVisible()
+
+  // 行详情抽屉：点行开 → 全字段 descriptions；编辑随只读隐藏，关闭可退
+  await row.click()
+  const drawer = page.locator('.el-drawer')
+  await expect(drawer).toBeVisible()
+  await expect(drawer.locator('.el-descriptions')).toContainText('dep_row_1')
+  await expect(drawer.getByRole('button', { name: '编辑' })).toHaveCount(0)
+  // exact：EP 抽屉自带关闭钮 aria-label「关闭此对话框」——子串会撞双
+  await drawer.getByRole('button', { name: '关闭', exact: true }).click()
+  await expect(drawer).not.toBeVisible()
+})

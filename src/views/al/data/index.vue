@@ -7,12 +7,17 @@
  * - cursor 分页（无 total——十三批「无 total 形态」）：页栈管理见 ./cursorPager（单测防漂移）
  * - 导出=blob 下载（裸 JSON 数组流）；导入=同格式文件直发 body（网关上限 1MB 前端预检）
  * - 编辑带 version 乐观锁（冲突 409+100008——activelist 跨服务码段）
+ * - 2026-10-08 排版改版：类型上下文头（schema 徽标）/行详情抽屉（点行开，全字段+系统字段）/
+ *   空态引导（去注册/写入首条）；废弃类型只读视图——下拉「已废弃」分组可选，
+ *   浏览/导出/删行放行（gateType 对读与软删本就放行），写入/导入/编辑随 409 门同步隐藏
  */
 import { computed, reactive, ref, watch } from 'vue'
 import {
-  ElAlert, ElButton, ElCard, ElDialog, ElForm, ElFormItem, ElInput, ElInputNumber,
-  ElMessage, ElMessageBox, ElOption, ElSelect, ElTable, ElTableColumn,
+  ElAlert, ElButton, ElCard, ElDescriptions, ElDescriptionsItem, ElDialog, ElDrawer,
+  ElEmpty, ElForm, ElFormItem, ElInput, ElInputNumber, ElMessage, ElMessageBox,
+  ElOption, ElOptionGroup, ElSelect, ElTable, ElTableColumn, ElTag,
 } from 'element-plus'
+import { useRouter } from 'vue-router'
 import { useQuery } from '@tanstack/vue-query'
 import {
   createAlDataApi, deleteAlDataApi, exportAlDataApi, importAlDataApi, listAlDataApi,
@@ -24,13 +29,27 @@ import { popCursor, pushCursor, resetCursor } from './cursorPager'
 // keep-alive 契约：name=动态路由名（菜单 code al_data，组件路径 al/data/index）
 defineOptions({ name: 'al_data' })
 
-// ─── 类型选择（schema 驱动列）───
+const router = useRouter()
+
+// ─── 类型选择（schema 驱动列；废弃类型只读可见——API 读取本就放行（gateType 仅查存在），
+//     UI 开只读存档入口：浏览/导出/删行清理放行，写入/导入/编辑随 409 门同步关闭）───
 const typesQuery = useQuery({ queryKey: ['al', 'types'], queryFn: listAlTypesApi })
-const activeTypes = computed(() => (typesQuery.data.value?.list ?? []).filter((t) => t.status === 'active'))
+const allTypes = computed(() => typesQuery.data.value?.list ?? [])
+const activeTypes = computed(() => allTypes.value.filter((t) => t.status === 'active'))
+const deprecatedTypes = computed(() => allTypes.value.filter((t) => t.status === 'deprecated'))
 const selectedType = ref('')
+const selectedDef = computed(() => allTypes.value.find((t) => t.type_name === selectedType.value))
+const isDeprecated = computed(() => selectedDef.value?.status === 'deprecated')
 const schema = computed<AlFieldDef[]>(
-  () => activeTypes.value.find((t) => t.type_name === selectedType.value)?.fields ?? [],
+  () => selectedDef.value?.fields ?? [],
 )
+
+const FIELD_TYPE_LABELS: Record<AlFieldDef['type'], string> = {
+  int: '整数', string: '文本', int_list: '整数列表', string_list: '文本列表',
+}
+function fieldTypeLabel(t: AlFieldDef['type']): string {
+  return FIELD_TYPE_LABELS[t] ?? t
+}
 
 // ─── cursor 分页列表 ───
 const list = ref<AlDataDoc[]>([])
@@ -276,10 +295,18 @@ function formatTime(iso?: string): string {
   if (!iso) return '—'
   return new Date(iso).toLocaleString('zh-CN', { hour12: false })
 }
+
+// ─── 行详情抽屉（点行开——动态 schema 行的全字段视图；编辑/删除收进抽屉底部）───
+const detailVisible = ref(false)
+const detailRow = ref<AlDataDoc | null>(null)
+function openDetail(row: AlDataDoc) {
+  detailRow.value = row
+  detailVisible.value = true
+}
 </script>
 
 <template>
-  <div class="p-4">
+  <div class="fill-page p-4">
     <el-card shadow="never">
       <template #header>
         <div class="flex items-center justify-between">
@@ -289,43 +316,80 @@ function formatTime(iso?: string): string {
               v-model="selectedType" filterable placeholder="选择类型" class="!w-56"
               :loading="typesQuery.isLoading.value"
             >
-              <el-option v-for="t in activeTypes" :key="t.type_name" :label="t.type_name" :value="t.type_name" />
+              <el-option-group label="使用中">
+                <el-option v-for="t in activeTypes" :key="t.type_name" :label="t.type_name" :value="t.type_name" />
+              </el-option-group>
+              <el-option-group v-if="deprecatedTypes.length" label="已废弃（只读）">
+                <el-option
+                  v-for="t in deprecatedTypes" :key="t.type_name"
+                  :label="`${t.type_name}（已废弃）`" :value="t.type_name"
+                />
+              </el-option-group>
             </el-select>
           </div>
           <div v-if="selectedType">
-            <el-button v-permission="'activelist:data:write'" type="primary" @click="openCreate">写入</el-button>
-            <el-button v-permission="'activelist:data:write'" @click="openImport">导入</el-button>
+            <!-- 废弃类型只读：写入/导入随 409 门同步隐藏；导出（存档）保留 -->
+            <el-button v-if="!isDeprecated" v-permission="'activelist:data:write'" type="primary" @click="openCreate">写入</el-button>
+            <el-button v-if="!isDeprecated" v-permission="'activelist:data:write'" @click="openImport">导入</el-button>
             <el-button @click="onExport">导出</el-button>
           </div>
         </div>
       </template>
 
-      <el-alert
-        v-if="!typesQuery.isLoading.value && !activeTypes.length"
-        title="暂无使用中的名单类型——请先在「名单类型」页注册"
-        type="info" show-icon :closable="false" class="mb-3"
-      />
+      <!-- 空态引导：无类型 → 去注册；有类型未选 → 选择提示 -->
+      <el-empty
+        v-if="!typesQuery.isLoading.value && !allTypes.length"
+        description="暂无活动列表类型——请先在「名单类型」页注册"
+      >
+        <el-button type="primary" @click="router.push('/al/types')">去注册类型</el-button>
+      </el-empty>
+      <el-empty v-else-if="!selectedType" description="选择一个类型以查看其数据" />
 
-      <template v-if="selectedType">
-        <el-table :data="list" v-loading="listLoading" row-key="id">
-          <el-table-column prop="id" label="ID" width="90" />
-          <!-- 动态列：schema 驱动（sensitive 原样显示——脱敏属日志侧语义） -->
-          <el-table-column
-            v-for="f in schema" :key="f.name" :label="f.name" :min-width="140" show-overflow-tooltip
-          >
-            <template #default="{ row }">{{ cellText(f, row as AlDataDoc) }}</template>
-          </el-table-column>
-          <el-table-column prop="version" label="v" width="60" align="center" />
-          <el-table-column label="更新时间" width="170">
-            <template #default="{ row }">{{ formatTime((row as AlDataDoc).updated_at) }}</template>
-          </el-table-column>
-          <el-table-column label="操作" width="160" fixed="right">
-            <template #default="{ row }">
-              <el-button v-permission="'activelist:data:write'" link type="primary" size="small" @click="openEdit(row as AlDataDoc)">编辑</el-button>
-              <el-button v-permission="'activelist:data:write'" link type="danger" size="small" @click="onDelete(row as AlDataDoc)">删除</el-button>
-            </template>
-          </el-table-column>
-        </el-table>
+      <template v-else>
+        <!-- 类型上下文头：schema 徽标一眼看懂列表形状（字段·类型·必填*） -->
+        <div v-if="selectedDef" class="mb-3 flex flex-wrap items-center gap-2">
+          <el-tag :type="isDeprecated ? 'info' : 'success'" size="small">
+            {{ isDeprecated ? '已废弃' : '使用中' }}
+          </el-tag>
+          <span class="text-xs text-gray-400">v{{ selectedDef.version }} · 注册于 {{ formatTime(selectedDef.created_at) }}</span>
+          <el-tag v-for="f in schema" :key="f.name" size="small" effect="plain">
+            {{ f.name }} · {{ fieldTypeLabel(f.type) }}{{ f.required ? ' *' : '' }}
+          </el-tag>
+        </div>
+
+        <el-alert
+          v-if="isDeprecated"
+          title="该类型已废弃：数据只读——可导出存档、删除行清理；写入/导入/编辑已关闭"
+          type="warning" show-icon :closable="false" class="mb-3"
+        />
+
+        <el-empty v-if="!listLoading && !list.length" description="暂无数据">
+          <el-button v-if="!isDeprecated" v-permission="'activelist:data:write'" type="primary" @click="openCreate">写入首条</el-button>
+        </el-empty>
+        <template v-else>
+          <!-- min-h-0 flex-1 + height 100%：表格吃满剩余视口内部滚动（fill 链，与 ProTable 同款） -->
+          <div class="min-h-0 flex-1">
+            <el-table :data="list" v-loading="listLoading" row-key="id" row-class-name="al-data-row" height="100%" @row-click="openDetail">
+            <el-table-column prop="id" label="ID" width="90" />
+            <!-- 动态列：schema 驱动（sensitive 原样显示——脱敏属日志侧语义） -->
+            <el-table-column
+              v-for="f in schema" :key="f.name" :label="f.name" :min-width="140" show-overflow-tooltip
+            >
+              <template #default="{ row }">{{ cellText(f, row as AlDataDoc) }}</template>
+            </el-table-column>
+            <el-table-column prop="version" label="v" width="60" align="center" />
+            <el-table-column label="更新时间" width="170">
+              <template #default="{ row }">{{ formatTime((row as AlDataDoc).updated_at) }}</template>
+            </el-table-column>
+            <el-table-column label="操作" width="160" fixed="right">
+              <template #default="{ row }">
+                <!-- .stop：行点击开详情抽屉，按钮动作不冒泡 -->
+                <el-button v-permission="'activelist:data:write'" link type="primary" size="small" @click.stop="openEdit(row as AlDataDoc)">编辑</el-button>
+                <el-button v-permission="'activelist:data:write'" link type="danger" size="small" @click.stop="onDelete(row as AlDataDoc)">删除</el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+          </div>
 
         <!-- cursor 分页（无 total——「第 N 页」由页栈派生；空页 next_cursor=null=遍历终止） -->
         <div class="flex items-center justify-between mt-3">
@@ -335,6 +399,7 @@ function formatTime(iso?: string): string {
             <el-button size="small" :disabled="!nextCursor || listLoading" @click="goNext">下一页</el-button>
           </div>
         </div>
+      </template>
       </template>
     </el-card>
 
@@ -372,5 +437,34 @@ function formatTime(iso?: string): string {
         <el-button type="primary" :loading="importBusy" @click="submitImport">导入</el-button>
       </template>
     </el-dialog>
+
+    <!-- 行详情抽屉：动态 schema 全字段 + 系统字段；编辑/删除收进底部（废弃类型随只读隐藏编辑） -->
+    <el-drawer v-model="detailVisible" :title="detailRow ? `数据详情 #${detailRow.id}` : '数据详情'" size="440px">
+      <el-descriptions v-if="detailRow" :column="1" border size="small">
+        <el-descriptions-item v-for="f in schema" :key="f.name" :label="f.name">
+          {{ cellText(f, detailRow as AlDataDoc) }}
+        </el-descriptions-item>
+        <el-descriptions-item label="版本">v{{ detailRow.version }}</el-descriptions-item>
+        <el-descriptions-item label="创建人">{{ detailRow.created_by }}</el-descriptions-item>
+        <el-descriptions-item label="更新人">{{ detailRow.updated_by }}</el-descriptions-item>
+        <el-descriptions-item label="创建时间">{{ formatTime(detailRow.created_at) }}</el-descriptions-item>
+        <el-descriptions-item label="更新时间">{{ formatTime(detailRow.updated_at) }}</el-descriptions-item>
+      </el-descriptions>
+      <template v-if="detailRow" #footer>
+        <el-button @click="detailVisible = false">关闭</el-button>
+        <el-button
+          v-if="!isDeprecated" v-permission="'activelist:data:write'"
+          type="primary" @click="detailVisible = false; openEdit(detailRow as AlDataDoc)"
+        >编辑</el-button>
+        <el-button v-permission="'activelist:data:write'" type="danger" @click="detailVisible = false; onDelete(detailRow as AlDataDoc)">删除</el-button>
+      </template>
+    </el-drawer>
   </div>
 </template>
+
+<style scoped>
+/* 行可点开详情抽屉 */
+:deep(.al-data-row) {
+  cursor: pointer;
+}
+</style>
