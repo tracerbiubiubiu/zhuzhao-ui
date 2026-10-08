@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * 名单数据（P4-W5——al_data 菜单页，activelist:data:read 可见/写操作挂 data:write）
+ * 活动列表（P4-W5——al_data 菜单页，activelist:data:read 可见/写操作挂 data:write；2026-10-08 由「名单数据」改名）
  *
  * - 列由所选类型的 schema 驱动（字段四类型：int/string/int_list/string_list）——
  *   动态列表格+动态表单，sensitive 字段原样显示（脱敏属日志侧语义）
@@ -284,7 +284,7 @@ function formatTime(iso?: string): string {
       <template #header>
         <div class="flex items-center justify-between">
           <div class="flex items-center gap-3">
-            <span class="font-semibold">名单数据</span>
+            <span class="font-semibold">活动列表</span>
             <el-select
               v-model="selectedType" filterable placeholder="选择类型" class="!w-56"
               :loading="typesQuery.isLoading.value"
