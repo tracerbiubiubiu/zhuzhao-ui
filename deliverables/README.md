@@ -21,6 +21,9 @@
 | [archive/review-missing-el-imports-2026-10-03.md](./archive/review-missing-el-imports-2026-10-03.md) | 跟进 | 3 处 EP 缺失导入（Panic 分页器/类型编辑器/错误提示静默失效）+扫描测试固化 |
 | [archive/review-ep-fix-closeout-2026-10-03.md](./archive/review-ep-fix-closeout-2026-10-03.md) | 复核确认 | 三处 EP 修复端到端验证（真 E2E + 探针）+ 扫描测试变异证明有牙 + 门禁全绿 |
 | [archive/review-ep-scan-nits-2026-10-03.md](./archive/review-ep-scan-nits-2026-10-03.md) | 复核确认 | `eea5b8e5` nit① 变异验证生效；nit②「8 处」口径误标纠正 + 新增 prefix-icon/suffix-icon 字符串闸（双向变异） |
+| [review-usetablefit-worktree-2026-10-08.md](./review-usetablefit-worktree-2026-10-08.md) | 自检 | useTableFit 批+漏网补齐批工作树核查（9 项发现：P1-1 observer 无补挂点/P1-2 Profile 漏挂/import 卫生/计数漂移） |
+| [review-usetablefit-verify-2026-10-08.md](./review-usetablefit-verify-2026-10-08.md) | 复核 | 上报告逐条验证+运行时探针——9 项 7 属实/2 已解决；P1-1 静态属实但症状预言被推翻（Home 三态零死区），降级 P2 加固 |
+| [commit-attribution-audit-2026-10-08.md](./commit-attribution-audit-2026-10-08.md) | 审计 | 当日三仓 ~25 笔提交归属审计——交叉污染恰 2 笔双向各一、内容零错位、决策不重写共享 main（fix-forward 已注记） |
 
 ## 终态
 
