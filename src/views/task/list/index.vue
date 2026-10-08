@@ -58,7 +58,7 @@ const runColumns: ProTableColumn[] = [
   { prop: 'duration_ms', label: '耗时(ms)', width: 90, align: 'right' },
   { prop: 'submitted_by', label: '提交人', width: 100 },
   { prop: 'enqueued_at', label: '入队时间', width: 170, slot: 'time' },
-  { prop: 'actions', label: '操作', width: 200, fixed: 'right', slot: 'actions' },
+  { prop: 'actions', label: '操作', width: 200, fixed: 'right', slot: 'actions', wrap: true },
 ]
 
 /** 详情弹窗（getTask——job_runs 快照+live_state 实时态） */
@@ -156,7 +156,7 @@ const jobColumns: ProTableColumn[] = [
   { prop: 'enabled', label: '启用', width: 80, align: 'center', slot: 'enabled' },
   { prop: 'description', label: '说明', minWidth: 160 },
   { prop: 'updated_at', label: '更新时间', width: 170, slot: 'time' },
-  { prop: 'actions', label: '操作', width: 200, fixed: 'right', slot: 'jobActions' },
+  { prop: 'actions', label: '操作', width: 200, fixed: 'right', slot: 'jobActions', wrap: true },
 ]
 
 async function onToggleJob(row: TaskJobRow, enabled: boolean) {

@@ -73,7 +73,8 @@ defineExpose({
         :min-width="col.minWidth"
         :align="col.align"
         :fixed="col.fixed"
-        :show-overflow-tooltip="col.showOverflowTooltip ?? true"
+        :show-overflow-tooltip="col.wrap ? false : (col.showOverflowTooltip ?? true)"
+        :class-name="col.wrap ? 'pro-cell-wrap' : undefined"
       >
         <template #default="{ row }">
           <!-- 页面声明了同名 slot 则自定义渲染，否则回退字段原值 -->
@@ -95,3 +96,11 @@ defineExpose({
     </div>
   </div>
 </template>
+
+<style scoped>
+/* wrap 列放行换行：操作列按钮折行而非被 ellipsis 截成不可点的「…」（EP .cell 默认 nowrap 仅在
+   show-overflow-tooltip 下出现，此处随 wrap 关闭 tooltip 后显式回归 normal） */
+.pro-table :deep(.el-table .pro-cell-wrap .cell) {
+  white-space: normal;
+}
+</style>

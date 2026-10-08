@@ -71,7 +71,7 @@ const columns: ProTableColumn[] = [
   { prop: 'phone', label: '手机号', width: 120 },
   { prop: 'status', label: '状态', width: 80, align: 'center', slot: 'status' },
   { prop: 'created_at', label: '创建时间', width: 170, slot: 'created_at' },
-  { prop: 'actions', label: '操作', width: 320, fixed: 'right', slot: 'actions' },
+  { prop: 'actions', label: '操作', width: 320, fixed: 'right', slot: 'actions', wrap: true },
 ]
 
 function formatTime(iso: string): string {

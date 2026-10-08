@@ -64,7 +64,7 @@ const columns: ProTableColumn[] = [
   { prop: 'assignee_name', label: '处理人', width: 110, slot: 'assignee' },
   { prop: 'sla_due_at', label: 'SLA 截止', width: 170, slot: 'sla_due_at' },
   { prop: 'created_at', label: '创建时间', width: 170, slot: 'created_at' },
-  { prop: 'actions', label: '操作', width: 90, fixed: 'right', slot: 'actions' },
+  { prop: 'actions', label: '操作', width: 90, fixed: 'right', slot: 'actions', wrap: true },
 ]
 
 function formatTime(iso?: string): string {

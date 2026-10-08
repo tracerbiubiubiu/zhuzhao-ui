@@ -10,6 +10,8 @@ export interface ProTableColumn {
   /** 自定义单元格渲染 slot 名（缺省 = prop；列模板内拿 { row }） */
   slot?: string
   showOverflowTooltip?: boolean
+  /** 单元格内容允许换行（操作列多按钮必开——否则 nowrap+ellipsis 把尾部按钮截成不可点的「…」） */
+  wrap?: boolean
 }
 
 /** 列表请求参数（与后端 PageData 契约直通——01 §5 分页参数不做映射） */

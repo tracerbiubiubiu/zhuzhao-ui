@@ -48,7 +48,7 @@ const columns: ProTableColumn[] = [
   { prop: 'priority', label: '优先级', width: 90, align: 'center' },
   { prop: 'status', label: '状态', width: 80, align: 'center', slot: 'status' },
   { prop: 'description', label: '描述', minWidth: 180 },
-  { prop: 'actions', label: '操作', width: 260, fixed: 'right', slot: 'actions' },
+  { prop: 'actions', label: '操作', width: 260, fixed: 'right', slot: 'actions', wrap: true },
 ]
 
 async function fetcher() {

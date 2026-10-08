@@ -51,7 +51,7 @@ const columns: ProTableColumn[] = [
   { prop: 'ip', label: 'IP', width: 130 },
   { prop: 'request_id', label: 'request_id', width: 200 },
   { prop: 'created_at', label: '时间', width: 170, slot: 'time' },
-  { prop: 'actions', label: '操作', width: 80, fixed: 'right', slot: 'actions' },
+  { prop: 'actions', label: '操作', width: 80, fixed: 'right', slot: 'actions', wrap: true },
 ]
 
 function statusTag(code: number): 'success' | 'danger' | 'warning' {
