@@ -6,3 +6,7 @@
 allowBuilds:
   esbuild: true
   vue-demi: true
+# 传递依赖安全钉（GHSA-68fv-2mgg-jv7q 事件循环 DoS）——pnpm 12 不再读 package.json 的
+# pnpm 段，overrides 唯一入口在此。
+overrides:
+  source-map-js: ^1.2.2
