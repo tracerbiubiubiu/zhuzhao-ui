@@ -10,7 +10,7 @@
  * - 详情路由 → 静态路由 /tickets/:id（§3.2④；发起页/详情页均菜单外静态路由）
  * - 新建入口（ticket:create）→ /tickets/new（发起表单页=form-create 渲染器）
  */
-import { reactive, ref } from 'vue'
+import { reactive, ref, watch } from 'vue'
 import {
   ElButton, ElCard, ElCheckbox, ElDatePicker, ElForm, ElFormItem, ElInput, ElLink,
   ElOption, ElSelect, ElTag,
@@ -41,6 +41,11 @@ const search = reactive({
 })
 /** 创建日期范围 [from, to]（YYYY-MM-DD，value-format 对齐端点 UTC 切日口径） */
 const dateRange = ref<[string, string] | null>(null)
+
+// 勾选型筛选即时生效（开关即查询，免点「查询」；回第一页防越页空结果）
+watch(() => [search.mineHandle, search.mineCreated], () => {
+  tableRef.value?.refresh({ resetPage: true })
+})
 
 function onSearch() {
   tableRef.value?.refresh({ resetPage: true })

@@ -45,6 +45,11 @@ function fetchRuns(params: { page: number; page_size: number }) {
   })
 }
 
+// 勾选（开关）型筛选即时生效（同 ticket/list——开关即查询，回第一页）
+watch(() => runsSearch.mine, () => {
+  runsTableRef.value?.refresh({ resetPage: true })
+})
+
 function statusInfo(s: string) {
   return RUN_STATUS[s] ?? { label: s, tag: 'info' as const }
 }
