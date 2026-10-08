@@ -120,12 +120,12 @@ async function runReconcile() {
 </script>
 
 <template>
-  <div class="p-4">
-    <el-tabs v-model="activeTab">
+  <div class="fill-page p-4">
+    <el-tabs v-model="activeTab" class="fill-tabs">
       <el-tab-pane label="审计日志" name="logs">
     <el-card shadow="never">
       <template #header><span class="font-semibold">审计日志</span></template>
-      <ProTable ref="tableRef" :columns="columns" :fetcher="fetcher">
+      <ProTable ref="tableRef" :columns="columns" :fetcher="fetcher" fill>
         <template #search>
           <el-form inline @submit.prevent>
             <el-form-item label="工号">
@@ -164,14 +164,16 @@ async function runReconcile() {
       <el-tab-pane label="Panic 聚合" name="panics">
         <el-card shadow="never">
           <template #header><span class="font-semibold">Panic 聚合（同指纹计数——最近优先）</span></template>
-          <el-table :data="panics" v-loading="panicsLoading" row-key="id">
-            <el-table-column prop="count" label="次数" width="80" align="center" />
-            <el-table-column prop="path" label="路径" min-width="200" />
-            <el-table-column prop="message" label="消息" min-width="260" show-overflow-tooltip />
-            <el-table-column prop="last_at" label="最近发生" width="170">
-              <template #default="{ row }">{{ formatTime((row as { last_at: string }).last_at) }}</template>
-            </el-table-column>
-          </el-table>
+          <div class="min-h-0 flex-1">
+            <el-table :data="panics" v-loading="panicsLoading" row-key="id" height="100%">
+              <el-table-column prop="count" label="次数" width="80" align="center" />
+              <el-table-column prop="path" label="路径" min-width="200" />
+              <el-table-column prop="message" label="消息" min-width="260" show-overflow-tooltip />
+              <el-table-column prop="last_at" label="最近发生" width="170">
+                <template #default="{ row }">{{ formatTime((row as { last_at: string }).last_at) }}</template>
+              </el-table-column>
+            </el-table>
+          </div>
           <div class="mt-3 flex items-center justify-between">
             <span class="text-xs text-gray-400">共 {{ panicsTotal }} 个聚合指纹</span>
             <el-pagination
@@ -203,7 +205,7 @@ async function runReconcile() {
             :description="`检查时间：${reconcileAt}`"
             show-icon :closable="false" class="mb-3"
           />
-          <pre v-if="reconcileGaps.length" class="text-xs whitespace-pre-wrap bg-gray-50 dark:bg-gray-800 p-3 rounded">{{ reconcileGaps.join('\n') }}</pre>
+          <pre v-if="reconcileGaps.length" class="text-xs whitespace-pre-wrap bg-gray-50 dark:bg-gray-800 p-3 rounded max-h-[420px] overflow-auto">{{ reconcileGaps.join('\n') }}</pre>
         </el-card>
       </el-tab-pane>
     </el-tabs>

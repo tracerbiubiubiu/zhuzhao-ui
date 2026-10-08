@@ -283,12 +283,12 @@ function formatTime(iso?: string | null): string {
 </script>
 
 <template>
-  <div class="p-4">
+  <div class="fill-page p-4">
     <el-card shadow="never">
-      <el-tabs v-model="activeTab">
+      <el-tabs v-model="activeTab" class="fill-tabs">
         <!-- ── Tab1 运行记录 ── -->
         <el-tab-pane label="运行记录" name="runs">
-          <ProTable ref="runsTableRef" :columns="runColumns" :fetcher="fetchRuns">
+          <ProTable ref="runsTableRef" :columns="runColumns" :fetcher="fetchRuns" fill>
             <template #search>
               <el-form inline @submit.prevent>
                 <el-form-item label="request_id">
@@ -336,7 +336,8 @@ function formatTime(iso?: string | null): string {
 
         <!-- ── Tab2 死信（只读+重试；无 total 按页号翻） ── -->
         <el-tab-pane label="死信" name="dead">
-          <el-table :data="deadList" v-loading="deadLoading" row-key="task_id">
+          <div class="min-h-0 flex-1">
+            <el-table :data="deadList" v-loading="deadLoading" row-key="task_id" height="100%">
             <el-table-column prop="task_id" label="任务 ID" min-width="210" show-overflow-tooltip />
             <el-table-column prop="action" label="动作" width="150" show-overflow-tooltip />
             <el-table-column prop="error" label="最后错误" min-width="220" show-overflow-tooltip />
@@ -351,7 +352,8 @@ function formatTime(iso?: string | null): string {
                 >重试</el-button>
               </template>
             </el-table-column>
-          </el-table>
+            </el-table>
+          </div>
           <div class="flex items-center justify-between mt-3">
             <span class="text-xs text-gray-400">第 {{ deadPage }} 页 · 每页 {{ deadPageSize }} 条（无总数统计）</span>
             <div>
@@ -363,7 +365,7 @@ function formatTime(iso?: string | null): string {
 
         <!-- ── Tab3 任务定义（写挂 task:manage） ── -->
         <el-tab-pane label="任务定义" name="jobs">
-          <ProTable ref="jobsTableRef" :columns="jobColumns" :fetcher="fetchJobs">
+          <ProTable ref="jobsTableRef" :columns="jobColumns" :fetcher="fetchJobs" fill>
             <template #toolbar>
               <div>
                 <el-button v-permission="'task:manage'" type="primary" @click="openCreateJob">新建任务</el-button>

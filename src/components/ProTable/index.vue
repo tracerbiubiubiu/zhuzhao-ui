@@ -27,8 +27,10 @@ const props = withDefaults(
     rowKey?: string
     initialPageSize?: number
     immediate?: boolean
+    /** 视口填充模式：页面不动、表格内部滚动（表头钉住），分页钉底——配合页面 .fill-page/.fill-card */
+    fill?: boolean
   }>(),
-  { rowKey: 'id', initialPageSize: 20, immediate: true },
+  { rowKey: 'id', initialPageSize: 20, immediate: true, fill: false },
 )
 
 const { state, actions } = useCrud<{ [key: string]: any }>({
@@ -51,19 +53,21 @@ defineExpose({
 </script>
 
 <template>
-  <div class="pro-table">
+  <div class="pro-table" :class="{ 'pro-table--fill': fill }">
     <div v-if="$slots.search" class="mb-4">
       <slot name="search" />
     </div>
     <div v-if="$slots.toolbar" class="mb-2 flex items-center justify-between">
       <slot name="toolbar" />
     </div>
-    <el-table
-      v-loading="state.listLoading.value"
-      :data="state.items.value"
-      :row-key="rowKey"
-      stripe
-    >
+    <div class="pro-table__table" :class="{ 'pro-table__table--fill': fill }">
+      <el-table
+        v-loading="state.listLoading.value"
+        :data="state.items.value"
+        :row-key="rowKey"
+        :height="fill ? '100%' : undefined"
+        stripe
+      >
       <el-table-column
         v-for="col in columns"
         :key="col.prop"
@@ -82,7 +86,8 @@ defineExpose({
           <template v-else>{{ row[col.prop] }}</template>
         </template>
       </el-table-column>
-    </el-table>
+      </el-table>
+    </div>
     <div class="mt-4 flex justify-end">
       <el-pagination
         :total="state.total.value"
@@ -102,5 +107,19 @@ defineExpose({
    show-overflow-tooltip 下出现，此处随 wrap 关闭 tooltip 后显式回归 normal） */
 .pro-table :deep(.el-table .pro-cell-wrap .cell) {
   white-space: normal;
+}
+
+/* fill 模式：根自身为弹性列（search/toolbar flex:none 自然高度），表格区吃满剩余高度，
+   el-table height=100% 启用内部滚动+表头钉住；分页区钉底（页级 .fill-page/.fill-card 提供高度链） */
+.pro-table--fill {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.pro-table__table--fill {
+  flex: 1;
+  min-height: 0;
 }
 </style>

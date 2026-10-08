@@ -362,9 +362,9 @@ async function onDelete(row: UserRow) {
 </script>
 
 <template>
-  <div class="p-4">
+  <div class="fill-page p-4">
     <el-card shadow="never">
-      <ProTable ref="tableRef" :columns="columns" :fetcher="fetcher">
+      <ProTable ref="tableRef" :columns="columns" :fetcher="fetcher" fill>
         <template #search>
           <el-form inline @submit.prevent>
             <el-form-item label="用户名">

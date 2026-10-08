@@ -245,9 +245,9 @@ async function onDelete(row: RoleRow) {
 </script>
 
 <template>
-  <div class="p-4">
+  <div class="fill-page p-4">
     <el-card shadow="never">
-      <ProTable ref="tableRef" :columns="columns" :fetcher="fetcher" :immediate="true">
+      <ProTable ref="tableRef" :columns="columns" :fetcher="fetcher" :immediate="true" fill>
         <template #toolbar>
           <div>
             <el-button v-permission="'role:create'" type="primary" @click="openCreate()">新建角色</el-button>

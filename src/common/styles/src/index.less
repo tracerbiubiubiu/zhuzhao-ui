@@ -13,3 +13,73 @@
 .el-popup-parent--hidden {
   width: 100% !important;
 }
+
+// ── 列表页视口填充（2026-10-08 统一批：web 页面不动、列表内部滚动、分页钉底）──
+// 链路：Layout 的 ElScrollbar view（v-scroll-view，定高弹性列）→ AppView section
+// （flex-1 min-h-0 overflow-y-auto——非填充页在这里整页滚，行为与原先一致）
+// → 填充页根 .fill-page → .el-card（含 __body）→ ProTable fill 模式 → el-table height=100%
+.v-scroll-view {
+  display: flex;
+  height: 100%;
+  flex-direction: column;
+}
+
+.fill-page {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+
+  > .el-card {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+
+    > .el-card__body {
+      display: flex;
+      flex: 1;
+      flex-direction: column;
+      min-height: 0;
+    }
+  }
+}
+
+// tabs 型列表页（audit/task）：页签头 flex:none，签内容吃满，每签独立成填充链
+.fill-tabs {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+
+  > .el-tabs__header {
+    flex: none;
+  }
+
+  > .el-tabs__content {
+    flex: 1;
+    min-height: 0;
+  }
+
+  .el-tab-pane {
+    display: flex;
+    height: 100%;
+    flex-direction: column;
+
+    > .el-card {
+      display: flex;
+      flex: 1;
+      flex-direction: column;
+      min-height: 0;
+      overflow: hidden;
+
+      > .el-card__body {
+        display: flex;
+        flex: 1;
+        flex-direction: column;
+        min-height: 0;
+      }
+    }
+  }
+}

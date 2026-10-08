@@ -126,7 +126,7 @@
       <main class="v-layout__workspace">
         <ToolHeader v-if="layout === 'sidebar' || layout === 'dual'" class="v-layout__toolbar" />
         <TagsView class="v-layout__tags" />
-        <ElScrollbar v-loading="appStore.pageLoading" class="v-layout-content-scrollbar">
+        <ElScrollbar v-loading="appStore.pageLoading" class="v-layout-content-scrollbar" view-class="v-scroll-view">
           <AppView />
         </ElScrollbar>
       </main>
