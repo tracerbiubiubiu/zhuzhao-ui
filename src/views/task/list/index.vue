@@ -336,7 +336,7 @@ function formatTime(iso?: string | null): string {
 
         <!-- ── Tab2 死信（只读+重试；无 total 按页号翻） ── -->
         <el-tab-pane label="死信" name="dead">
-          <div class="min-h-0 flex-1">
+          <div class="min-h-0 flex-initial">
             <el-table :data="deadList" v-loading="deadLoading" row-key="task_id" height="100%">
             <el-table-column prop="task_id" label="任务 ID" min-width="210" show-overflow-tooltip />
             <el-table-column prop="action" label="动作" width="150" show-overflow-tooltip />

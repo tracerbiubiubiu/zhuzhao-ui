@@ -164,7 +164,7 @@ async function runReconcile() {
       <el-tab-pane label="Panic 聚合" name="panics">
         <el-card shadow="never">
           <template #header><span class="font-semibold">Panic 聚合（同指纹计数——最近优先）</span></template>
-          <div class="min-h-0 flex-1">
+          <div class="min-h-0 flex-initial">
             <el-table :data="panics" v-loading="panicsLoading" row-key="id" height="100%">
               <el-table-column prop="count" label="次数" width="80" align="center" />
               <el-table-column prop="path" label="路径" min-width="200" />

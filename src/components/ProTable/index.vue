@@ -109,8 +109,9 @@ defineExpose({
   white-space: normal;
 }
 
-/* fill 模式：根自身为弹性列（search/toolbar flex:none 自然高度），表格区吃满剩余高度，
-   el-table height=100% 启用内部滚动+表头钉住；分页区钉底（页级 .fill-page/.fill-card 提供高度链） */
+/* fill 模式：根自身为弹性列；search/toolbar/分页 flex:none 不参与压缩，表格区是唯一
+   可收缩项——行少时表格贴内容（分页紧跟其下，留白落在页底背景），行多时表格被压到
+   可用高度、max-height=100% 启用内部滚动+表头钉住（页级 .fill-page/.fill-card 提供高度链） */
 .pro-table--fill {
   display: flex;
   flex: 1;
@@ -118,8 +119,13 @@ defineExpose({
   min-height: 0;
 }
 
-.pro-table__table--fill {
-  flex: 1;
+.pro-table--fill > div {
+  flex: none;
+}
+
+/* 两条同根规则——特异性须压过上面的 > div flex:none（0-1-1），包裹层是唯一可收缩项 */
+.pro-table--fill > .pro-table__table--fill {
+  flex: 0 1 auto;
   min-height: 0;
 }
 </style>

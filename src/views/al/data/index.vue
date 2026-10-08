@@ -386,7 +386,7 @@ function openDetail(row: AlDataDoc) {
         </el-empty>
         <template v-else>
           <!-- min-h-0 flex-1 + height 100%：表格吃满剩余视口内部滚动（fill 链，与 ProTable 同款） -->
-          <div class="min-h-0 flex-1">
+          <div class="min-h-0 flex-initial">
             <el-table :data="list" v-loading="listLoading" row-key="id" :row-class-name="rowClass" height="100%" @row-click="openDetail">
             <el-table-column prop="id" label="ID" width="90" />
             <el-table-column label="状态" width="76" align="center">
