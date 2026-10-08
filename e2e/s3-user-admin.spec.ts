@@ -63,7 +63,9 @@ test('S3 分配组织（P2-12）：树勾选全量替换 + 主组织 + API 断�
     await page.getByRole('button', { name: '查询' }).click()
     const row = page.locator('tr', { hasText: `s3_orguser_${suffix}` })
     await expect(row).toBeVisible({ timeout: 10_000 })
-    await row.getByRole('button', { name: '分配组织' }).click()
+    // 分配组织在「更多」下拉内（操作列主操作+收尾模式）——先展开再点
+    await row.getByRole('button', { name: '更多' }).click()
+    await page.locator('.el-dropdown-menu__item').filter({ hasText: '分配组织' }).filter({ visible: true }).click()
     const dlg = page.locator('.el-dialog').filter({ hasText: '分配组织' })
     await expect(dlg).toBeVisible()
     await expect(dlg.getByText('集团总部')).toBeVisible({ timeout: 10_000 })
@@ -89,7 +91,8 @@ test('S3 分配组织（P2-12）：树勾选全量替换 + 主组织 + API 断�
     expect(bound?.is_primary, '根组织应为主组织').toBe(true)
 
     // 回显路径（复核报告-收尾批 遗留②）：再次打开对话框 → 已有绑定预勾选 + 主组织回填
-    await row.getByRole('button', { name: '分配组织' }).click()
+    await row.getByRole('button', { name: '更多' }).click()
+    await page.locator('.el-dropdown-menu__item').filter({ hasText: '分配组织' }).filter({ visible: true }).click()
     await expect(dlg).toBeVisible()
     const rootCheck = dlg.locator('.el-tree-node__content').filter({ hasText: '集团总部' }).locator('.el-checkbox')
     await expect(rootCheck).toHaveClass(/is-checked/, { timeout: 10_000 })

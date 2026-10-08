@@ -13,10 +13,11 @@
  */
 import { computed, reactive, ref } from 'vue'
 import {
-  ElAlert, ElButton, ElCard, ElDialog, ElForm, ElFormItem, ElInput, ElMessage,
-  ElMessageBox, ElOption, ElSelect, ElTag, ElTree,
+  ElAlert, ElButton, ElCard, ElDialog, ElDropdown, ElDropdownItem, ElDropdownMenu,
+  ElForm, ElFormItem, ElInput, ElMessage, ElMessageBox, ElOption, ElSelect, ElTag, ElTree,
 } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
+import { usePermission } from '@/common/auth'
 import { getOrgTreeApi, type OrgTreeNode } from '@/api/system/org'
 import { useQuery } from '@tanstack/vue-query'
 import ProTable from '@/components/ProTable/index.vue'
@@ -71,8 +72,23 @@ const columns: ProTableColumn[] = [
   { prop: 'phone', label: '手机号', width: 120 },
   { prop: 'status', label: '状态', width: 80, align: 'center', slot: 'status' },
   { prop: 'created_at', label: '创建时间', width: 170, slot: 'created_at' },
-  { prop: 'actions', label: '操作', width: 320, fixed: 'right', slot: 'actions', wrap: true },
+  { prop: 'actions', label: '操作', width: 250, fixed: 'right', slot: 'actions', wrap: true },
 ]
+
+// ─── 操作列「更多」下拉（业界主操作+收尾模式）：低频动作收进菜单，列宽 320→250 单行放下；
+// 删除入菜单顺带多一层防误触。四项全无权限则整个下拉不渲染（防空菜单）。
+const { hasAny } = usePermission()
+const hasUserMore = computed(() =>
+  hasAny('user:reset_password', 'user:assign_role', 'user:assign_org', 'user:delete'),
+)
+
+type UserMoreCommand = 'reset' | 'roles' | 'orgs' | 'delete'
+function onMoreCommand(cmd: UserMoreCommand, row: UserRow) {
+  if (cmd === 'reset') openReset(row)
+  else if (cmd === 'roles') openRoles(row)
+  else if (cmd === 'orgs') openOrgs(row)
+  else onDelete(row)
+}
 
 function formatTime(iso: string): string {
   if (!iso) return '—'
@@ -395,10 +411,21 @@ async function onDelete(row: UserRow) {
           <el-button v-permission="'user:status'" link :type="row.status === 1 ? 'warning' : 'success'" size="small" @click="toggleStatus(row)">
             {{ row.status === 1 ? '禁用' : '启用' }}
           </el-button>
-          <el-button v-permission="'user:reset_password'" link type="primary" size="small" @click="openReset(row)">重置密码</el-button>
-          <el-button v-permission="'user:assign_role'" link type="primary" size="small" @click="openRoles(row)">分配角色</el-button>
-          <el-button v-permission="'user:assign_org'" link type="primary" size="small" @click="openOrgs(row)">分配组织</el-button>
-          <el-button v-permission="'user:delete'" link type="danger" size="small" @click="onDelete(row)">删除</el-button>
+          <el-dropdown
+            v-if="hasUserMore"
+            class="user-more"
+            @command="(cmd: UserMoreCommand) => onMoreCommand(cmd, row as UserRow)"
+          >
+            <el-button link type="primary" size="small">更多</el-button>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item v-permission="'user:reset_password'" command="reset">重置密码</el-dropdown-item>
+                <el-dropdown-item v-permission="'user:assign_role'" command="roles">分配角色</el-dropdown-item>
+                <el-dropdown-item v-permission="'user:assign_org'" command="orgs">分配组织</el-dropdown-item>
+                <el-dropdown-item v-permission="'user:delete'" command="delete" class="user-more-danger">删除</el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
         </template>
       </ProTable>
     </el-card>
@@ -508,3 +535,21 @@ async function onDelete(row: UserRow) {
     </el-dialog>
   </div>
 </template>
+
+<style scoped>
+/* 「更多」触发与相邻 el-button 的 12px 间距对齐（el-dropdown 非按钮，无自动 margin） */
+.user-more {
+  margin-left: 12px;
+  vertical-align: middle;
+}
+/* 菜单挂在 body 下（teleported），scoped 样式够不到——删除项红色走全局渲染位置 */
+</style>
+<style>
+.el-dropdown-menu__item.user-more-danger {
+  color: var(--el-color-danger);
+}
+.el-dropdown-menu__item.user-more-danger:hover {
+  color: var(--el-color-danger);
+  background-color: var(--el-color-danger-light-9);
+}
+</style>
