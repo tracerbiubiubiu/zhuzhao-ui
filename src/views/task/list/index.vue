@@ -50,13 +50,13 @@ function statusInfo(s: string) {
 }
 
 const runColumns: ProTableColumn[] = [
-  { prop: 'task_id', label: '任务 ID', width: 210 },
-  { prop: 'action', label: '动作', width: 150 },
+  { prop: 'task_id', label: '任务 ID', minWidth: 210 },
+  { prop: 'action', label: '动作', minWidth: 150 },
   { prop: 'dept', label: '归属', width: 110 },
   { prop: 'status', label: '状态', width: 100, align: 'center', slot: 'status' },
   { prop: 'attempts', label: '次数', width: 70, align: 'center' },
   { prop: 'duration_ms', label: '耗时(ms)', width: 90, align: 'right' },
-  { prop: 'submitted_by', label: '提交人', width: 100 },
+  { prop: 'submitted_by', label: '提交人', minWidth: 120 },
   { prop: 'enqueued_at', label: '入队时间', width: 170, slot: 'time' },
   { prop: 'actions', label: '操作', width: 250, fixed: 'right', slot: 'actions', wrap: true },
 ]
