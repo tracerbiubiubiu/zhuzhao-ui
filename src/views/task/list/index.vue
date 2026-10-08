@@ -337,8 +337,8 @@ function formatTime(iso?: string | null): string {
         <!-- ── Tab2 死信（只读+重试；无 total 按页号翻） ── -->
         <el-tab-pane label="死信" name="dead">
           <el-table :data="deadList" v-loading="deadLoading" row-key="task_id">
-            <el-table-column prop="task_id" label="任务 ID" min-width="210" />
-            <el-table-column prop="action" label="动作" width="150" />
+            <el-table-column prop="task_id" label="任务 ID" min-width="210" show-overflow-tooltip />
+            <el-table-column prop="action" label="动作" width="150" show-overflow-tooltip />
             <el-table-column prop="error" label="最后错误" min-width="220" show-overflow-tooltip />
             <el-table-column prop="failed_at" label="失败时间" width="170">
               <template #default="{ row }">{{ formatTime((row as DeadLetterRow).failed_at) }}</template>
