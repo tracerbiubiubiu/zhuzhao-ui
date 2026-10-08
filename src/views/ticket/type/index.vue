@@ -359,14 +359,15 @@ async function onDeleteTpl(row: TicketTemplateRow) {
 </script>
 
 <template>
-  <div class="p-4">
+  <div class="fill-page p-4">
     <el-card shadow="never">
-      <el-tabs>
+      <el-tabs class="fill-tabs">
         <el-tab-pane label="工单类型">
-          <div class="mb-2">
+          <div class="mb-2 flex-none">
             <el-button v-permission="'ticket:type:manage'" type="primary" @click="openTypeCreate">新建类型</el-button>
           </div>
-          <el-table v-loading="typesQuery.isLoading.value" :data="typesQuery.data.value ?? []" row-key="id" stripe>
+          <div class="min-h-0 flex-initial">
+          <el-table v-loading="typesQuery.isLoading.value" :data="typesQuery.data.value ?? []" row-key="id" stripe height="100%">
             <el-table-column v-for="col in typeColumns" :key="col.prop" :prop="col.prop" :label="col.label" :width="col.width" :min-width="col.minWidth" :align="col.align">
               <template #default="{ row }">
                 <template v-if="col.prop === 'has_custom_fields'">
@@ -387,13 +388,15 @@ async function onDeleteTpl(row: TicketTemplateRow) {
               </template>
             </el-table-column>
           </el-table>
+          </div>
         </el-tab-pane>
 
         <el-tab-pane label="工单模板" lazy>
-          <div class="mb-2">
+          <div class="mb-2 flex-none">
             <el-button v-permission="'ticket:type:manage'" type="primary" @click="openTplCreate">新建模板</el-button>
           </div>
-          <el-table v-loading="templatesQuery.isLoading.value" :data="templatesQuery.data.value ?? []" row-key="id" stripe>
+          <div class="min-h-0 flex-initial">
+          <el-table v-loading="templatesQuery.isLoading.value" :data="templatesQuery.data.value ?? []" row-key="id" stripe height="100%">
             <el-table-column prop="code" label="编码" width="160" />
             <el-table-column prop="name" label="名称" min-width="160" />
             <el-table-column prop="type_code" label="类型" width="140" />
@@ -407,6 +410,7 @@ async function onDeleteTpl(row: TicketTemplateRow) {
               </template>
             </el-table-column>
           </el-table>
+          </div>
         </el-tab-pane>
       </el-tabs>
     </el-card>

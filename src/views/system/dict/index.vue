@@ -181,10 +181,11 @@ async function onDeleteItem(row: DictItemRow) {
 </script>
 
 <template>
-  <div class="p-4">
-    <div class="flex gap-4 items-start">
+  <!-- 填充链(docs/table-standard.md):双栏等高,两表各自内部滚动 -->
+  <div class="fill-page p-4">
+    <div class="flex flex-1 gap-4 min-h-0">
       <!-- 左：类型 -->
-      <el-card shadow="never" class="w-[42%]">
+      <el-card shadow="never" class="w-[42%] dict-pane">
         <template #header>
           <div class="flex items-center justify-between">
             <span class="font-semibold">字典类型</span>
@@ -195,8 +196,9 @@ async function onDeleteItem(row: DictItemRow) {
           <el-input v-model="keyword" placeholder="code/name 搜索" clearable class="!w-48" @keyup.enter="fetchTypes" />
           <el-button class="ml-2" @click="fetchTypes">搜索</el-button>
         </el-form>
+        <div class="min-h-0 flex-initial">
         <el-table
-          :data="types" v-loading="typesLoading" row-key="id" highlight-current-row
+          :data="types" v-loading="typesLoading" row-key="id" highlight-current-row height="100%"
           @current-change="(r: DictTypeRow | null) => r && selectType(r)"
         >
           <el-table-column prop="code" label="code" min-width="120" />
@@ -212,10 +214,11 @@ async function onDeleteItem(row: DictItemRow) {
             </template>
           </el-table-column>
         </el-table>
+        </div>
       </el-card>
 
       <!-- 右：项 -->
-      <el-card shadow="never" class="flex-1">
+      <el-card shadow="never" class="flex-1 dict-pane">
         <template #header>
           <div class="flex items-center justify-between">
             <span class="font-semibold">字典项{{ selectedType ? `（${selectedType.code}）` : '' }}</span>
@@ -223,7 +226,8 @@ async function onDeleteItem(row: DictItemRow) {
           </div>
         </template>
         <el-alert v-if="!selectedType" title="选择左侧类型查看字典项" type="info" show-icon :closable="false" />
-        <el-table v-else :data="items" v-loading="itemsLoading" row-key="id">
+        <div v-else class="min-h-0 flex-initial">
+        <el-table :data="items" v-loading="itemsLoading" row-key="id" height="100%">
           <el-table-column prop="sort_order" label="序" width="60" align="center" />
           <el-table-column prop="code" label="code" min-width="110" />
           <el-table-column prop="label" label="标签" min-width="110" />
@@ -246,6 +250,7 @@ async function onDeleteItem(row: DictItemRow) {
             </template>
           </el-table-column>
         </el-table>
+        </div>
       </el-card>
     </div>
 
@@ -275,3 +280,21 @@ async function onDeleteItem(row: DictItemRow) {
     </el-dialog>
   </div>
 </template>
+
+<style scoped>
+/* 双栏等高填充(docs/table-standard.md):卡片弹性列,卡片体弹性化,表格区由页内 wrap 控高 */
+.dict-pane {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.dict-pane :deep(.el-card__body) {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+</style>

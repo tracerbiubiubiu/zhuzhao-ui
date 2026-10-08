@@ -161,7 +161,7 @@ function formatTime(iso?: string): string {
 </script>
 
 <template>
-  <div class="p-4">
+  <div class="fill-page p-4">
     <el-card shadow="never">
       <template #header>
         <div class="flex items-center justify-between">
@@ -170,7 +170,8 @@ function formatTime(iso?: string): string {
         </div>
       </template>
 
-      <el-table :data="rows" v-loading="typesQuery.isLoading.value" row-key="type_name">
+      <div class="min-h-0 flex-initial">
+        <el-table :data="rows" v-loading="typesQuery.isLoading.value" row-key="type_name" height="100%">
         <el-table-column prop="type_name" label="类型名" min-width="160" />
         <el-table-column label="状态" width="100" align="center">
           <template #default="{ row }">
@@ -200,6 +201,7 @@ function formatTime(iso?: string): string {
           </template>
         </el-table-column>
       </el-table>
+      </div>
     </el-card>
 
     <!-- 注册/演进共用编辑器 -->
