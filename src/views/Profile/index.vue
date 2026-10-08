@@ -19,6 +19,7 @@ import { useRouter } from 'vue-router'
 import { useUserStore } from '@/store/modules/user'
 import { updateProfileApi, fetchProfileApi } from '@/api/user'
 import { createPatApi, listPatsApi, revokePatApi, type PatRow } from '@/api/user/pat'
+import { useTableFit } from '@vea/hooks'
 
 // keep-alive 契约：name=路由名（静态补充路由 §3.2④，tagsView.cachedViews 存路由名）
 defineOptions({ name: 'Profile' })
@@ -65,6 +66,9 @@ async function handleSubmit() {
 
 // ─── P4-6 PAT（个人 API 凭据——脚本/CI 调用）───
 const pats = ref<PatRow[]>([])
+/** PAT 表列宽自适应（frontend-standard.md 踩坑⑦口径——手动 el-table 必须自行挂接） */
+const patsTable = ref()
+useTableFit(patsTable, () => pats.value)
 const patLoading = ref(false)
 const patVisible = ref(false)
 const patSaving = ref(false)
@@ -222,7 +226,7 @@ function formatTime(iso?: string | null): string {
         title="用于脚本/CI 等非交互调用：Authorization: Bearer zpat_…（等效登录态）。明文仅创建时展示一次，请立即保存。"
         type="info" show-icon :closable="false" class="mb-3"
       />
-      <el-table :data="pats" v-loading="patLoading" row-key="id">
+      <el-table ref="patsTable" :data="pats" v-loading="patLoading" row-key="id">
         <el-table-column prop="name" label="名称" min-width="140" />
         <el-table-column label="状态" width="90" align="center">
           <template #default="{ row }">

@@ -69,6 +69,7 @@ overflow-y-auto 仅为兜底——正常页面不该用到它）→ 页面根 .f
    行多时封顶内滚。不要回退「无脑拉满」——高屏会露框内死区。
 6. 全局卡类等页面级 CSS 改动后，六张已填列表页+四张内容页都要回归（DOM 探针最便宜）。
 7. **EP 2.14 el-table 列宽拟合不随容器变化重排**（侧栏异步收起/窗口面板调整/数据晚到后，表格保持
+   豁免：对话框/抽屉内定宽表（如 ticket/type 字段编辑器 860px）不挂 useTableFit，见 `src/tableFitScan` 豁免清单。
    首次拟合宽度——右侧残留死区或表内横向滚动条，window resize 也不自愈）。兜底=`useTableFit`
    （`@vea/hooks`，ResizeObserver 盯表格父容器+window resize→`doLayout`，数据晚到传 watchSource）；
    **ProTable 已内置**，手动 el-table 必须自行挂接（用法见 composable 头注释）。
@@ -90,5 +91,5 @@ overflow-y-auto 仅为兜底——正常页面不该用到它）→ 页面根 .f
 | system/dict | 双栏列表 | ✅ 双栏等高各自内滚 |
 | MyOrg | 复合页（组织卡+名册） | ✅ 名册内滚、组织卡 flex-none |
 | system/org · menu | 内容页（树） | ✅ 内容区内滚（漏网补齐批 2026-10-08） |
-| ticket/detail · ticket/create · Profile · Home | 内容页 | ✅ 内容区内滚（本批） |
+| ticket/detail · ticket/create · Profile · Home | 内容页 | ✅ 内容区内滚（本批；Profile PAT 表 useTableFit 补挂 2026-10-09） |
 | 登录/改密/403/404 | 独立布局 | ➖ 不适用 |

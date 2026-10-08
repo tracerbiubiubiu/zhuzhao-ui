@@ -12,6 +12,7 @@
  *   浏览/导出/删行放行（gateType 对读与软删本就放行），写入/导入/编辑随 409 门同步隐藏
  */
 import { computed, reactive, ref, watch } from 'vue'
+import { useTableFit } from '@vea/hooks'
 import {
   ElAlert, ElButton, ElCard, ElDescriptions, ElDescriptionsItem, ElDialog, ElDrawer,
   ElEmpty, ElForm, ElFormItem, ElInput, ElInputNumber, ElMessage, ElMessageBox,
@@ -55,7 +56,6 @@ function fieldTypeLabel(t: AlFieldDef['type']): string {
 const list = ref<AlDataDoc[]>([])
 const listLoading = ref(false)
 const pageSize = ref(20)
-import { useTableFit } from '@vea/hooks'
 const nextCursor = ref<AlCursor | null>(null)
 /** 页栈：stack[k-1]=第 k 页末 cursor——上一页弹栈、下一页压栈（纯函数见 cursorPager） */
 const cursorStack = ref<AlCursor[]>([])

@@ -9,6 +9,7 @@
  *   移除成员（RemoveMember——不可移除 owner）
  */
 import { computed, ref } from 'vue'
+import { useTableFit } from '@vea/hooks'
 import {
   ElButton, ElCard, ElEmpty, ElMessage, ElMessageBox, ElOption, ElPagination, ElSelect,
   ElTable, ElTableColumn, ElTag,
@@ -45,7 +46,6 @@ const roster = ref<OrgMemberRosterItem[]>([])
 const rosterLoading = ref(false)
 const rosterPage = ref(1)
 const rosterPageSize = ref(20)
-import { useTableFit } from '@vea/hooks'
 const rosterTotal = ref(0)
 /** 普通成员：名册 403 → 只读组织信息（owner/admin 控件不渲染） */
 const readonlyMode = ref(false)

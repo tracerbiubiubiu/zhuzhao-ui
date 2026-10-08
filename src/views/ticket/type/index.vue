@@ -12,6 +12,7 @@
  * - 乐观锁：类型/模板 version 回传 CAS（可省略——管理页应带上），10006 → 关框刷新范式
  */
 import { computed, reactive, ref } from 'vue'
+import { useTableFit } from '@vea/hooks'
 import {
   ElAlert, ElButton, ElCard, ElDialog, ElForm, ElFormItem, ElInput, ElInputNumber,
   ElMessage, ElMessageBox, ElOption, ElSelect, ElSwitch, ElTable, ElTableColumn, ElTabPane, ElTabs, ElTag,
@@ -42,7 +43,6 @@ const FIELD_TYPES: Array<{ value: TicketTypeFieldInput['field_type']; label: str
 ]
 
 // ─── 类型 Tab ───
-import { useTableFit } from '@vea/hooks'
 const typesQuery = useQuery({ queryKey: ['ticket', 'types'], queryFn: listTicketTypesApi })
 const typeColumns = [
   { prop: 'code', label: '编码', width: 160 },

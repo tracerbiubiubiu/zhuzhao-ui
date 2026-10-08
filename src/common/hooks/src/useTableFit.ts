@@ -20,23 +20,51 @@ export function useTableFit(
   watchSource?: () => unknown,
 ): void {
   let observer: ResizeObserver | undefined
+  let observedEl: HTMLElement | undefined
+  let rafId = 0
 
   const relayout = () => tableRef.value?.doLayout()
 
+  /** 帧合并：侧栏收起是 ~300ms CSS transition，ResizeObserver 逐帧触发——
+      rAF 合并到每帧一次，消连续数十次 doLayout 的布局抖动 */
+  const scheduleRelayout = () => {
+    if (rafId) return
+    rafId = requestAnimationFrame(() => {
+      rafId = 0
+      void nextTick(relayout)
+    })
+  }
+
+  /** 可重入挂接：表格被 v-if 门控时挂载瞬间尚不存在（如 Home recent/MyOrg selectedOrg/
+      al/data list/dict selectedType 初值皆空），onMounted 那次 observe 会跳过——
+      每次重入判 el 变化再换挂目标，覆盖 ref 迟挂与表实例替换 */
+  const syncObserve = () => {
+    const el = tableRef.value?.$el?.parentElement
+    if (!el || el === observedEl) return
+    observer?.unobserve(observedEl as HTMLElement)
+    observedEl = el
+    observer?.observe(el)
+  }
+
   onMounted(() => {
     relayout()
-    observer = new ResizeObserver(() => void nextTick(relayout))
-    // 盯父容器而非表格自身：缺陷场景里表格自身可能被内容撑宽（宽度失真），父容器才是布局真相
-    const parent = tableRef.value?.$el?.parentElement
-    if (parent) observer.observe(parent)
+    observer = new ResizeObserver(scheduleRelayout)
+    syncObserve()
     window.addEventListener('resize', relayout)
   })
 
+  // ref 迟挂补挂点：门控翻真/表实例替换时 tableRef 变化 → 补 observe + 补一次重排
+  watch(tableRef, () => {
+    syncObserve()
+    scheduleRelayout()
+  })
+
   if (watchSource) {
-    watch(watchSource, () => void nextTick(relayout))
+    watch(watchSource, scheduleRelayout)
   }
 
   onBeforeUnmount(() => {
+    if (rafId) cancelAnimationFrame(rafId)
     observer?.disconnect()
     window.removeEventListener('resize', relayout)
   })

@@ -110,3 +110,28 @@ describe('EP 组件导入完整性（防静默失效）', () => {
     expect(violations.join('\n'), 'prefix-icon/suffix-icon 字符串残留（死图标）').toBe('')
   })
 })
+
+describe('手动 el-table 挂接 useTableFit（列宽兜底防漏网，frontend-standard.md 踩坑⑦）', () => {
+  it('全仓含 <el-table 的 .vue 宿主文件均挂接 useTableFit（或列入豁免）', () => {
+    // EP 2.14 列宽不随容器变化重排（踩坑⑦）——ProTable 内置兜底，手动 el-table 必须自行挂接。
+    // 静态门禁（eslint/tsc/build/现有单测）全绿也抓不到漏挂——2026-10-08 useTableFit 批
+    // 自检报告 P1-2 实证 Profile 漏网。本用例为该类的自动捕获层（与 epImports 同型）。
+    // 豁免：对话框/抽屉内定宽表（容器恒定，无重排需求），须在此显式登记。
+    const EXEMPT = new Set([
+      join(ROOT, 'views/ticket/type/index.vue'), // 字段编辑器对话框内定宽 860px 表
+    ])
+    // 去 HTML 注释（文档性提及 <el-table 不算宿主）
+    const hosts = walkVue(ROOT).filter((f) => /<el-table[\s>]/.test(readFileSync(f, 'utf-8').replace(/<!--[\s\S]*?-->/g, '')))
+    expect(hosts.length, '含 el-table 的宿主文件数').toBeGreaterThanOrEqual(10)
+
+    const violations: string[] = []
+    for (const f of hosts) {
+      if (EXEMPT.has(f)) continue
+      if (f.endsWith(join('components', 'ProTable', 'index.vue'))) continue // 兜底内置组件本体
+      const src = readFileSync(f, 'utf-8')
+      if (!/useTableFit\(/.test(src)) violations.push(`${f}: 含 <el-table> 但未挂 useTableFit`)
+    }
+
+    expect(violations.join('\n'), '手动 el-table 漏挂 useTableFit（列宽不随容器重排）').toBe('')
+  })
+})

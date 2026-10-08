@@ -8,6 +8,7 @@
  * - 废弃=幂等危险操作（deprecated 后数据写门关闭）；历史抽屉按 op/version 展示
  */
 import { computed, reactive, ref } from 'vue'
+import { useTableFit } from '@vea/hooks'
 import {
   ElButton, ElCard, ElDrawer, ElForm, ElFormItem, ElInput, ElMessage, ElMessageBox,
   ElSwitch, ElTable, ElTableColumn, ElTag, ElSelect, ElOption, ElAlert,
@@ -24,7 +25,6 @@ import {
 defineOptions({ name: 'al_types' })
 
 const queryClient = useQueryClient()
-import { useTableFit } from '@vea/hooks'
 const typesQuery = useQuery({ queryKey: ['al', 'types'], queryFn: listAlTypesApi })
 const rows = computed(() => typesQuery.data.value?.list ?? [])
 
