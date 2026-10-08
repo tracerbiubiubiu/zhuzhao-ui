@@ -109,20 +109,20 @@ function typeLabel(code: string): string {
     <el-card shadow="never">
       <ProTable ref="tableRef" :columns="columns" :fetcher="fetcher" fill>
         <template #search>
-          <el-form inline @submit.prevent>
+          <el-form inline class="ticket-filter" @submit.prevent>
             <el-form-item label="关键字">
               <el-input
                 v-model="search.keyword" placeholder="标题 / 工单号" clearable maxlength="50"
-                class="!w-[200px]" @keyup.enter="onSearch"
+                class="!w-[160px]" @keyup.enter="onSearch"
               />
             </el-form-item>
             <el-form-item label="类型">
-              <el-select v-model="search.type_code" placeholder="全部" clearable class="!w-[150px]">
+              <el-select v-model="search.type_code" placeholder="全部" clearable class="!w-[120px]">
                 <el-option v-for="t in typesQuery.data.value ?? []" :key="t.code" :label="t.name" :value="t.code" />
               </el-select>
             </el-form-item>
             <el-form-item label="状态">
-              <el-select v-model="search.status" placeholder="全部" clearable class="!w-[120px]">
+              <el-select v-model="search.status" placeholder="全部" clearable class="!w-[110px]">
                 <el-option v-for="s in TICKET_STATUSES" :key="s.value" :label="s.label" :value="s.value" />
               </el-select>
             </el-form-item>
@@ -134,14 +134,14 @@ function typeLabel(code: string): string {
             <el-form-item label="创建时间">
               <el-date-picker
                 v-model="dateRange" type="daterange" value-format="YYYY-MM-DD"
-                start-placeholder="开始" end-placeholder="结束" class="!w-[240px]"
+                start-placeholder="开始" end-placeholder="结束" class="!w-[210px]"
               />
             </el-form-item>
             <el-form-item>
               <el-checkbox v-model="search.mineHandle">只看我处理的</el-checkbox>
               <el-checkbox v-model="search.mineCreated">我发起的</el-checkbox>
             </el-form-item>
-            <el-form-item>
+            <el-form-item class="ml-auto !mr-0">
               <el-button type="primary" @click="onSearch">查询</el-button>
               <el-button @click="onReset">重置</el-button>
             </el-form-item>
@@ -195,3 +195,15 @@ function typeLabel(code: string): string {
     </el-card>
   </div>
 </template>
+
+<style scoped>
+/* 筛选栏：EP inline 默认项距 32px 过疏——收半使首行多容一个字段；尾行「勾选居左+查询钉右」。
+   inline 原生是 inline-flex 文本流（margin-left:auto 无效），转 flex+wrap 后 ml-auto 才成立 */
+.ticket-filter {
+  display: flex;
+  flex-wrap: wrap;
+}
+.ticket-filter :deep(.el-form-item) {
+  margin-right: 16px;
+}
+</style>
