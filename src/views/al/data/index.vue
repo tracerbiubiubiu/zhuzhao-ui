@@ -21,7 +21,7 @@ import { useRouter } from 'vue-router'
 import { useQuery } from '@tanstack/vue-query'
 import {
   createAlDataApi, deleteAlDataApi, exportAlDataApi, importAlDataApi, listAlDataApi,
-  listAlTypesApi, updateAlDataApi,
+  listAlTypesApi, restoreAlDataApi, updateAlDataApi,
   type AlCursor, type AlDataDoc, type AlFieldDef,
 } from '@/api/al'
 import { popCursor, pushCursor, resetCursor } from './cursorPager'
@@ -70,6 +70,7 @@ async function fetchPage(cursor: AlCursor | null) {
   try {
     const res = await listAlDataApi(selectedType.value, {
       page_size: pageSize.value,
+      include_deleted: true,
       ...(cursor ? { after_created_at: cursor.after_created_at, after_id: cursor.after_id } : {}),
     })
     if (seq !== fetchSeq) return // 已切别的类型——弃置过期响应
@@ -225,6 +226,23 @@ async function onDelete(row: AlDataDoc) {
   }
 }
 
+/** 恢复软删行（幂等；废弃类型下仍放行——gateType 对存量生命周期操作放行） */
+async function onRestore(row: AlDataDoc) {
+  try {
+    await restoreAlDataApi(selectedType.value, row.id)
+    ElMessage.success(`#${row.id} 已恢复`)
+    refresh()
+  } catch (err: unknown) {
+    const resp = (err as { response?: { data?: { message?: string } } })?.response?.data
+    ElMessage.error(resp?.message ?? '恢复失败')
+  }
+}
+
+/** 行样式：软删行灰态（已删除徽标+恢复入口的数据面） */
+function rowClass({ row }: { row: AlDataDoc }): string {
+  return row.status === 'deleted' ? 'al-row-deleted' : 'al-data-row'
+}
+
 // ─── 导出/导入 ───
 async function onExport() {
   try {
@@ -369,8 +387,14 @@ function openDetail(row: AlDataDoc) {
         <template v-else>
           <!-- min-h-0 flex-1 + height 100%：表格吃满剩余视口内部滚动（fill 链，与 ProTable 同款） -->
           <div class="min-h-0 flex-1">
-            <el-table :data="list" v-loading="listLoading" row-key="id" row-class-name="al-data-row" height="100%" @row-click="openDetail">
+            <el-table :data="list" v-loading="listLoading" row-key="id" :row-class-name="rowClass" height="100%" @row-click="openDetail">
             <el-table-column prop="id" label="ID" width="90" />
+            <el-table-column label="状态" width="76" align="center">
+              <template #default="{ row }">
+                <el-tag v-if="(row as AlDataDoc).status === 'deleted'" size="small" type="info">已删除</el-tag>
+                <span v-else class="text-xs text-gray-300">—</span>
+              </template>
+            </el-table-column>
             <!-- 动态列：schema 驱动（sensitive 原样显示——脱敏属日志侧语义） -->
             <el-table-column
               v-for="f in schema" :key="f.name" :label="f.name" :min-width="140" show-overflow-tooltip
@@ -384,8 +408,13 @@ function openDetail(row: AlDataDoc) {
             <el-table-column label="操作" width="160" fixed="right">
               <template #default="{ row }">
                 <!-- .stop：行点击开详情抽屉，按钮动作不冒泡 -->
-                <el-button v-permission="'activelist:data:write'" link type="primary" size="small" @click.stop="openEdit(row as AlDataDoc)">编辑</el-button>
-                <el-button v-permission="'activelist:data:write'" link type="danger" size="small" @click.stop="onDelete(row as AlDataDoc)">删除</el-button>
+                <template v-if="(row as AlDataDoc).status === 'deleted'">
+                  <el-button v-permission="'activelist:data:write'" link type="primary" size="small" @click.stop="onRestore(row as AlDataDoc)">恢复</el-button>
+                </template>
+                <template v-else>
+                  <el-button v-if="!isDeprecated" v-permission="'activelist:data:write'" link type="primary" size="small" @click.stop="openEdit(row as AlDataDoc)">编辑</el-button>
+                  <el-button v-permission="'activelist:data:write'" link type="danger" size="small" @click.stop="onDelete(row as AlDataDoc)">删除</el-button>
+                </template>
               </template>
             </el-table-column>
           </el-table>
@@ -444,6 +473,10 @@ function openDetail(row: AlDataDoc) {
         <el-descriptions-item v-for="f in schema" :key="f.name" :label="f.name">
           {{ cellText(f, detailRow as AlDataDoc) }}
         </el-descriptions-item>
+        <el-descriptions-item label="状态">
+          <el-tag v-if="detailRow.status === 'deleted'" size="small" type="info">已删除</el-tag>
+          <template v-else>正常</template>
+        </el-descriptions-item>
         <el-descriptions-item label="版本">v{{ detailRow.version }}</el-descriptions-item>
         <el-descriptions-item label="创建人">{{ detailRow.created_by }}</el-descriptions-item>
         <el-descriptions-item label="更新人">{{ detailRow.updated_by }}</el-descriptions-item>
@@ -452,19 +485,28 @@ function openDetail(row: AlDataDoc) {
       </el-descriptions>
       <template v-if="detailRow" #footer>
         <el-button @click="detailVisible = false">关闭</el-button>
-        <el-button
-          v-if="!isDeprecated" v-permission="'activelist:data:write'"
-          type="primary" @click="detailVisible = false; openEdit(detailRow as AlDataDoc)"
-        >编辑</el-button>
-        <el-button v-permission="'activelist:data:write'" type="danger" @click="detailVisible = false; onDelete(detailRow as AlDataDoc)">删除</el-button>
+        <template v-if="detailRow.status === 'deleted'">
+          <el-button v-permission="'activelist:data:write'" type="primary" @click="detailVisible = false; onRestore(detailRow as AlDataDoc)">恢复</el-button>
+        </template>
+        <template v-else>
+          <el-button
+            v-if="!isDeprecated" v-permission="'activelist:data:write'"
+            type="primary" @click="detailVisible = false; openEdit(detailRow as AlDataDoc)"
+          >编辑</el-button>
+          <el-button v-permission="'activelist:data:write'" type="danger" @click="detailVisible = false; onDelete(detailRow as AlDataDoc)">删除</el-button>
+        </template>
       </template>
     </el-drawer>
   </div>
 </template>
 
 <style scoped>
-/* 行可点开详情抽屉 */
+/* 行可点开详情抽屉；软删行灰态 */
 :deep(.al-data-row) {
   cursor: pointer;
+}
+:deep(.al-row-deleted) {
+  cursor: pointer;
+  opacity: 0.55;
 }
 </style>

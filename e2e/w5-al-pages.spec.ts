@@ -69,25 +69,25 @@ test('W5 冒烟：al 类型注册/数据写入/cursor 分页/软删恢复', asyn
     await expect(page.locator('.el-dialog').first()).not.toBeVisible()
     await expect(page.locator('.el-table__row').filter({ hasText: 'row_ui_written' })).toBeVisible()
 
-    // ── 软删（列表 WHERE status='active' 硬过滤——删除即行消失；恢复无 UI 入口走 API 闭环，
-    //    顺带消费 000032 整改端点形态 body={type_name,id}）──
+    // ── 软删 → 行转「已删除」灰态（include_deleted 混排——行不再消失）→ UI 恢复闭环
+    //    （恢复消费 000032 整改端点形态 body={type_name,id}，入口在行操作列/详情抽屉）──
     const uiRow = page.locator('.el-table__row').filter({ hasText: 'row_ui_written' })
-    const writtenId = (await uiRow.locator('td').first().innerText()).trim()
     await uiRow.getByRole('button', { name: '删除' }).click()
     // 分步归因：先等弹窗本体（写入 Dialog 关闭动画收尾期点击存在吞没窗口），再点确认
     const confirmBox = page.locator('.el-message-box')
     await expect(confirmBox).toBeVisible({ timeout: 10_000 })
     await confirmBox.getByRole('button', { name: '删除' }).click()
-    await expect(uiRow).toHaveCount(0, { timeout: 10_000 }) // 行从列表消失
 
-    // API 恢复 → UI 刷新行回来（行为闭环）
-    const restored = await api('/al/api/v1/data/restore', { ...h, method: 'POST', body: { type_name: typeName, id: writtenId } })
-    expect(restored.env!.code).toBe(0)
-    await page.reload()
-    // reload 重置组件态（类型选择丢失）——重选后断言行回来
-    await page.locator('.el-select').first().click()
-    await page.getByRole('option', { name: typeName }).click()
-    await expect(page.locator('.el-table__row').filter({ hasText: 'row_ui_written' })).toBeVisible({ timeout: 10_000 })
+    // 行不消失：灰态行类 + 已删除徽标 + 操作列变「恢复」（编辑随之隐藏）
+    await expect(uiRow).toHaveClass(/al-row-deleted/, { timeout: 10_000 })
+    await expect(uiRow.locator('.el-tag')).toContainText('已删除')
+    await expect(uiRow.getByRole('button', { name: '编辑' })).toHaveCount(0)
+
+    // UI 恢复 → 行回正常态（灰态类/徽标消失、编辑回归——行为闭环不再借道 API）
+    await uiRow.getByRole('button', { name: '恢复' }).click()
+    await expect(uiRow).toHaveClass(/al-data-row/, { timeout: 10_000 })
+    await expect(uiRow.locator('.el-tag')).toHaveCount(0)
+    await expect(uiRow.getByRole('button', { name: '编辑' })).toBeVisible()
   } finally {
     // 清理：废弃类型（幂等；数据留存——历史行无跨 spec 约束）
     await api('/al/api/v1/admin/types/deprecate', { ...h, method: 'POST', body: { type_name: typeName } }).catch(() => {})
