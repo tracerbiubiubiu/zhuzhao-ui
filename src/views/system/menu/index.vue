@@ -23,7 +23,8 @@ function toAssign() {
 </script>
 
 <template>
-  <div class="p-4">
+  <div class="fill-page p-4">
+    <div class="min-h-0 flex-1 overflow-y-auto">
     <el-card shadow="never">
       <template #header>
         <div class="flex items-center justify-between">
@@ -51,5 +52,6 @@ function toAssign() {
         </template>
       </el-tree>
     </el-card>
+    </div>
   </div>
 </template>

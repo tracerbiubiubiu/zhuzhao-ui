@@ -177,7 +177,8 @@ async function onDelete(node: OrgTreeNode) {
 </script>
 
 <template>
-  <div class="p-4">
+  <div class="fill-page p-4">
+    <div class="min-h-0 flex-1 overflow-y-auto">
     <el-card shadow="never">
       <template #header>
         <div class="flex items-center justify-between">
@@ -209,6 +210,7 @@ async function onDelete(node: OrgTreeNode) {
         </template>
       </el-tree>
     </el-card>
+    </div>
 
     <!-- 新建/编辑 -->
     <el-dialog v-model="editVisible" :title="editIsCreate ? '新建组织' : '编辑组织'" width="520px">
