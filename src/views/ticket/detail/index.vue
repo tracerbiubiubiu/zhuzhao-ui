@@ -270,7 +270,8 @@ async function submitRelation() {
 </script>
 
 <template>
-  <div class="p-4" v-loading="ticketQuery.isLoading.value">
+  <div class="fill-page p-4" v-loading="ticketQuery.isLoading.value">
+    <div class="min-h-0 flex-1 overflow-y-auto">
     <el-card shadow="never" class="mb-4">
       <template #header>
         <div class="flex items-center gap-3 flex-wrap">
@@ -376,6 +377,7 @@ async function submitRelation() {
     </el-card>
 
     <!-- 编辑对话框 -->
+    </div>
     <el-dialog v-model="editVisible" title="编辑工单" width="520px">
       <el-form ref="editFormRef" :model="editForm" label-width="80px">
         <el-form-item label="标题" required>

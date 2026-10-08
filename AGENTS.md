@@ -46,9 +46,9 @@ pnpm test:e2e      # Playwright（S1–S8/S10/S12/S16/FE3/W4·W5/P4 穿插池—
 - **存放**：Phase 设计文档住主仓 `zhuzhao/docs/`（SSOT）；本仓放操作文档（README/AGENTS/子模块说明）；时点报告住 `deliverables/`，命名 `<topic-kebab>-<YYYY-MM-DD>.md`（对齐主仓 deliverables/ 惯例）
 - **计数/状态声明须与实测一致**：改 E2E/单测数量或修复状态时，同批更新 README 与 AGENTS 两处；「全部修复」类表述须有逐项证据（deliverables/ 报告为凭）
 
-## 表格与列表页 UI 规范（2026-10-08 制定）
+## 前端 UI 规范（2026-10-08 制定）
 
-**新增/改动列表类页面前必读 [docs/table-standard.md](docs/table-standard.md)**——填充判定（主体是列表→fill 锁视口表格内滚；表单/详情页不填充）、列宽（内容列 `minWidth` 吸收剩余宽度，全固定宽=宽屏右侧死区）、分页（ProTable 统一 `[10,20,50,100]` 默认 20；无 total/cursor 与面板型口径见文档）、滚动（填充页外层零滚动，Backtop 盯 `.v-app-view`）与新增页 checklist。踩过的坑（EP max-height 百分比不驱动滚动、特异性互压、v-else 配对）一并记录在内，勿重蹈。
+**新增/改动任何页面前必读 [docs/frontend-standard.md](docs/frontend-standard.md)**——铁律：**页面不动，所有页面锁定视口，一切滚动条都在内部元素上**（列表页=表格内滚+分页钉底；内容页=内容区容器内滚）。文档含三种页面骨架配方、表格列宽（内容列 `minWidth`，全固定宽=宽屏右侧死区）、分页口径（ProTable 统一 `[10,20,50,100]` 默认 20；cursor/面板型见文档）、滚动归属（Backtop 盯 `.v-app-view`）、六个踩坑记录与新增页 checklist。
 
 ## 前端契约速查（详细见主仓 01 号）
 

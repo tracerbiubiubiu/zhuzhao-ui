@@ -94,7 +94,8 @@ function formatTime(iso?: string): string {
 </script>
 
 <template>
-  <div class="p-4">
+  <div class="fill-page p-4">
+    <div class="min-h-0 flex-1 overflow-y-auto">
     <el-row :gutter="16" class="mb-4">
       <el-col v-for="card in statusCardDefs" :key="card.key" :span="6">
         <el-card shadow="hover" class="cursor-pointer">
@@ -166,5 +167,6 @@ function formatTime(iso?: string): string {
       </el-table>
       <el-empty v-else description="暂无工单" />
     </el-card>
+    </div>
   </div>
 </template>
