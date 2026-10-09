@@ -61,3 +61,24 @@ await actions.submit((values) => loginApi(values))
 ```
 
 服务端字段错误可通过 `setErrors` 写入；`validateField` 可用于失焦校验。表单模型采用浅层快照，嵌套对象应整体替换，以便正确计算 `dirtyFields`。
+
+## useTableFit
+
+`useTableFit` 是 el-table 列宽自适应兜底（frontend-standard.md 踩坑⑦）：EP 2.14 列宽拟合不随
+容器变化重排（侧栏收起/面板调整/数据晚到），本 composable 以 ResizeObserver 盯表格父容器 +
+window resize 兜底，变化即 rAF 合并调 `doLayout()`。可重入挂接覆盖「表格被 `v-if` 门控、
+挂载瞬间尚不存在」的页面（ref 迟挂自动补挂）。
+
+```ts
+import { useTableFit } from '@vea/hooks'
+
+const tableRef = ref()
+useTableFit(tableRef, () => rows.value)
+```
+
+```html
+<el-table ref="tableRef" :data="rows">…</el-table>
+```
+
+手动 `el-table` 必须挂接（ProTable 已内置）；对话框/抽屉内定宽表豁免（见 frontend-standard.md）。
+覆盖面由 `src/epImports.test.ts` 第三用例扫描闸守护（漏挂即红）。
