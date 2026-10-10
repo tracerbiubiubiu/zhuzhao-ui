@@ -118,7 +118,17 @@ service.interceptors.response.use(
   },
   async (error: AxiosError) => {
     const status = error.response?.status
-    const body = error.response?.data as { code?: number } | undefined
+    let body = error.response?.data as { code?: number; message?: string } | undefined
+    // blob 端点（如 al 导出）的错误体也是 Blob——先转文本解析出信封 code/message，
+    // 否则 401 分码（20002 静默刷新/20003 跳登录）与业务提示全部失明（frontend-standard 踩坑同期批）
+    if (error.config?.responseType === 'blob' && body instanceof Blob) {
+      try {
+        body = JSON.parse(await body.text())
+        if (error.response) (error.response as { data: unknown }).data = body
+      } catch {
+        /* 非 JSON 错误体（如纯文本 404 page not found）——保持 Blob 原值 */
+      }
+    }
     const bizCode = body?.code
 
     // 403+20007 强制改密（errorBehavior 接线——跳改密页不清会话）

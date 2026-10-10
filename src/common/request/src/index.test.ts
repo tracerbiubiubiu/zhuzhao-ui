@@ -269,6 +269,30 @@ describe('响应拦截器 401 分支', () => {
     expect(usePermissionStore().isAddRouters).toBe(false)
   })
 
+  it('blob 错误体（导出类端点）→ 解析信封 code，20002 正常走静默刷新+重放', async () => {
+    seedSession()
+    h.post.mockResolvedValue({ data: { code: 0, data: { access_token: 'new', refresh_token: 'RT2' } } })
+    const error = {
+      config: { headers: {} as Record<string, string>, url: '/al/api/v1/data/x/export', responseType: 'blob' },
+      response: { status: 401, data: new Blob([JSON.stringify({ code: 20002, message: '过期' })], { type: 'application/json' }) },
+    }
+    await h.handlers.err?.(error as never)
+    // 修复前：body 是 Blob，code 取不到 → 刷新分支失明，既不刷新也不重放
+    expect(h.post).toHaveBeenCalled()
+    expect((error.config.headers as Record<string, string>).Authorization).toBe('Bearer new')
+  })
+
+  it('blob 非 JSON 错误体（纯文本 404）→ 保持原值不误判', async () => {
+    seedSession()
+    const body = new Blob(['404 page not found'], { type: 'text/plain' })
+    const error = {
+      config: { headers: {} as Record<string, string>, url: '/al/api/v1/data/x/export', responseType: 'blob' },
+      response: { status: 404, data: body },
+    }
+    await expect(h.handlers.err?.(error as never)).rejects.toBe(error)
+    expect((error.response as { data: Blob }).data).toBe(body)
+  })
+
   it('403+20007 强制改密 → 跳改密页且不清会话', async () => {
     seedSession()
     await expect(h.handlers.err?.(makeError(403, 20007))).rejects.toBeTruthy()
