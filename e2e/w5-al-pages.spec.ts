@@ -48,9 +48,9 @@ test('W5 冒烟：al 类型注册/数据写入/cursor 分页/软删恢复', asyn
 
     // ── data 页：选类型 → 动态列渲染 + cursor 分页（25 行=2 页）──
     await page.goto('/#/al/data')
-    const typeSelect = page.locator('.el-select').first()
-    await typeSelect.click()
-    await page.getByRole('option', { name: typeName }).click()
+    // 两栏版：左栏类型清单搜索+点击切换（取代下拉）
+    await page.getByPlaceholder('搜索类型').fill(typeName)
+    await page.locator('.al-type-item').filter({ hasText: typeName }).click()
     await expect(page.getByRole('columnheader', { name: 'name' })).toBeVisible()
     await expect(page.getByRole('columnheader', { name: 'score' })).toBeVisible()
     await expect(page.locator('.el-table__row')).toHaveCount(20) // 第 1 页满页
@@ -118,8 +118,8 @@ test('活动列表：废弃类型只读视图（分组可选/写入隐藏/导出
   await uiLogin(page, state.admin.employeeNo, state.admin.password)
   await expect(page.getByRole('menuitem', { name: '名单管理' })).toBeVisible({ timeout: 15_000 })
   await page.goto('/#/al/data')
-  await page.locator('.el-select').first().click()
-  await page.getByRole('option', { name: typeName }).click()
+  await page.getByPlaceholder('搜索类型').fill(typeName)
+  await page.locator('.al-type-item').filter({ hasText: typeName }).click()
 
   // 只读态：废弃 alert + 写入/导入隐藏 + 导出（存档）保留 + 数据行可见
   await expect(page.getByText('该类型已废弃')).toBeVisible()

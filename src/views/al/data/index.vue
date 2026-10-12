@@ -8,15 +8,17 @@
  * - 导出=blob 下载（裸 JSON 数组流）；导入=同格式文件直发 body（网关上限 1MB 前端预检）
  * - 编辑带 version 乐观锁（冲突 409+100008——activelist 跨服务码段）
  * - 2026-10-08 排版改版：类型上下文头（schema 徽标）/行详情抽屉（点行开，全字段+系统字段）/
- *   空态引导（去注册/写入首条）；废弃类型只读视图——下拉「已废弃」分组可选，
- *   浏览/导出/删行放行（gateType 对读与软删本就放行），写入/导入/编辑随 409 门同步隐藏
+ *   空态引导（去注册/写入首条）；废弃类型只读视图——浏览/导出/删行放行（gateType 对读与
+ *   软删本就放行），写入/导入/编辑随 409 门同步隐藏
+ * - 2026-10-12 两栏改版：类型选择由下拉改**左右双栏**（左类型清单分组+搜索，右数据区）——
+ *   类型全集与废弃态一眼可见；废弃只读/门控语义不变
  */
 import { computed, reactive, ref, watch } from 'vue'
 import { useTableFit } from '@vea/hooks'
 import {
   ElAlert, ElButton, ElCard, ElDescriptions, ElDescriptionsItem, ElDialog, ElDrawer,
   ElEmpty, ElForm, ElFormItem, ElInput, ElInputNumber, ElMessage, ElMessageBox,
-  ElOption, ElOptionGroup, ElSelect, ElTable, ElTableColumn, ElTag,
+  ElTable, ElTableColumn, ElTag,
 } from 'element-plus'
 import { useRouter } from 'vue-router'
 import { useQuery } from '@tanstack/vue-query'
@@ -36,8 +38,14 @@ const router = useRouter()
 //     UI 开只读存档入口：浏览/导出/删行清理放行，写入/导入/编辑随 409 门同步关闭）───
 const typesQuery = useQuery({ queryKey: ['al', 'types'], queryFn: listAlTypesApi })
 const allTypes = computed(() => typesQuery.data.value?.list ?? [])
-const activeTypes = computed(() => allTypes.value.filter((t) => t.status === 'active'))
-const deprecatedTypes = computed(() => allTypes.value.filter((t) => t.status === 'deprecated'))
+// 左栏类型清单搜索（两栏改版——取代下拉；按类型名不区分大小写过滤）
+const typeFilter = ref('')
+const filteredTypes = computed(() => {
+  const kw = typeFilter.value.trim().toLowerCase()
+  return kw ? allTypes.value.filter((t) => t.type_name.toLowerCase().includes(kw)) : allTypes.value
+})
+const activeFiltered = computed(() => filteredTypes.value.filter((t) => t.status === 'active'))
+const deprecatedFiltered = computed(() => filteredTypes.value.filter((t) => t.status === 'deprecated'))
 const selectedType = ref('')
 const selectedDef = computed(() => allTypes.value.find((t) => t.type_name === selectedType.value))
 const isDeprecated = computed(() => selectedDef.value?.status === 'deprecated')
@@ -329,45 +337,65 @@ useTableFit(dataTable, () => list.value)
 
 <template>
   <div class="fill-page p-4">
-    <el-card shadow="never">
-      <template #header>
-        <div class="flex items-center justify-between">
-          <div class="flex items-center gap-3">
-            <span class="font-semibold">活动列表</span>
-            <el-select
-              v-model="selectedType" filterable placeholder="选择类型" class="!w-56"
-              :loading="typesQuery.isLoading.value"
+    <div class="flex flex-1 gap-4 min-h-0">
+      <!-- 左：类型清单（分组+搜索；点击切换——取代下拉，类型全集与废弃态一眼可见） -->
+      <el-card shadow="never" class="w-[240px] al-pane al-pane--left">
+        <template #header>
+          <span class="font-semibold">活动列表类型</span>
+        </template>
+        <el-input v-model="typeFilter" placeholder="搜索类型" clearable size="small" class="mb-2" />
+        <div class="al-type-list">
+          <template v-if="!typesQuery.isLoading.value && filteredTypes.length">
+            <div class="al-type-group">使用中</div>
+            <div
+              v-for="t in activeFiltered" :key="t.type_name"
+              class="al-type-item" :class="{ 'al-type-item--active': selectedType === t.type_name }"
+              @click="selectedType = t.type_name"
             >
-              <el-option-group label="使用中">
-                <el-option v-for="t in activeTypes" :key="t.type_name" :label="t.type_name" :value="t.type_name" />
-              </el-option-group>
-              <el-option-group v-if="deprecatedTypes.length" label="已废弃（只读）">
-                <el-option
-                  v-for="t in deprecatedTypes" :key="t.type_name"
-                  :label="`${t.type_name}（已废弃）`" :value="t.type_name"
-                />
-              </el-option-group>
-            </el-select>
-          </div>
-          <div v-if="selectedType">
-            <!-- 废弃类型只读：写入/导入随 409 门同步隐藏；导出（存档）保留 -->
-            <el-button v-if="!isDeprecated" v-permission="'activelist:data:write'" type="primary" @click="openCreate">写入</el-button>
-            <el-button v-if="!isDeprecated" v-permission="'activelist:data:write'" @click="openImport">导入</el-button>
-            <el-button @click="onExport">导出</el-button>
-          </div>
+              <span class="al-type-name">{{ t.type_name }}</span>
+              <span class="al-type-meta">{{ t.fields.length }} 字段</span>
+            </div>
+            <template v-if="deprecatedFiltered.length">
+              <div class="al-type-group mt-2">已废弃（只读）</div>
+              <div
+                v-for="t in deprecatedFiltered" :key="t.type_name"
+                class="al-type-item" :class="{ 'al-type-item--active': selectedType === t.type_name }"
+                :title="`${t.type_name}（已废弃，只读）`"
+                @click="selectedType = t.type_name"
+              >
+                <span class="al-type-name">{{ t.type_name }}</span>
+                <el-tag size="small" type="info">废</el-tag>
+              </div>
+            </template>
+          </template>
+          <div v-else-if="!typesQuery.isLoading.value" class="text-xs text-gray-400 px-1">无匹配类型</div>
         </div>
-      </template>
+      </el-card>
 
-      <!-- 空态引导：无类型 → 去注册；有类型未选 → 选择提示 -->
-      <el-empty
-        v-if="!typesQuery.isLoading.value && !allTypes.length"
-        description="暂无活动列表类型——请先在「名单类型」页注册"
-      >
-        <el-button type="primary" @click="router.push('/al/types')">去注册类型</el-button>
-      </el-empty>
-      <el-empty v-else-if="!selectedType" description="选择一个类型以查看其数据" />
+      <!-- 右：所选类型的数据区（原单卡内容平移） -->
+      <el-card shadow="never" class="flex-1 al-pane al-pane--right">
+        <template #header>
+          <div class="flex items-center justify-between">
+            <span class="font-semibold">{{ selectedType || '活动列表' }}</span>
+            <div v-if="selectedType">
+              <!-- 废弃类型只读：写入/导入随 409 门同步隐藏；导出（存档）保留 -->
+              <el-button v-if="!isDeprecated" v-permission="'activelist:data:write'" type="primary" size="small" @click="openCreate">写入</el-button>
+              <el-button v-if="!isDeprecated" v-permission="'activelist:data:write'" size="small" @click="openImport">导入</el-button>
+              <el-button size="small" @click="onExport">导出</el-button>
+            </div>
+          </div>
+        </template>
 
-      <template v-else>
+        <!-- 空态引导：无类型 → 去注册；有类型未选 → 选择提示 -->
+        <el-empty
+          v-if="!typesQuery.isLoading.value && !allTypes.length"
+          description="暂无活动列表类型——请先在「名单类型」页注册"
+        >
+          <el-button type="primary" @click="router.push('/al/types')">去注册类型</el-button>
+        </el-empty>
+        <el-empty v-else-if="!selectedType" description="从左侧选择一个类型以查看其数据" />
+
+
         <!-- 类型上下文头：schema 徽标一眼看懂列表形状（字段·类型·必填*） -->
         <div v-if="selectedDef" class="mb-3 flex flex-wrap items-center gap-2">
           <el-tag :type="isDeprecated ? 'info' : 'success'" size="small">
@@ -432,9 +460,9 @@ useTableFit(dataTable, () => list.value)
             <el-button size="small" :disabled="!nextCursor || listLoading" @click="goNext">下一页</el-button>
           </div>
         </div>
-      </template>
-      </template>
-    </el-card>
+        </template>
+      </el-card>
+    </div>
 
     <!-- 写入/编辑（schema 驱动表单——四类型） -->
     <el-dialog v-model="formVisible" :title="formIsCreate ? `写入「${selectedType}」` : `编辑 #${editing.id}`" width="560px">
@@ -512,5 +540,68 @@ useTableFit(dataTable, () => list.value)
 :deep(.al-row-deleted) {
   cursor: pointer;
   opacity: 0.55;
+}
+
+/* 双栏骨架（dict-pane 同款）：两卡各自弹性列、卡体弹性化、内滚 */
+.al-pane {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+.al-pane--left {
+  flex: none;
+}
+.al-pane--right {
+  flex: 1;
+}
+.al-pane :deep(.el-card__body) {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+/* 左栏类型清单：分组标题/清单项（点选切换）/选中态/元信息 */
+.al-type-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+.al-type-group {
+  padding: 2px 4px;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
+.al-type-item {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+}
+.al-type-item:hover {
+  background: var(--el-fill-color-light);
+}
+.al-type-item--active,
+.al-type-item--active:hover {
+  background: var(--el-color-primary-light-9);
+}
+.al-type-item--active .al-type-name {
+  color: var(--el-color-primary);
+  font-weight: 600;
+}
+.al-type-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.al-type-meta {
+  flex: none;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
 }
 </style>
