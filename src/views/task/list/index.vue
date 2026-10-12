@@ -11,8 +11,9 @@
  * - jobs 写操作挂 task:manage；trigger 对 enabled=false 后端 409——按钮同步禁用
  * - 「只看我提交的」仅运行记录（submitted_by=me 由 zhuzhao 代理换 actor 透传）
  */
-import { reactive, ref, watch } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { useTableFit } from '@vea/hooks'
+import { usePermission } from '@/common/auth'
 import {
   ElAlert, ElButton, ElCard, ElDialog, ElForm, ElFormItem, ElInput, ElInputNumber,
   ElMessage, ElMessageBox, ElOption, ElSelect, ElSwitch, ElTabPane, ElTabs, ElTable,
@@ -30,6 +31,11 @@ import {
 defineOptions({ name: 'task_center' })
 
 const activeTab = ref('runs')
+
+const { hasPerm } = usePermission()
+/** 任务定义 Tab = /jobs* 数据面，B13 矩阵 admin 专属——无 task:manage 整个 Tab 不渲染
+ *（此前仅按钮挂 v-permission，Tab 面板急切渲染仍对 operator/viewer 发 GET /jobs → 403 toast）*/
+const canManageJobs = computed(() => hasPerm('task:manage'))
 
 // ─── Tab1 运行记录（offset+total——ProTable）───
 const runsTableRef = ref<InstanceType<typeof ProTable>>()
@@ -372,8 +378,8 @@ useTableFit(deadTable, () => deadList.value)
           </div>
         </el-tab-pane>
 
-        <!-- ── Tab3 任务定义（写挂 task:manage） ── -->
-        <el-tab-pane label="任务定义" name="jobs">
+        <!-- ── Tab3 任务定义（B13：/jobs* admin 专属——无 task:manage 整 Tab 隐藏） ── -->
+        <el-tab-pane v-if="canManageJobs" label="任务定义" name="jobs">
           <ProTable ref="jobsTableRef" :columns="jobColumns" :fetcher="fetchJobs" fill>
             <template #toolbar>
               <div>
