@@ -14,6 +14,8 @@
 
 ## 前端门禁（每批交付前必跑）
 
+> 测试策略与纪律（分层职责/不 mock 决策/变异验牙/FE4 哨兵/豁免登记/独占跑）SSOT = [docs/testing-standard.md](./docs/testing-standard.md)。
+
 ```bash
 pnpm lint          # ESLint（纯检查；自动修复用 pnpm lint:fix，修复后重跑 lint）
 pnpm typecheck     # vue-tsc --noEmit（codegen 类型**部分接线**：入参仅 4/14 api 文件引 __generated__（user/role/profile/selfService）、出参全手写——漂移仅接线面编译期报错，勿视为全量守卫；改 API 形状后先 pnpm codegen，补接线随域渐进）

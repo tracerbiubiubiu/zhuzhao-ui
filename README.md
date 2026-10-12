@@ -29,6 +29,8 @@ Vue 3 + TypeScript strict + Vite 8 ｜ Element Plus 2.14 ｜ Pinia 4（客户端
 
 ## 前端门禁
 
+> 测试策略 SSOT：[docs/testing-standard.md](./docs/testing-standard.md)（分层职责/不 mock 决策/防漂移闸/非 admin 哨兵）。
+
 ```bash
 pnpm lint        # ESLint（纯检查；修复用 pnpm lint:fix）
 pnpm typecheck   # vue-tsc --noEmit（codegen 类型**部分接线** 4/14——漂移仅接线面报错，与 AGENTS 同口径）
