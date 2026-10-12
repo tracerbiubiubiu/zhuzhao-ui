@@ -87,7 +87,8 @@ overflow-y-auto 仅为兜底——正常页面不该用到它）→ 页面根 .f
 
 | 页面 | 形态 | 状态 |
 |---|---|---|
-| system/user · role · ticket/list · audit/log · task/list · al/data · al/types · system/ticket-type | 列表页（单表/tabs） | ✅ 表格内滚 |
+| system/user · role · ticket/list · audit/log · task/list · al/types · system/ticket-type | 列表页（单表/tabs） | ✅ 表格内滚 |
+| al/data | 双栏列表（类型清单+数据区） | ✅ 左清单右数据各自内滚（2026-10-12 两栏改版，下拉弃用） |
 | system/dict | 双栏列表 | ✅ 双栏等高各自内滚 |
 | MyOrg | 复合页（组织卡+名册） | ✅ 名册内滚、组织卡 flex-none |
 | system/org · menu | 内容页（树） | ✅ 内容区内滚（漏网补齐批 2026-10-08） |
