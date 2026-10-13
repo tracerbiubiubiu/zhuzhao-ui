@@ -10,6 +10,7 @@
 import { reactive, ref, watch } from 'vue'
 import { ElAlert, ElButton, ElCard, ElDatePicker, ElDescriptions, ElDescriptionsItem, ElDialog, ElForm, ElFormItem, ElInput, ElOption, ElPagination, ElSelect, ElTabPane, ElTable, ElTableColumn, ElTabs, ElTag } from 'element-plus'
 import ProTable from '@/components/ProTable/index.vue'
+import UserNameText from '@/components/UserNameText/index.vue'
 import type { ProTableColumn } from '@/components/ProTable/types'
 import { listAuditLogsApi, type AuditLogRow, listPanicsApi, reconcileAuditApi, type PanicRow } from '@/api/audit'
 import { useTableFit } from '@vea/hooks'
@@ -46,7 +47,8 @@ function fetcher(params: { page: number; page_size: number }) {
 
 const columns: ProTableColumn[] = [
   { prop: 'id', label: 'ID', width: 90 },
-  { prop: 'username', label: '操作人', width: 110 },
+  // 操作人快照（000044）：人名(工号)，存量行无快照降级 username（登录账号名）
+  { prop: 'username', label: '操作人', width: 150, slot: 'operator' },
   { prop: 'method', label: '方法', width: 70, align: 'center' },
   { prop: 'path', label: '路径', minWidth: 220 },
   { prop: 'status_code', label: '状态', width: 80, align: 'center', slot: 'status' },
@@ -158,6 +160,13 @@ useTableFit(panicsTable, () => panics.value)
           </el-form>
         </template>
 
+        <template #operator="{ row }">
+          <UserNameText
+            :name="(row as AuditLogRow).real_name"
+            :no="(row as AuditLogRow).employee_no"
+            :fallback="(row as AuditLogRow).username"
+          />
+        </template>
         <template #status="{ row }">
           <el-tag :type="statusTag((row as AuditLogRow).status_code)" size="small">
             {{ (row as AuditLogRow).status_code }}

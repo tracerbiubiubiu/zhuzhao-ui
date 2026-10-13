@@ -29,6 +29,8 @@ export interface paths {
                     end?: string;
                     /** @description 工号 */
                     employee_no?: string;
+                    /** @description HTTP 方法（GET/POST/PUT/DELETE 等） */
+                    method?: string;
                 };
                 header?: never;
                 path?: never;

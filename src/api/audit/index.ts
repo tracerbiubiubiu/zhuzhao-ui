@@ -11,6 +11,9 @@ export interface AuditLogRow {
   id: string
   user_id?: string
   username: string
+  /** 操作人快照（000044）：写入时刻定格；存量行为空 → 展示端降级 username */
+  employee_no?: string
+  real_name?: string
   method: string
   path: string
   status_code: number

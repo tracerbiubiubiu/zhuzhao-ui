@@ -10,7 +10,8 @@ import request from '@vea/request'
 
 /** 工单行（= model.Ticket 的 JSON 投影；assigned_to 可空——创建即未分派；
  * created_by_name/assignee_name 为 W4 后端回填字段（03 S9——real_name 优先/空回退
- * username/软删不回填），缺省时调用方降级显 ID） */
+ * username/软删不回填），缺省时调用方降级显 ID；*_no 为工号消歧独立字段
+ * （2026-10-13 展示统一批），UserNameText 统一渲染「人名(工号)」） */
 export interface TicketRow {
   id: string
   type_code: string
@@ -20,8 +21,10 @@ export interface TicketRow {
   status: string
   created_by: string
   created_by_name?: string
+  created_by_no?: string
   assigned_to?: string
   assignee_name?: string
+  assignee_no?: string
   org_id: string
   org_path: string
   custom_data?: unknown
@@ -245,6 +248,9 @@ export interface TicketCommentRow {
   content: string
   is_internal: boolean
   created_at: string
+  /** 作者回填（2026-10-13 展示统一批）：姓名+工号独立字段，UserNameText 渲染 */
+  created_by_name?: string
+  created_by_no?: string
 }
 
 /** 评论列表（无分页——01 §8-W4：详情页「全部展示+条数上限提示」，勿假设 page/total） */

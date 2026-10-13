@@ -18,6 +18,7 @@ import {
 import { useRoute, useRouter } from 'vue-router'
 import { useQuery } from '@tanstack/vue-query'
 import ProTable from '@/components/ProTable/index.vue'
+import UserNameText from '@/components/UserNameText/index.vue'
 import type { ProTableColumn } from '@/components/ProTable/types'
 import { listTicketTypesApi, listTicketsApi, STATUS_LABEL, TICKET_STATUSES } from '@/api/ticket'
 import { usePermission } from '@/common/auth'
@@ -196,9 +197,10 @@ function typeLabel(code: string): string {
           </el-tag>
         </template>
 
-        <!-- 处理人：W4 后端姓名回填（assignee_name），未分派/回填缺失降级显 ID -->
+        <!-- 处理人：结构化回填（assignee_name + assignee_no，2026-10-13 展示统一批），
+             未分派/回填缺失降级显 ID -->
         <template #assignee="{ row }">
-          {{ row.assignee_name ?? row.assigned_to ?? '—' }}
+          <UserNameText :name="row.assignee_name" :no="row.assignee_no" :fallback="row.assigned_to" />
         </template>
 
         <template #sla_due_at="{ row }">

@@ -15,8 +15,11 @@ const DEVICE = 'e2e-setup-device-01'
 
 const ADMIN_NO = process.env.E2E_ADMIN_EMPLOYEE_NO ?? 'E000001'
 const SEED_PWD = process.env.E2E_ADMIN_SEED_PASSWORD ?? 'admin123'
+// E2E 旧固定口令——2026-10-13 起降级为：登录候选（历史状态迁移）+ mcp 两步轮换过渡值
+// （终态翻转见 main ① 注释；新测试账号口令模式参考 runbook §4）
 const ADMIN_PWD = process.env.E2E_ADMIN_PASSWORD ?? 'E2eAdmin#2609'
-// 验收脚本轮换口令（acceptance-phase1:80 改密先例）——dev 库常处该态，闭环须能收敛
+// admin 唯一终态口令（全生态收敛：后端 acceptance phase1 幂等流 / break-glass CLI 复原值
+// / E2E 本闭环三处同值；dev 栈公开测试凭据，台账=主仓 docs/runbook.md §4）
 const ACCEPTANCE_PWD = process.env.E2E_ADMIN_ACCEPTANCE_PASSWORD ?? 'admin12345'
 
 const OPERATOR = {
@@ -55,21 +58,40 @@ function envFail(where: string, status: number, code: number | undefined, messag
 }
 
 async function main(): Promise<void> {
-  // ── ① admin 凭据闭环（三候选：E2E 固定口令 → 种子 admin123 → 验收轮换 admin12345） ──
-  // 命中非 E2E 口令（无论是否 must_change）一律改密统一到 E2E 固定口令——后续运行零失败尝试
+  // ── ① admin 凭据闭环（2026-10-13 统一口径翻转：终态 = ACCEPTANCE_PWD/admin12345） ──
+  // 此前终态 = E2eAdmin#2609，与后端 acceptance（phase1 幂等流认 admin12345）/
+  // break-glass CLI（复原值 admin12345）结构性互踢——同日内三次互改实证。
+  // 现全生态收敛到唯一终值 admin12345（dev 栈公开测试凭据，台账见主仓 runbook §4）；
+  // E2eAdmin#2609 降级为：登录候选（历史状态迁移）+ mcp=true 时的两步轮换过渡值。
   let adminToken: string | undefined
-  for (const candidate of [ADMIN_PWD, SEED_PWD, ACCEPTANCE_PWD]) {
+  for (const candidate of [ACCEPTANCE_PWD, ADMIN_PWD, SEED_PWD]) {
     const r = await apiLogin(ADMIN_NO, candidate, DEVICE)
     const pair = r.env?.data
     if (r.status === 200 && r.env?.code === 0 && pair?.access_token) {
-      if (candidate === ADMIN_PWD && !pair.must_change_password) {
-        adminToken = pair.access_token // 已是终态（重放的常态路径）
+      if (candidate === ACCEPTANCE_PWD && !pair.must_change_password) {
+        adminToken = pair.access_token // 已是统一终态（重放的常态路径，零改密）
+      } else if (candidate === ACCEPTANCE_PWD && pair.must_change_password) {
+        // 已在终值但带强制改密标记（break-glass 直改后未轮换）——同值改密被
+        // B2-2 拒，两步过：先到 E2eAdmin#2609 过渡，再回终值
+        const tmp = await api<TokenPair>('/api/v1/auth/password/update', {
+          method: 'POST',
+          token: pair.access_token,
+          body: { old_password: ACCEPTANCE_PWD, new_password: ADMIN_PWD, device_id: DEVICE },
+        })
+        const tmpToken = tmp.env?.data?.access_token
+        if (!tmpToken) throw new Error('admin 两步轮换第一步失败（终值→过渡值）')
+        const back = await api<TokenPair>('/api/v1/auth/password/update', {
+          method: 'POST',
+          token: tmpToken,
+          body: { old_password: ADMIN_PWD, new_password: ACCEPTANCE_PWD, device_id: DEVICE },
+        })
+        if (back.env?.code === 0) adminToken = back.env.data?.access_token
       } else {
-        // 首跑（种子强制改密）或口令漂移（验收态/他改）→ 统一到 E2E 固定口令
+        // 首跑（种子强制改密）或口令漂移（E2E 旧口令/验收态/他改）→ 统一到终值
         const upd = await api<TokenPair>('/api/v1/auth/password/update', {
           method: 'POST',
           token: pair.access_token,
-          body: { old_password: candidate, new_password: ADMIN_PWD, device_id: DEVICE },
+          body: { old_password: candidate, new_password: ACCEPTANCE_PWD, device_id: DEVICE },
         })
         if (upd.env?.code === 0) adminToken = upd.env.data?.access_token
       }
@@ -78,9 +100,10 @@ async function main(): Promise<void> {
   }
   if (!adminToken) {
     throw new Error(
-      `admin 登录闭环失败（E2E 固定口令与种子口令均不可用）。` +
+      `admin 登录闭环失败（终值 admin12345 / E2E 旧口令 / 种子口令均不可用）。` +
         `检查：① 后端已起（主仓 INTERNAL_JOBS_SK=xxx make dev，dev 栈 scripts/dev-stack.sh up）` +
-        `② 若 admin 口令已被改为其他值，用 E2E_ADMIN_PASSWORD 覆盖`,
+        `② 若 admin 口令已被改为未知他值，主仓 break-glass CLI 复原：` +
+        `printf 'admin12345\\n' | go run ./cmd/server reset-password --username admin --password-stdin --yes（runbook §1）`,
     )
   }
 
@@ -177,7 +200,7 @@ async function main(): Promise<void> {
   if (reset.env?.code !== 0) envFail('POST /users/password/reset(S1)', reset.status, reset.env?.code, reset.env?.message)
 
   writeFileSync(STATE_FILE, JSON.stringify({
-    admin: { employeeNo: ADMIN_NO, password: ADMIN_PWD },
+    admin: { employeeNo: ADMIN_NO, password: ACCEPTANCE_PWD }, // 终态=统一口令（specs 登录用）
     operator: { employeeNo: OPERATOR.employeeNo, password: OPERATOR.password },
     viewer: { employeeNo: VIEWER.employeeNo, password: VIEWER.password },
     s1: { employeeNo: S1.employeeNo, password: S1.password, newPassword: S1.newPassword },

@@ -86,7 +86,7 @@
 
         <div class="form-foot">
           <span class="env-badge" :class="{ 'env-badge--prod': isProd }">{{ envLabel }}</span>
-          <span class="foot-copy">工单 · 名单 · 任务一体化控制台</span>
+          <span class="foot-copy">工单 · 活动列表 · 任务一体化控制台</span>
         </div>
         <div v-if="!isProd" class="form-hint">
           测试账号：superadmin E000001 · operator E2E9020 · viewer E2E9030（口令见 globalSetup）

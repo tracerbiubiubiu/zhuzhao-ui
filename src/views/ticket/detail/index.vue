@@ -25,6 +25,7 @@ import {
   getTicketRelationsApi, listTicketTypesApi, STATUS_LABEL, updateTicketApi,
 } from '@/api/ticket'
 import { useUserStoreWithOut } from '@/store/modules/user'
+import UserNameText from '@/components/UserNameText/index.vue'
 
 // keep-alive 契约：name=静态路由名（参数路由——同工单不同 ID 依赖 :key 路由 fullPath 分实例）
 defineOptions({ name: 'TicketDetail' })
@@ -291,9 +292,11 @@ async function submitRelation() {
         </el-descriptions-item>
         <el-descriptions-item label="创建时间">{{ formatTime(ticket?.created_at) }}</el-descriptions-item>
         <el-descriptions-item label="更新时间">{{ formatTime(ticket?.updated_at) }}</el-descriptions-item>
+        <el-descriptions-item label="创建人">
+          <UserNameText :name="ticket?.created_by_name" :no="ticket?.created_by_no" :fallback="ticket?.created_by" />
+        </el-descriptions-item>
         <el-descriptions-item label="处理人">
-          <!-- W4 后端姓名回填：assignee_name 优先，回填缺失降级显裸 ID -->
-          {{ ticket?.assignee_name ?? ticket?.assigned_to ?? '未分派' }}
+          <UserNameText :name="ticket?.assignee_name" :no="ticket?.assignee_no" :fallback="ticket?.assigned_to ?? '未分派'" />
         </el-descriptions-item>
       </el-descriptions>
 
@@ -327,7 +330,7 @@ async function submitRelation() {
       <div class="space-y-3 mb-4">
         <div v-for="c in commentsQuery.data.value ?? []" :key="c.id" class="border rounded p-3">
           <div class="flex items-center gap-2 mb-1">
-            <span class="text-xs text-gray-500">用户 #{{ c.user_id }}</span>
+            <UserNameText class="text-xs" :name="c.created_by_name" :no="c.created_by_no" :fallback="`用户 #${c.user_id}`" />
             <el-tag v-if="c.is_internal" size="small" type="warning">内部备注</el-tag>
             <span class="text-xs text-gray-400">{{ formatTime(c.created_at) }}</span>
           </div>
