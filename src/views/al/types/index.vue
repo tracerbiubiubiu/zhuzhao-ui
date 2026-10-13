@@ -27,6 +27,18 @@ defineOptions({ name: 'al_types' })
 const queryClient = useQueryClient()
 const typesQuery = useQuery({ queryKey: ['al', 'types'], queryFn: listAlTypesApi })
 const rows = computed(() => typesQuery.data.value?.list ?? [])
+// 类型清单客户端筛选（筛选规范：关键字匹配类型名 + 状态过滤；即时生效）
+const typeFilter = ref('')
+const typeStatusFilter = ref<'' | 'active' | 'deprecated'>('')
+const filteredRows = computed(() =>
+  rows.value.filter((t) => {
+    const kw = typeFilter.value.trim().toLowerCase()
+    if (kw && !t.type_name.toLowerCase().includes(kw)) return false
+    if (typeStatusFilter.value === 'active' && t.status !== 'active') return false
+    if (typeStatusFilter.value === 'deprecated' && t.status !== 'deprecated') return false
+    return true
+  }),
+)
 
 function refresh() {
   queryClient.invalidateQueries({ queryKey: ['al', 'types'] })
@@ -174,8 +186,16 @@ useTableFit(typesTable, () => rows.value)
         </div>
       </template>
 
+      <div class="mb-2 flex items-center gap-2 flex-none">
+        <el-input v-model="typeFilter" placeholder="按类型名过滤" clearable size="small" class="!w-[200px]" />
+        <el-select v-model="typeStatusFilter" placeholder="全部状态" clearable size="small" class="!w-[110px]">
+          <el-option label="使用中" value="active" />
+          <el-option label="已废弃" value="deprecated" />
+        </el-select>
+        <span class="text-xs text-gray-400">筛选即时生效</span>
+      </div>
       <div class="min-h-0 flex-initial">
-        <el-table ref="typesTable" :data="rows" v-loading="typesQuery.isLoading.value" row-key="type_name" height="100%">
+        <el-table ref="typesTable" :data="filteredRows" v-loading="typesQuery.isLoading.value" row-key="type_name" height="100%">
         <el-table-column prop="type_name" label="类型名" min-width="160" />
         <el-table-column label="状态" width="100" align="center">
           <template #default="{ row }">

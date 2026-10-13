@@ -44,6 +44,18 @@ const FIELD_TYPES: Array<{ value: TicketTypeFieldInput['field_type']; label: str
 
 // ─── 类型 Tab ───
 const typesQuery = useQuery({ queryKey: ['ticket', 'types'], queryFn: listTicketTypesApi })
+// 类型 Tab 客户端筛选（筛选规范：数据一次拉全量→前端过滤；关键字匹配名称/编码）
+const typeFilter = ref('')
+const typeStatusFilter = ref<'' | 'on' | 'off'>('')
+const filteredTicketTypes = computed(() =>
+  ((typesQuery.data.value ?? []) as TicketTypeFullRow[]).filter((t) => {
+    const kw = typeFilter.value.trim().toLowerCase()
+    if (kw && !t.name.toLowerCase().includes(kw) && !t.code.toLowerCase().includes(kw)) return false
+    if (typeStatusFilter.value === 'on' && !t.is_active) return false
+    if (typeStatusFilter.value === 'off' && t.is_active) return false
+    return true
+  }),
+)
 const typeColumns = [
   { prop: 'code', label: '编码', width: 160 },
   { prop: 'name', label: '名称', minWidth: 140 },
@@ -370,11 +382,17 @@ useTableFit(tplTable, () => templatesQuery.data.value)
     <el-card shadow="never">
       <el-tabs class="fill-tabs">
         <el-tab-pane label="工单类型">
-          <div class="mb-2 flex-none">
+          <div class="mb-2 flex-none flex items-center gap-2">
+            <el-input v-model="typeFilter" placeholder="按名称/编码过滤" clearable size="small" class="!w-[200px]" />
+            <el-select v-model="typeStatusFilter" placeholder="全部状态" clearable size="small" class="!w-[110px]">
+              <el-option label="启用" value="on" />
+              <el-option label="停用" value="off" />
+            </el-select>
+            <span class="text-xs text-gray-400">筛选即时生效</span>
             <el-button v-permission="'ticket:type:manage'" type="primary" @click="openTypeCreate">新建类型</el-button>
           </div>
           <div class="min-h-0 flex-initial">
-          <el-table ref="ttTable" v-loading="typesQuery.isLoading.value" :data="typesQuery.data.value ?? []" row-key="id" stripe height="100%">
+          <el-table ref="ttTable" v-loading="typesQuery.isLoading.value" :data="filteredTicketTypes" row-key="id" stripe height="100%">
             <el-table-column v-for="col in typeColumns" :key="col.prop" :prop="col.prop" :label="col.label" :width="col.width" :min-width="col.minWidth" :align="col.align">
               <template #default="{ row }">
                 <template v-if="col.prop === 'has_custom_fields'">
