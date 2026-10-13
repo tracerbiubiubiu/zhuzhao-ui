@@ -8,7 +8,7 @@
 |---|---|---|---|
 | 静态三闸 | TS strict + eslint + **扫描闸**（`src/epImports.test.ts` 三用例：el-* 导入完整性 / 字符串 prefix-icon / el-table 漏挂 useTableFit） | "静态门禁全绿但运行时静默失效"类缺陷（模板缺 import=分页器隐形、漏挂=列宽不随容器重排） | 逻辑错误、运行时权限问题 |
 | 单测契约闸 | Vitest（请求层单飞刷新/动态路由解析/viewNames 种子派生/cursorPager/errorToast 等） | 关键契约的漂移（后端种子改了前端没跟、并发竞态回归） | 纯道具式断言（禁止为覆盖率写无语义用例） |
-| E2E 真栈 | Playwright（S1–S8/S10/S12/S16/FE3/FE4/W4·W5/P4 穿插池） | 场景级回归（登录/改密/CRUD/跨用户会话/角色边界），断言真数据级 | 布局审美细节（人眼/探针）、非可达路径 |
+| E2E 真栈 | Playwright（S1–S8/S10/S12/S16/FE3·FE4/W4·W5/P4 穿插池） | 场景级回归（登录/改密/CRUD/跨用户会话/角色边界），断言真数据级 | 布局审美细节（人眼/探针）、非可达路径 |
 | FE4 哨兵 | `e2e/fe4-nonadmin-hygiene.spec.ts` | operator/viewer 双角色可达路由遍历——**零 4xx/5xx API 响应 + 零「无权限/内部错误」toast** | 管理面（admin 专属，FE3 覆盖 404 边界） |
 
 职责铁律：**每层只拦自己那类**——用 E2E 验布局、用单测验场景、为覆盖率写无语义用例，都是反模式。
