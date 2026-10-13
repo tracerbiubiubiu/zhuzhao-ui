@@ -9,6 +9,9 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 # 缺失则容器内 --frozen-lockfile 报 ERR_PNPM_IGNORED_BUILDS（与 CI run 36430052551 同款）
 RUN pnpm install --frozen-lockfile
 COPY . .
+# 环境徽标构建参数（Login 页 env-badge）——默认生产环境；测试栈 compose 注入「测试环境」
+ARG VITE_APP_ENV=生产环境
+ENV VITE_APP_ENV=$VITE_APP_ENV
 RUN pnpm build
 
 FROM nginx:1.27-alpine

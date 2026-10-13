@@ -10,11 +10,11 @@
   const { t } = useI18n()
 
   // 环境徽标 + 测试账号提示（生产环境不显示账号提示——防凭据外泄）
-  const ENV_LABELS: Record<string, string> = {
-    base: '开发环境', development: '开发环境', test: '测试环境', pro: '生产环境',
-  }
-  const envLabel = ENV_LABELS[import.meta.env.MODE] ?? import.meta.env.MODE
-  const isProd = import.meta.env.MODE === 'pro'
+  // 标签优先取 VITE_APP_ENV（构建参数注入——docker 测试栈 ui=「测试环境」，MODE 推断会误标生产）
+  const envLabel =
+    (import.meta.env.VITE_APP_ENV as string | undefined) ??
+    ({ base: '开发环境', development: '开发环境', test: '测试环境', pro: '生产环境' }[import.meta.env.MODE] ?? import.meta.env.MODE)
+  const isProd = envLabel === '生产环境'
 </script>
 
 <template>
