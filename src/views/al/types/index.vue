@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * 名单类型管理（P4-W5——al_types 菜单页，activelist:type:read 可见/管理操作挂 type:manage）
+ * 活动类型管理（P4-W5；2026-10-13 菜单改「活动类型」——al_types 菜单页，activelist:type:read 可见/管理操作挂 type:manage）
  *
  * - 类型列表全量小列表（{list,total} 无分页）；注册/演进共用字段行编辑器（四类型枚举封闭）
  * - 演进带 version 乐观锁（10006 冲突→提示重拉）；破坏性变更服务端放行（旧数据懒执行）——
@@ -181,7 +181,7 @@ useTableFit(typesTable, () => rows.value)
     <el-card shadow="never">
       <template #header>
         <div class="flex items-center justify-between">
-          <span class="font-semibold">名单类型</span>
+          <span class="font-semibold">活动类型</span>
           <el-button v-permission="'activelist:type:manage'" type="primary" @click="openCreate">注册类型</el-button>
         </div>
       </template>

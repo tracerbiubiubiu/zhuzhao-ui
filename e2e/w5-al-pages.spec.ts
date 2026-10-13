@@ -38,8 +38,8 @@ test('W5 冒烟：al 类型注册/数据写入/cursor 分页/软删恢复', asyn
   try {
     await uiLogin(page, state.admin.employeeNo, state.admin.password)
     // al 页是动态菜单路由：等菜单加载+动态路由注册完成（uiLogin 点完即返——静态路由 spec
-    // 无感，动态路由竞态会弹回登录）。「名单类型」是折叠子菜单（hidden）——等父级项
-    await expect(page.getByRole('menuitem', { name: '名单管理' })).toBeVisible({ timeout: 15_000 })
+    // 无感，动态路由竞态会弹回登录）。「活动类型」是折叠子菜单（hidden）——等父级项
+    await expect(page.getByRole('menuitem', { name: '活动列表' })).toBeVisible({ timeout: 15_000 })
 
     // ── types 页：造的类型行可见 ──
     await page.goto('/#/al/types')
@@ -116,7 +116,7 @@ test('活动列表：废弃类型只读视图（分组可选/写入隐藏/导出
   expect(dep.env!.code).toBe(0)
 
   await uiLogin(page, state.admin.employeeNo, state.admin.password)
-  await expect(page.getByRole('menuitem', { name: '名单管理' })).toBeVisible({ timeout: 15_000 })
+  await expect(page.getByRole('menuitem', { name: '活动列表' })).toBeVisible({ timeout: 15_000 })
   await page.goto('/#/al/data')
   await page.getByPlaceholder('搜索类型').fill(typeName)
   await page.locator('.al-type-item').filter({ hasText: typeName }).click()

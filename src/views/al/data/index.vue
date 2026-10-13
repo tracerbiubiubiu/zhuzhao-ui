@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * 活动列表（P4-W5——al_data 菜单页，activelist:data:read 可见/写操作挂 data:write；2026-10-08 由「名单数据」改名）
+ * 活动列表（P4-W5——al_data 菜单页，activelist:data:read 可见/写操作挂 data:write；2026-10-08 由「名单数据」改名；2026-10-13 菜单改「活动数据」（顶级「活动列表」命名批））
  *
  * - 列由所选类型的 schema 驱动（字段四类型：int/string/int_list/string_list）——
  *   动态列表格+动态表单，sensitive 字段原样显示（脱敏属日志侧语义）
@@ -341,7 +341,7 @@ useTableFit(dataTable, () => list.value)
       <!-- 左：类型清单（分组+搜索；点击切换——取代下拉，类型全集与废弃态一眼可见） -->
       <el-card shadow="never" class="w-[240px] al-pane al-pane--left">
         <template #header>
-          <span class="font-semibold">活动列表类型</span>
+          <span class="font-semibold">活动类型</span>
         </template>
         <el-input v-model="typeFilter" placeholder="搜索类型" clearable size="small" class="mb-2" />
         <div class="al-type-list">
@@ -376,7 +376,7 @@ useTableFit(dataTable, () => list.value)
       <el-card shadow="never" class="flex-1 al-pane al-pane--right">
         <template #header>
           <div class="flex items-center justify-between">
-            <span class="font-semibold">{{ selectedType || '活动列表' }}</span>
+            <span class="font-semibold">{{ selectedType || '活动数据' }}</span>
             <div v-if="selectedType">
               <!-- 废弃类型只读：写入/导入随 409 门同步隐藏；导出（存档）保留 -->
               <el-button v-if="!isDeprecated" v-permission="'activelist:data:write'" type="primary" size="small" @click="openCreate">写入</el-button>
@@ -389,7 +389,7 @@ useTableFit(dataTable, () => list.value)
         <!-- 空态引导：无类型 → 去注册；有类型未选 → 选择提示 -->
         <el-empty
           v-if="!typesQuery.isLoading.value && !allTypes.length"
-          description="暂无活动列表类型——请先在「名单类型」页注册"
+          description="暂无活动类型——请先在「活动类型」页注册"
         >
           <el-button type="primary" @click="router.push('/al/types')">去注册类型</el-button>
         </el-empty>
