@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/tracerbiubiubiu/zhuzhao-ui/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/tracerbiubiubiu/zhuzhao-ui/actions/workflows/ci.yml?query=branch%3Amain)
 
-zhuzhao（Go 模块化单体 IAM + 工单系统）的前端控制台。**全部页面唯一家**（单仓单 SPA）：system（用户/角色/菜单/组织）、ticket（工单）、task（任务管理）、al（名单，走网关反代 `/al/api/v1`）、audit（审计）。
+zhuzhao（Go 模块化单体 IAM + 工单系统）的前端控制台。**全部页面唯一家**（单仓单 SPA）：system（用户/角色/菜单/组织）、ticket（工单）、task（任务管理）、al（活动列表，走网关反代 `/al/api/v1`）、audit（审计）。
 
 ## 状态
 
