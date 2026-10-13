@@ -46,6 +46,11 @@ const filteredTypes = computed(() => {
 })
 const activeFiltered = computed(() => filteredTypes.value.filter((t) => t.status === 'active'))
 const deprecatedFiltered = computed(() => filteredTypes.value.filter((t) => t.status === 'deprecated'))
+// 分组折叠：已废弃默认收起（E2E 累积类型多——藏噪音）；搜索时强制展开命中分组
+const activeOpen = ref(true)
+const deprecatedOpen = ref(false)
+const activeOpenEff = computed(() => activeOpen.value || !!typeFilter.value.trim())
+const deprecatedOpenEff = computed(() => deprecatedOpen.value || !!typeFilter.value.trim())
 const selectedType = ref('')
 const selectedDef = computed(() => allTypes.value.find((t) => t.type_name === selectedType.value))
 const isDeprecated = computed(() => selectedDef.value?.status === 'deprecated')
@@ -346,26 +351,42 @@ useTableFit(dataTable, () => list.value)
         <el-input v-model="typeFilter" placeholder="搜索类型" clearable size="small" class="mb-2" />
         <div class="al-type-list">
           <template v-if="!typesQuery.isLoading.value && filteredTypes.length">
-            <div class="al-type-group">使用中</div>
             <div
-              v-for="t in activeFiltered" :key="t.type_name"
-              class="al-type-item" :class="{ 'al-type-item--active': selectedType === t.type_name }"
-              @click="selectedType = t.type_name"
+              class="al-type-group al-type-group--toggle"
+              @click="activeOpen = !activeOpen"
             >
-              <span class="al-type-name">{{ t.type_name }}</span>
-              <span class="al-type-meta">{{ t.fields.length }} 字段</span>
+              <span>使用中（{{ activeFiltered.length }}）</span>
+              <span class="al-type-chevron" :class="{ open: activeOpenEff }">▾</span>
             </div>
-            <template v-if="deprecatedFiltered.length">
-              <div class="al-type-group mt-2">已废弃（只读）</div>
+            <template v-if="activeOpenEff">
               <div
-                v-for="t in deprecatedFiltered" :key="t.type_name"
+                v-for="t in activeFiltered" :key="t.type_name"
                 class="al-type-item" :class="{ 'al-type-item--active': selectedType === t.type_name }"
-                :title="`${t.type_name}（已废弃，只读）`"
                 @click="selectedType = t.type_name"
               >
                 <span class="al-type-name">{{ t.type_name }}</span>
-                <el-tag size="small" type="info">废</el-tag>
+                <span class="al-type-meta">{{ t.fields.length }} 字段</span>
               </div>
+            </template>
+            <template v-if="deprecatedFiltered.length">
+              <div
+                class="al-type-group al-type-group--toggle mt-2"
+                @click="deprecatedOpen = !deprecatedOpen"
+              >
+                <span>已废弃（只读）</span>
+                <span class="al-type-chevron" :class="{ open: deprecatedOpenEff }">▾</span>
+              </div>
+              <template v-if="deprecatedOpenEff">
+                <div
+                  v-for="t in deprecatedFiltered" :key="t.type_name"
+                  class="al-type-item" :class="{ 'al-type-item--active': selectedType === t.type_name }"
+                  :title="`${t.type_name}（已废弃，只读）`"
+                  @click="selectedType = t.type_name"
+                >
+                  <span class="al-type-name">{{ t.type_name }}</span>
+                  <el-tag size="small" type="info">废</el-tag>
+                </div>
+              </template>
             </template>
           </template>
           <div v-else-if="!typesQuery.isLoading.value" class="text-xs text-gray-400 px-1">无匹配类型</div>
@@ -572,6 +593,27 @@ useTableFit(dataTable, () => list.value)
   padding: 2px 4px;
   font-size: 12px;
   color: var(--el-text-color-secondary);
+}
+.al-type-group--toggle {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 6px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--el-text-color-primary);
+}
+.al-type-group--toggle:hover {
+  background: var(--el-fill-color-light);
+}
+.al-type-chevron {
+  transition: transform 160ms ease;
+  color: var(--el-text-color-secondary);
+}
+.al-type-chevron.open {
+  transform: rotate(180deg);
 }
 .al-type-item {
   display: flex;
