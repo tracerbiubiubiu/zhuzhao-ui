@@ -8,7 +8,7 @@
  * - P4-8 对账/指标极简查询页：后端本体未开工（穿插池件），本页不含——随本体批交付
  */
 import { reactive, ref, watch } from 'vue'
-import { ElAlert, ElButton, ElCard, ElDatePicker, ElDialog, ElForm, ElFormItem, ElInput, ElPagination, ElTabPane, ElTable, ElTableColumn, ElTabs, ElTag } from 'element-plus'
+import { ElAlert, ElButton, ElCard, ElDatePicker, ElDescriptions, ElDescriptionsItem, ElDialog, ElForm, ElFormItem, ElInput, ElOption, ElPagination, ElSelect, ElTabPane, ElTable, ElTableColumn, ElTabs, ElTag } from 'element-plus'
 import ProTable from '@/components/ProTable/index.vue'
 import type { ProTableColumn } from '@/components/ProTable/types'
 import { listAuditLogsApi, type AuditLogRow, listPanicsApi, reconcileAuditApi, type PanicRow } from '@/api/audit'
@@ -18,7 +18,7 @@ import { useTableFit } from '@vea/hooks'
 defineOptions({ name: 'audit_log_page' })
 
 const tableRef = ref<InstanceType<typeof ProTable>>()
-const search = reactive({ employee_no: '', path: '', range: [] as string[] })
+const search = reactive({ employee_no: '', path: '', method: '', range: [] as string[] })
 
 function onSearch() {
   tableRef.value?.refresh({ resetPage: true })
@@ -27,6 +27,7 @@ function onSearch() {
 function onReset() {
   search.employee_no = ''
   search.path = ''
+  search.method = ''
   search.range = []
   tableRef.value?.refresh({ resetPage: true })
 }
@@ -37,6 +38,7 @@ function fetcher(params: { page: number; page_size: number }) {
     page_size: params.page_size,
     ...(search.employee_no ? { employee_no: search.employee_no.trim() } : {}),
     ...(search.path ? { path: search.path.trim() } : {}),
+    ...(search.method ? { method: search.method } : {}),
     ...(search.range?.[0] ? { start: String(search.range[0]) } : {}),
     ...(search.range?.[1] ? { end: String(search.range[1]) } : {}),
   })
@@ -135,6 +137,11 @@ useTableFit(panicsTable, () => panics.value)
             <el-form-item label="工号">
               <el-input v-model="search.employee_no" placeholder="如 E000001（含已删用户）" clearable class="!w-44" />
             </el-form-item>
+            <el-form-item label="方法">
+              <el-select v-model="search.method" placeholder="全部" clearable class="!w-[110px]">
+                <el-option v-for="m in ['GET', 'POST', 'PUT', 'DELETE', 'PATCH']" :key="m" :label="m" :value="m" />
+              </el-select>
+            </el-form-item>
             <el-form-item label="路径">
               <el-input v-model="search.path" placeholder="如 /api/v1/users" clearable class="!w-52" />
             </el-form-item>
@@ -158,7 +165,7 @@ useTableFit(panicsTable, () => panics.value)
         </template>
         <template #time="{ row }">{{ formatTime((row as AuditLogRow).created_at) }}</template>
         <template #actions="{ row }">
-          <el-button link type="primary" size="small" @click="openPayload(row as AuditLogRow)">载荷</el-button>
+          <el-button link type="primary" size="small" @click="openPayload(row as AuditLogRow)">详情</el-button>
         </template>
       </ProTable>
     </el-card>
@@ -215,12 +222,24 @@ useTableFit(panicsTable, () => panics.value)
     </el-tabs>
 
     <!-- 审计载荷（request_body JSON 美化——溯源） -->
-    <el-dialog v-model="payloadVisible" :title="`#${payloadRow?.id ?? ''} 载荷`" width="640px">
-      <div v-if="payloadRow">
-        <div class="text-xs text-gray-400 mb-1">{{ payloadRow.method }} {{ payloadRow.path }}</div>
-        <div class="text-xs text-gray-400 mb-3">UA：{{ payloadRow.user_agent || '—' }}</div>
-        <pre class="whitespace-pre-wrap text-xs bg-gray-50 dark:bg-gray-800 p-3 rounded max-h-[420px] overflow-auto">{{ prettyBody(payloadRow) }}</pre>
-      </div>
+    <!-- 请求详情：审计上下文全字段 + 请求体（载荷溯源）——2026-10-12 由「载荷」弹窗升级 -->
+    <el-dialog v-model="payloadVisible" :title="`#${payloadRow?.id ?? ''} 请求详情`" width="640px">
+      <el-descriptions v-if="payloadRow" :column="2" border size="small">
+        <el-descriptions-item label="操作人">{{ payloadRow.username || '—' }}</el-descriptions-item>
+        <el-descriptions-item label="时间">{{ formatTime(payloadRow.created_at) }}</el-descriptions-item>
+        <el-descriptions-item label="方法">{{ payloadRow.method }}</el-descriptions-item>
+        <el-descriptions-item label="状态码">
+          <el-tag :type="statusTag(payloadRow.status_code)" size="small">{{ payloadRow.status_code }}</el-tag>
+        </el-descriptions-item>
+        <el-descriptions-item label="路径" :span="2">{{ payloadRow.path }}</el-descriptions-item>
+        <el-descriptions-item label="耗时">{{ payloadRow.duration }} ms</el-descriptions-item>
+        <el-descriptions-item label="IP">{{ payloadRow.ip || '—' }}</el-descriptions-item>
+        <el-descriptions-item label="request_id" :span="2">{{ payloadRow.request_id || '—' }}</el-descriptions-item>
+        <el-descriptions-item label="User-Agent" :span="2">{{ payloadRow.user_agent || '—' }}</el-descriptions-item>
+        <el-descriptions-item label="请求体" :span="2">
+          <pre class="whitespace-pre-wrap text-xs bg-gray-50 dark:bg-gray-800 p-3 rounded max-h-[280px] overflow-auto m-0">{{ prettyBody(payloadRow) }}</pre>
+        </el-descriptions-item>
+      </el-descriptions>
     </el-dialog>
   </div>
 </template>

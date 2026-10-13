@@ -9,6 +9,7 @@
  */
 
 import { ref, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElCard, ElCol, ElRow, ElTable, ElTableColumn, ElTag, ElEmpty } from 'element-plus'
 import { listTicketsApi } from '@/api/ticket'
 import { useTableFit } from '@vea/hooks'
@@ -95,6 +96,16 @@ function formatTime(iso?: string): string {
 
 const homeTable = ref()
 useTableFit(homeTable, () => recent.value)
+
+const router = useRouter()
+/** 统计卡点击 → 工单列表按该口径过滤（URL 参数预填，ticket/list 白名单键） */
+function goTickets(query: Record<string, string>) {
+  router.push({ path: '/tickets', query })
+}
+/** 最近工单行 → 工单详情 */
+function goDetail(id: number | string) {
+  router.push(`/tickets/${id}`)
+}
 </script>
 
 <template>
@@ -102,7 +113,7 @@ useTableFit(homeTable, () => recent.value)
     <div class="min-h-0 flex-1 overflow-y-auto">
     <el-row :gutter="16" class="mb-4">
       <el-col v-for="card in statusCardDefs" :key="card.key" :span="6">
-        <el-card shadow="hover" class="cursor-pointer">
+        <el-card shadow="hover" class="cursor-pointer" @click="goTickets({ status: card.key })">
           <div class="flex items-center justify-between">
             <div>
               <div class="text-2xl font-bold" :style="{ color: card.color }">
@@ -119,7 +130,7 @@ useTableFit(homeTable, () => recent.value)
     <!-- 我的待办/已办（W4 P1-c assignee=me 点亮） -->
     <el-row :gutter="16" class="mb-4">
       <el-col :span="12">
-        <el-card shadow="hover">
+        <el-card shadow="hover" class="cursor-pointer" @click="goTickets({ assignee: 'me' })">
           <div class="flex items-center justify-between">
             <div>
               <div class="text-2xl font-bold" style="color: var(--el-color-danger)">
@@ -132,7 +143,7 @@ useTableFit(homeTable, () => recent.value)
         </el-card>
       </el-col>
       <el-col :span="12">
-        <el-card shadow="hover">
+        <el-card shadow="hover" class="cursor-pointer" @click="goTickets({ assignee: 'me', status: 'closed' })">
           <div class="flex items-center justify-between">
             <div>
               <div class="text-2xl font-bold" style="color: var(--el-color-success)">
@@ -150,7 +161,7 @@ useTableFit(homeTable, () => recent.value)
       <template #header>
         <span class="font-semibold">最近工单</span>
       </template>
-      <el-table ref="homeTable" v-if="recent.length" :data="recent" stripe size="default">
+      <el-table ref="homeTable" v-if="recent.length" :data="recent" stripe size="default" row-class-name="home-recent-row" @row-click="(row: { id: number | string }) => goDetail(row.id)">
         <el-table-column prop="id" label="ID" width="80" />
         <el-table-column prop="title" label="标题" min-width="200" show-overflow-tooltip />
         <el-table-column label="状态" width="100" align="center">
@@ -174,3 +185,10 @@ useTableFit(homeTable, () => recent.value)
     </div>
   </div>
 </template>
+
+<style scoped>
+/* 最近工单行可点进详情 */
+:deep(.home-recent-row) {
+  cursor: pointer;
+}
+</style>

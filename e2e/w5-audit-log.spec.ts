@@ -11,7 +11,7 @@ import { uiLogin } from './ui'
 
 test.setTimeout(90_000)
 
-test('W5 冒烟：审计日志页渲染+工号过滤+载荷弹窗', async ({ page }) => {
+test('W5 冒烟：审计日志页渲染+工号过滤+请求详情弹窗', async ({ page }) => {
   const state = loadState()
   await uiLogin(page, state.admin.employeeNo, state.admin.password)
   await expect(page.getByRole('menuitem', { name: '审计日志' })).toBeVisible({ timeout: 15_000 })
@@ -29,10 +29,10 @@ test('W5 冒烟：审计日志页渲染+工号过滤+载荷弹窗', async ({ pag
   const count = await rows.count()
   expect(count).toBeGreaterThan(0)
 
-  // 载荷弹窗打开（request_body JSON 美化区）——内容级断言（2026-10-02 加固）：
-  // pre 必须非空（'（无 body）' 占位亦算——空 pre=弹层渲染坏也绿的原假绿面）
-  await rows.first().getByRole('button', { name: '载荷' }).click()
-  const dlg = page.locator('.el-dialog').filter({ hasText: '载荷' })
+  // 请求详情弹窗（2026-10-12 由「载荷」升级：descriptions 全上下文 + request_body 美化区）
+  // ——内容级断言延续（2026-10-02 加固）：pre 必须非空（'（无 body）' 占位亦算）
+  await rows.first().getByRole('button', { name: '详情' }).click()
+  const dlg = page.locator('.el-dialog').filter({ hasText: '请求详情' })
   await expect(dlg).toBeVisible()
   const preText = await dlg.locator('pre').innerText({ timeout: 10_000 })
   expect(preText.trim().length, '载荷 pre 内容为空——美化区未渲染').toBeGreaterThan(0)

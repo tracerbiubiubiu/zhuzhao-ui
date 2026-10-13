@@ -15,7 +15,7 @@ import {
   ElButton, ElCard, ElCheckbox, ElDatePicker, ElForm, ElFormItem, ElInput, ElLink,
   ElOption, ElSelect, ElTag,
 } from 'element-plus'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useQuery } from '@tanstack/vue-query'
 import ProTable from '@/components/ProTable/index.vue'
 import type { ProTableColumn } from '@/components/ProTable/types'
@@ -39,6 +39,18 @@ const search = reactive({
   mineHandle: false, // assignee=me（仅字面量 me，后端解析为当前用户）
   mineCreated: false, // created_by=me
 })
+
+// URL 参数预填（首页统计卡/外部入口跳转——FE4 配套基础设施）：白名单键，非法值忽略。
+// 支持 status/assignee=me/keyword/type_code。
+{
+  const q = useRoute().query
+  if (typeof q.status === 'string' && q.status) search.status = q.status
+  if (q.assignee === 'me') search.mineHandle = true
+  if (q.created_by === 'me') search.mineCreated = true
+  if (typeof q.keyword === 'string' && q.keyword) search.keyword = q.keyword
+  if (typeof q.type_code === 'string' && q.type_code) search.type_code = q.type_code
+}
+
 /** 创建日期范围 [from, to]（YYYY-MM-DD，value-format 对齐端点 UTC 切日口径） */
 const dateRange = ref<[string, string] | null>(null)
 
