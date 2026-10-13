@@ -8,6 +8,13 @@
 
   const appStore = useAppStore()
   const { t } = useI18n()
+
+  // 环境徽标 + 测试账号提示（生产环境不显示账号提示——防凭据外泄）
+  const ENV_LABELS: Record<string, string> = {
+    base: '开发环境', development: '开发环境', test: '测试环境', pro: '生产环境',
+  }
+  const envLabel = ENV_LABELS[import.meta.env.MODE] ?? import.meta.env.MODE
+  const isProd = import.meta.env.MODE === 'pro'
 </script>
 
 <template>
@@ -71,9 +78,19 @@
 
     <section class="form-stage">
       <div class="form-card">
-        <Transition name="form-swap" mode="out-in">
-          <LoginForm key="login" />
-        </Transition>
+        <div class="form-card-main">
+          <Transition name="form-swap" mode="out-in">
+            <LoginForm key="login" />
+          </Transition>
+        </div>
+
+        <div class="form-foot">
+          <span class="env-badge" :class="{ 'env-badge--prod': isProd }">{{ envLabel }}</span>
+          <span class="foot-copy">工单 · 名单 · 任务一体化控制台</span>
+        </div>
+        <div v-if="!isProd" class="form-hint">
+          测试账号：superadmin E000001 · operator E2E9020 · viewer E2E9030（口令见 globalSetup）
+        </div>
       </div>
     </section>
   </main>
@@ -542,6 +559,7 @@
   .form-card {
     position: relative;
     display: flex;
+    flex-direction: column;
     width: min(100%, 440px);
     min-height: 610px;
     padding: clamp(32px, 4vw, 48px);
@@ -551,7 +569,46 @@
     box-shadow:
       0 30px 80px rgb(42 57 91 / 13%),
       0 2px 10px rgb(42 57 91 / 5%);
+
+    /* 表单主区居中吃掉剩余高度，底部信息条钉在卡底——填卡内空区 */
+    .form-card-main {
+      display: flex;
+      flex: 1;
+      align-items: center;
+      min-height: 0;
+    }
+  }
+
+  .form-foot {
+    display: flex;
+    gap: 10px;
     align-items: center;
+    padding-top: 18px;
+    margin-top: 6px;
+    border-top: 1px solid var(--login-line);
+
+    .env-badge {
+      padding: 2px 10px;
+      font-family: SFMono-Regular, Consolas, monospace;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--el-color-warning);
+      cursor: default;
+      background: rgb(230 162 60 / 10%);
+      border: 1px solid rgb(230 162 60 / 45%);
+      border-radius: 999px;
+    }
+
+    .env-badge--prod {
+      color: var(--el-color-success);
+      background: rgb(103 194 58 / 10%);
+      border-color: rgb(103 194 58 / 45%);
+    }
+
+    .foot-copy {
+      font-size: 12px;
+      color: var(--login-muted);
+    }
 
     &::before {
       position: absolute;
@@ -563,6 +620,16 @@
       border-radius: 0 0 99px 99px;
       content: '';
     }
+  }
+
+  .form-hint {
+    padding: 10px 12px;
+    margin-top: 12px;
+    font-size: 12px;
+    line-height: 1.7;
+    color: var(--login-muted);
+    background: var(--login-panel);
+    border-radius: 10px;
   }
 
   .ambient {
@@ -648,6 +715,14 @@
     .form-card {
       border-color: rgb(255 255 255 / 7%);
       box-shadow: 0 30px 80px rgb(0 0 0 / 24%);
+    }
+
+    .form-foot {
+      border-top-color: var(--login-line);
+    }
+
+    .form-hint {
+      background: rgb(13 20 37 / 60%);
     }
   }
 
