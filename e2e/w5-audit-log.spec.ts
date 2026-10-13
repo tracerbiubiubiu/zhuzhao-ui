@@ -23,7 +23,6 @@ test('W5 冒烟：审计日志页渲染+工号过滤+请求详情弹窗', async 
 
   // 按自身工号过滤——登录与本页查询刚产生审计行，必非空
   await page.getByPlaceholder('如 E000001（含已删用户）').fill(state.admin.employeeNo)
-  await page.getByRole('button', { name: '查询' }).click()
   const rows = page.locator('.el-table__row')
   await expect(rows.first()).toBeVisible({ timeout: 10_000 })
   const count = await rows.count()

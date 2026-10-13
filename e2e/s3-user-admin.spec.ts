@@ -20,13 +20,11 @@ test('S3 admin：表格渲染 + 搜索命中 + 无假搜索项 + 分页器 + 新
 
   // 搜索真实性：username 模糊命中
   await page.getByPlaceholder('用户名（模糊）').fill('adm')
-  await page.getByRole('button', { name: '查询' }).click()
   await expect(page.getByRole('cell', { name: 'admin', exact: true })).toBeVisible()
 
   // employee_no 精确命中（admin=E000001）+ 阴性对照（viewer 行应消失——四轮审计：原断言过滤器 no-op 不可区分）
   await page.getByPlaceholder('用户名（模糊）').fill('')
   await page.getByPlaceholder('工号（精确）').fill('E000001')
-  await page.getByRole('button', { name: '查询' }).click()
   await expect(page.getByRole('cell', { name: 'admin', exact: true })).toBeVisible()
   await expect(page.locator('.el-table__row').filter({ hasText: 'viewer' })).toHaveCount(0, { timeout: 5_000 })
 
@@ -60,7 +58,6 @@ test('S3 分配组织（P2-12）：树勾选全量替换 + 主组织 + API 断�
     // 列表 id ASC + E2E 历史建号累积（total 可远超首页）——先按 username 模糊搜索收敛，
     // 目标行必回首页（本用例建号带唯一 suffix，无歧义）
     await page.getByPlaceholder('用户名（模糊）').fill(`s3_orguser_${suffix}`)
-    await page.getByRole('button', { name: '查询' }).click()
     const row = page.locator('tr', { hasText: `s3_orguser_${suffix}` })
     await expect(row).toBeVisible({ timeout: 10_000 })
     // 分配组织在「更多」下拉内（操作列主操作+收尾模式）——先展开再点

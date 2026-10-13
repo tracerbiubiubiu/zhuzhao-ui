@@ -39,7 +39,6 @@ test('W4 冒烟：工单列表渲染+关键字筛选+标题链接进详情', asy
   // 2026-10-08 批：关键字筛选真数据命中 + 标题链接进详情（操作列已删，标题=靶点）
   await page.goto('/#/tickets')
   await page.locator('.el-form-item').filter({ hasText: '关键字' }).locator('input').fill('冒烟单据')
-  await page.getByRole('button', { name: '查询' }).click()
   const row = page.locator('tr', { hasText: 'W4 冒烟单据' }).first()
   await expect(row).toBeVisible()
   await row.locator('.el-link').click()

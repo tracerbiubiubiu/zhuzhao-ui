@@ -13,7 +13,7 @@ import ProTable from '@/components/ProTable/index.vue'
 import UserNameText from '@/components/UserNameText/index.vue'
 import type { ProTableColumn } from '@/components/ProTable/types'
 import { listAuditLogsApi, type AuditLogRow, listPanicsApi, reconcileAuditApi, type PanicRow } from '@/api/audit'
-import { useTableFit } from '@vea/hooks'
+import { useAutoFilterRun, useTableFit } from '@vea/hooks'
 
 // keep-alive 契约：name=动态路由名（菜单 code audit_log，组件路径 audit/log/index）
 defineOptions({ name: 'audit_log_page' })
@@ -21,9 +21,11 @@ defineOptions({ name: 'audit_log_page' })
 const tableRef = ref<InstanceType<typeof ProTable>>()
 const search = reactive({ employee_no: '', path: '', method: '', range: [] as string[] })
 
-function onSearch() {
-  tableRef.value?.refresh({ resetPage: true })
-}
+// 筛选即时生效（筛选栏配方触发口径：全部控件变更即查，文本防抖 300ms 收敛）
+useAutoFilterRun(
+  () => ({ ...search, range: search.range }),
+  () => tableRef.value?.refresh({ resetPage: true }),
+)
 
 function onReset() {
   search.employee_no = ''
@@ -153,8 +155,7 @@ useTableFit(panicsTable, () => panics.value)
                 start-placeholder="开始" end-placeholder="结束" class="!w-60"
               />
             </el-form-item>
-            <el-form-item>
-              <el-button type="primary" @click="onSearch">查询</el-button>
+            <el-form-item class="ml-auto !mr-0">
               <el-button @click="onReset">重置</el-button>
             </el-form-item>
           </el-form>

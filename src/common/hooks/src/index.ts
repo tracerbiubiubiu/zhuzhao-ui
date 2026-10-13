@@ -26,3 +26,4 @@ export type {
   UseFormOptions
 } from './useForm'
 export { useTableFit } from './useTableFit'
+export { useAutoFilterRun } from './useAutoFilterRun'

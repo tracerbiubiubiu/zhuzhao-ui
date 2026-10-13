@@ -10,13 +10,14 @@
  * - 详情路由 → 静态路由 /tickets/:id（§3.2④；发起页/详情页均菜单外静态路由）
  * - 新建入口（ticket:create）→ /tickets/new（发起表单页=form-create 渲染器）
  */
-import { reactive, ref, watch } from 'vue'
+import { reactive, ref } from 'vue'
 import {
   ElButton, ElCard, ElCheckbox, ElDatePicker, ElForm, ElFormItem, ElInput, ElLink,
   ElOption, ElSelect, ElTag,
 } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
 import { useQuery } from '@tanstack/vue-query'
+import { useAutoFilterRun } from '@vea/hooks'
 import ProTable from '@/components/ProTable/index.vue'
 import UserNameText from '@/components/UserNameText/index.vue'
 import type { ProTableColumn } from '@/components/ProTable/types'
@@ -55,14 +56,12 @@ const search = reactive({
 /** 创建日期范围 [from, to]（YYYY-MM-DD，value-format 对齐端点 UTC 切日口径） */
 const dateRange = ref<[string, string] | null>(null)
 
-// 勾选型筛选即时生效（开关即查询，免点「查询」；回第一页防越页空结果）
-watch(() => [search.mineHandle, search.mineCreated], () => {
-  tableRef.value?.refresh({ resetPage: true })
-})
-
-function onSearch() {
-  tableRef.value?.refresh({ resetPage: true })
-}
+// 筛选即时生效（筛选栏配方触发口径：全部控件变更即查，文本防抖 300ms 收敛；
+// URL 预填已在声明期完成，不经过本 watch）
+useAutoFilterRun(
+  () => ({ ...search, range: dateRange.value }),
+  () => tableRef.value?.refresh({ resetPage: true }),
+)
 
 function onReset() {
   search.keyword = ''
@@ -131,7 +130,7 @@ function typeLabel(code: string): string {
             <el-form-item label="关键字">
               <el-input
                 v-model="search.keyword" placeholder="标题 / 工单号" clearable maxlength="50"
-                class="!w-[160px]" @keyup.enter="onSearch"
+                class="!w-[160px]"
               />
             </el-form-item>
             <el-form-item label="类型">
@@ -160,7 +159,6 @@ function typeLabel(code: string): string {
               <el-checkbox v-model="search.mineCreated">我发起的</el-checkbox>
             </el-form-item>
             <el-form-item class="ml-auto !mr-0">
-              <el-button type="primary" @click="onSearch">查询</el-button>
               <el-button @click="onReset">重置</el-button>
             </el-form-item>
           </el-form>

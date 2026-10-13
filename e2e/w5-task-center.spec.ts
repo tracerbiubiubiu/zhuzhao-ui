@@ -32,7 +32,6 @@ test('W5 冒烟：任务中心四 Tab（提交/runs 过滤/死信/jobs）', asyn
   // ── Tab1 运行记录：受理行出现 + submitted_by=me 过滤（zhuzhao 代理换 actor 透传）──
   await page.getByRole('tab', { name: '运行记录' }).click()
   await page.locator('.el-form-item').filter({ hasText: '动作' }).locator('input').fill(action)
-  await page.getByRole('button', { name: '查询' }).click()
   const runRow = page.locator('.el-table__row').filter({ hasText: action })
   await expect(runRow).toHaveCount(1, { timeout: 15_000 })
   // submitted_by=zhuzhao username（actorOf——admin 账号即 'admin'，非工号）
@@ -43,7 +42,6 @@ test('W5 冒烟：任务中心四 Tab（提交/runs 过滤/死信/jobs）', asyn
   const opH = { token: opSetup.env!.data.access_token } as const
   await api('/api/v1/tasks', { ...opH, method: 'POST', body: { action: `${action}_other` } })
   await page.locator('.el-form-item').filter({ hasText: '只看我提交的' }).locator('.el-switch').click()
-  await page.getByRole('button', { name: '查询' }).click()
   await expect(page.locator('.el-table__row').filter({ hasText: action })).toHaveCount(1, { timeout: 15_000 })
   await expect(page.locator('.el-table__row').filter({ hasText: `${action}_other` })).toHaveCount(0, { timeout: 5_000 })
 

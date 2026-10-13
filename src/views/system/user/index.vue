@@ -18,6 +18,7 @@ import {
 } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
 import { usePermission } from '@/common/auth'
+import { useAutoFilterRun } from '@vea/hooks'
 import { getOrgTreeApi, type OrgTreeNode } from '@/api/system/org'
 import { useQuery } from '@tanstack/vue-query'
 import ProTable from '@/components/ProTable/index.vue'
@@ -40,9 +41,11 @@ const roleOptions = computed(() => rolesQuery.data.value ?? [])
 // ─── 搜索（严格对齐 GET /users 四参数）───
 const search = reactive({ username: '', employee_no: '', role: '', status: undefined as number | undefined })
 
-function onSearch() {
-  tableRef.value?.refresh({ resetPage: true })
-}
+// 筛选即时生效（筛选栏配方触发口径：控件变更即查，文本防抖 300ms 收敛）
+useAutoFilterRun(
+  () => ({ ...search }),
+  () => tableRef.value?.refresh({ resetPage: true }),
+)
 
 function onReset() {
   search.username = ''
@@ -368,10 +371,10 @@ async function onDelete(row: UserRow) {
         <template #search>
           <el-form inline @submit.prevent>
             <el-form-item label="用户名">
-              <el-input v-model="search.username" placeholder="用户名（模糊）" clearable class="!w-[180px]" @keyup.enter="onSearch" />
+              <el-input v-model="search.username" placeholder="用户名（模糊）" clearable class="!w-[180px]" />
             </el-form-item>
             <el-form-item label="工号">
-              <el-input v-model="search.employee_no" placeholder="工号（精确）" clearable class="!w-[160px]" @keyup.enter="onSearch" />
+              <el-input v-model="search.employee_no" placeholder="工号（精确）" clearable class="!w-[160px]" />
             </el-form-item>
             <el-form-item label="角色">
               <el-select v-model="search.role" placeholder="全部" clearable class="!w-[140px]">
@@ -384,8 +387,7 @@ async function onDelete(row: UserRow) {
                 <el-option label="禁用" :value="0" />
               </el-select>
             </el-form-item>
-            <el-form-item>
-              <el-button type="primary" @click="onSearch">查询</el-button>
+            <el-form-item class="ml-auto !mr-0">
               <el-button @click="onReset">重置</el-button>
             </el-form-item>
           </el-form>

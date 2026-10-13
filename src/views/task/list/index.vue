@@ -12,7 +12,7 @@
  * - 「只看我提交的」仅运行记录（submitted_by=me 由 zhuzhao 代理换 actor 透传）
  */
 import { computed, reactive, ref, watch } from 'vue'
-import { useTableFit } from '@vea/hooks'
+import { useAutoFilterRun, useTableFit } from '@vea/hooks'
 import { usePermission } from '@/common/auth'
 import {
   ElAlert, ElButton, ElCard, ElDialog, ElForm, ElFormItem, ElInput, ElInputNumber,
@@ -52,10 +52,11 @@ function fetchRuns(params: { page: number; page_size: number }) {
   })
 }
 
-// 勾选（开关）型筛选即时生效（同 ticket/list——开关即查询，回第一页）
-watch(() => runsSearch.mine, () => {
-  runsTableRef.value?.refresh({ resetPage: true })
-})
+// 筛选即时生效（筛选栏配方触发口径：runsSearch 全控件变更即查，文本防抖 300ms 收敛）
+useAutoFilterRun(
+  () => ({ ...runsSearch }),
+  () => runsTableRef.value?.refresh({ resetPage: true }),
+)
 
 function statusInfo(s: string) {
   return RUN_STATUS[s] ?? { label: s, tag: 'info' as const }
@@ -320,9 +321,7 @@ useTableFit(deadTable, () => deadList.value)
                 <el-form-item label="只看我提交的">
                   <el-switch v-model="runsSearch.mine" />
                 </el-form-item>
-                <el-form-item>
-                  <el-button type="primary" @click="runsTableRef?.refresh({ resetPage: true })">查询</el-button>
-                </el-form-item>
+
               </el-form>
             </template>
 
