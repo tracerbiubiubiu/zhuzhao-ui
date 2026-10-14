@@ -47,7 +47,7 @@ function fetchRuns(params: { page: number; page_size: number }) {
   return listRunsApi({
     page: params.page,
     page_size: params.page_size,
-    ...(/^\d+$/.test(runsSearch.seq) ? { id: Number(runsSearch.seq) } : {}),
+    ...(/^\d+$/.test(runsSearch.seq) ? { id: runsSearch.seq } : {}),
     ...(runsSearch.request_id ? { request_id: runsSearch.request_id } : {}),
     ...(runsSearch.action ? { action: runsSearch.action } : {}),
     ...(runsSearch.status ? { status: runsSearch.status } : {}),
