@@ -169,7 +169,7 @@ function formatTime(iso?: string | null): string {
 
 <template>
   <div class="fill-page p-4 max-w-[720px] mx-auto">
-    <div class="min-h-0 flex-1 overflow-y-auto">
+    <div class="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
     <el-card shadow="hover" class="mb-4">
       <template #header><span class="font-semibold">基本信息</span></template>
       <div class="flex items-center gap-4 mb-2">

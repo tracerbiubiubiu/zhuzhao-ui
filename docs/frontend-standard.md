@@ -106,7 +106,8 @@ overflow-y-auto 仅为兜底——正常页面不该用到它）→ 页面根 .f
 5. 填充语义 = **紧凑+按需封顶**：行少时表格贴内容、分页紧跟（留白在页底背景，不是表格框内的洞）；
    行多时封顶内滚。不要回退「无脑拉满」——高屏会露框内死区。
 6. 全局卡类等页面级 CSS 改动后，六张已填列表页+四张内容页都要回归（DOM 探针最便宜）。
-7. **EP 2.14 el-table 列宽拟合不随容器变化重排**（侧栏异步收起/窗口面板调整/数据晚到后，表格保持
+7. **EP `el-row :gutter` 负外边距 × 滚动容器 = 横向溢出**(2026-10-14 首页统计卡实测):gutter 靠行两侧 ±8px 负外边距实现,滚动容器内即成真实横向溢出——容器加 `overflow-x-hidden` 裁掉补偿区即可(列内 padding 保护,无可见损失)。
+8. **EP 2.14 el-table 列宽拟合不随容器变化重排**（侧栏异步收起/窗口面板调整/数据晚到后，表格保持
    豁免：对话框/抽屉内定宽表（如 ticket/type 字段编辑器 860px）不挂 useTableFit，见 `src/tableFitScan` 豁免清单。
    首次拟合宽度——右侧残留死区或表内横向滚动条，window resize 也不自愈）。兜底=`useTableFit`
    （`@vea/hooks`，ResizeObserver 盯表格父容器+window resize→`doLayout`，数据晚到传 watchSource）；

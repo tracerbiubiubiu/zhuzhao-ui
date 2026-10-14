@@ -37,13 +37,14 @@
       to="/"
     >
       <img src="@/assets/imgs/logo.png" class="w-38px h-38px flex-none" />
+      <!-- 常驻+透明度过渡(不随 v-if 卸载):侧栏宽度动画期间文字淡入淡出,消除闪现 -->
       <div
-        v-if="showTitle"
         :class="[
-          'ml-10px text-15px font-600 tracking-[-0.01em]',
+          'ml-10px text-15px font-600 tracking-[-0.01em] whitespace-nowrap transition-opacity duration-200',
           {
             'text-[var(--logo-title-text-color)]': layout === 'sidebar' || layout === 'dual',
-            'text-[var(--top-header-text-color)]': layout === 'top' || layout === 'mixed'
+            'text-[var(--top-header-text-color)]': layout === 'top' || layout === 'mixed',
+            'opacity-0': !showTitle
           }
         ]"
       >

@@ -110,7 +110,7 @@ function goDetail(id: number | string) {
 
 <template>
   <div class="fill-page p-4">
-    <div class="min-h-0 flex-1 overflow-y-auto">
+    <div class="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
     <el-row :gutter="16" class="mb-4">
       <el-col v-for="card in statusCardDefs" :key="card.key" :span="6">
         <el-card shadow="hover" class="cursor-pointer" @click="goTickets({ status: card.key })">

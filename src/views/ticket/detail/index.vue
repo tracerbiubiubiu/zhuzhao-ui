@@ -272,7 +272,7 @@ async function submitRelation() {
 
 <template>
   <div class="fill-page p-4" v-loading="ticketQuery.isLoading.value">
-    <div class="min-h-0 flex-1 overflow-y-auto">
+    <div class="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
     <el-card shadow="never" class="mb-4">
       <template #header>
         <div class="flex items-center gap-3 flex-wrap">

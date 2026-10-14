@@ -155,7 +155,7 @@ async function handleSubmit() {
 
 <template>
   <div class="fill-page p-4 max-w-[760px] mx-auto">
-    <div class="min-h-0 flex-1 overflow-y-auto">
+    <div class="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
     <el-card shadow="never">
       <template #header><span class="font-semibold">发起工单</span></template>
       <el-alert v-if="errorMsg" :title="errorMsg" type="error" show-icon class="mb-4" :closable="false" />

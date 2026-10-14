@@ -29,6 +29,10 @@
   flex: 1;
   flex-direction: column;
   min-height: 0;
+  // 框体贴底(2026-10-14 用户反馈:copyright 与框体间空白带):抵消页面根与
+  // section 的下 padding,框体底边直抵 copyright 行——拉满后框内紧凑语义不变
+  margin-bottom: calc(-1 * var(--app-content-padding));
+  padding-bottom: 0;
 
   > .el-card {
     display: flex;

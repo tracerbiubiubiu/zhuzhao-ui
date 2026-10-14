@@ -1,6 +1,8 @@
 <script setup lang="ts">
   import { useAppStore } from '@/store/modules/app'
   import { useI18n } from 'vue-i18n'
+  import { ElIcon } from 'element-plus'
+  import { Expand, Fold } from '@element-plus/icons-vue'
   const prefixCls = 'v-collapse'
 
   withDefaults(defineProps<{ color?: string }>(), { color: '' })
@@ -20,12 +22,12 @@
     :aria-label="t(appStore.collapse ? 'layout.expandNavigation' : 'layout.collapseNavigation')"
     @click="toggleCollapse"
   >
-    <Icon
-      :size="18"
-      :icon="appStore.collapse ? 'mdi:menu-open' : 'mdi:menu'"
-      :color="color"
-      class="cursor-pointer"
-    />
+    <!-- 图标=动作(Geeker CollapseIcon 同款,EP 内置 Fold/Expand):展开态=Fold(点击收起),
+         收起态=Expand(点击展开);MDI 离线包不含此二形,EP 内置零依赖 -->
+    <el-icon :size="18" :color="color" class="cursor-pointer">
+      <Expand v-if="appStore.collapse" />
+      <Fold v-else />
+    </el-icon>
   </button>
 </template>
 
