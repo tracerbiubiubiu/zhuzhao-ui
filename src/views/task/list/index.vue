@@ -13,7 +13,7 @@
  * - jobs 写操作挂 task:manage；trigger 对 enabled=false 后端 409——按钮同步禁用
  * - 「只看我提交的」仅运行记录（submitted_by=me 由 zhuzhao 代理换 actor 透传）
  */
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { useAutoFilterRun, useTableFit } from '@vea/hooks'
 import { usePermission } from '@/common/auth'
 import {
@@ -38,6 +38,48 @@ const { hasPerm } = usePermission()
 /** 任务定义 Tab = /jobs* 数据面，B13 矩阵 admin 专属——无 task:manage 整个 Tab 不渲染
  *（此前仅按钮挂 v-permission，Tab 面板急切渲染仍对 operator/viewer 发 GET /jobs → 403 toast）*/
 const canManageJobs = computed(() => hasPerm('task:manage'))
+
+// ─── 队列水位条（页首——排队/执行/失败/死信计数，30s 轮询；点击即按状态过滤）
+// 数据源=runs 端点按 status 各拉 total（零后端改动；语义=job_runs 表态，队列瞬时深度
+// 走 P5-S4 登记的 asynq Inspector 端点，触发驱动）───
+const waterline = ref<Record<string, number>>({})
+const waterlineDefs = [
+  { key: 'pending', label: '排队中', color: 'var(--el-color-warning)' },
+  { key: 'running', label: '执行中', color: 'var(--el-color-primary)' },
+  { key: 'failed', label: '已失败', color: 'var(--el-color-danger)' },
+  { key: 'dead', label: '死信', color: 'var(--el-color-info)' },
+]
+let waterlineTimer: ReturnType<typeof setInterval> | undefined
+
+async function fetchWaterline() {
+  const results = await Promise.allSettled(
+    waterlineDefs.map(({ key }) => listRunsApi({ status: key, page: 1, page_size: 1 })),
+  )
+  const next: Record<string, number> = {}
+  results.forEach((r, i) => {
+    next[waterlineDefs[i].key] = r.status === 'fulfilled' ? ((r.value as { total?: number })?.total ?? 0) : 0
+  })
+  waterline.value = next
+}
+
+function jumpWaterline(key: string) {
+  runsSearch.status = key
+  if (key === 'dead') {
+    activeTab.value = 'dead'
+    fetchDead()
+  } else {
+    activeTab.value = 'runs'
+    runsTableRef.value?.refresh({ resetPage: true })
+  }
+}
+
+onMounted(() => {
+  fetchWaterline()
+  waterlineTimer = setInterval(fetchWaterline, 30_000)
+})
+onUnmounted(() => {
+  if (waterlineTimer) clearInterval(waterlineTimer)
+})
 
 // ─── Tab1 运行记录（offset+total——ProTable）───
 const runsTableRef = ref<InstanceType<typeof ProTable>>()
@@ -361,6 +403,21 @@ useTableFit(deadTable, () => deadList.value)
 <template>
   <div class="fill-page p-4">
     <el-card shadow="never">
+      <!-- 队列水位条：排队/执行/失败/死信计数一屏可见（点击=按状态过滤；死信切 Tab） -->
+      <div class="mb-3 flex items-center gap-3 flex-none" data-testid="queue-waterline">
+        <span class="text-xs text-gray-400 flex-none">队列水位</span>
+        <button
+          v-for="w in waterlineDefs" :key="w.key" type="button"
+          class="waterline-chip" @click="jumpWaterline(w.key)"
+        >
+          <span class="waterline-num" :style="{ color: w.color }">
+            {{ waterline[w.key] ?? 0 }}
+          </span>
+          <span class="waterline-label">{{ w.label }}</span>
+        </button>
+        <el-button size="small" text bg class="!ml-auto" @click="fetchWaterline">刷新</el-button>
+      </div>
+
       <el-tabs v-model="activeTab" class="fill-tabs">
         <!-- ── Tab1 运行记录 ── -->
         <el-tab-pane label="运行记录" name="runs">
@@ -589,3 +646,31 @@ useTableFit(deadTable, () => deadList.value)
     </el-dialog>
   </div>
 </template>
+
+<style scoped>
+/* 水位 chip：计数醒目、整块可点 */
+.waterline-chip {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  padding: 8px 14px;
+  background: var(--el-fill-color-light);
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.waterline-chip:hover {
+  background: var(--el-fill-color);
+}
+
+.waterline-num {
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.waterline-label {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
+</style>
