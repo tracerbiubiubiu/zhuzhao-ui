@@ -1,8 +1,6 @@
 <script setup lang="ts">
   import { useAppStore } from '@/store/modules/app'
   import { useI18n } from 'vue-i18n'
-  import { ElIcon } from 'element-plus'
-  import { Expand, Fold } from '@element-plus/icons-vue'
   const prefixCls = 'v-collapse'
 
   withDefaults(defineProps<{ color?: string }>(), { color: '' })
@@ -23,11 +21,13 @@
     @click="toggleCollapse"
   >
     <!-- 图标=动作(Geeker CollapseIcon 同款,EP 内置 Fold/Expand):展开态=Fold(点击收起),
-         收起态=Expand(点击展开);MDI 离线包不含此二形,EP 内置零依赖 -->
-    <el-icon :size="18" :color="color" class="cursor-pointer">
-      <Expand v-if="appStore.collapse" />
-      <Fold v-else />
-    </el-icon>
+         收起态=Expand(点击展开);目标形态为 Geeker 的 EP Fold/Expand——但 @element-plus/icons-vue 在本仓 pnpm 布局下解析失败(CI 实证),暂用离线包在册字形,工具链修复后再对齐 -->
+    <Icon
+      :size="18"
+      :icon="appStore.collapse ? 'mdi:chevron-double-right' : 'mdi:chevron-double-left'"
+      :color="color"
+      class="cursor-pointer"
+    />
   </button>
 </template>
 
