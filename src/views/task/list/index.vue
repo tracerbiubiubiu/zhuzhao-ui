@@ -448,7 +448,6 @@ useTableFit(deadTable, () => deadList.value)
           </ProTable>
         </el-tab-pane>
 
-b-pane>
         <!-- ── Tab3 死信（第三位——需人工介入的告警面）（只读+重试；无 total 按页号翻；红点=存在待处理死信） ── -->
         <el-tab-pane name="dead">
           <template #label>
