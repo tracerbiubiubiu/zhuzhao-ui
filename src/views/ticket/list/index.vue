@@ -214,7 +214,7 @@ function typeLabel(code: string): string {
 </template>
 
 <style scoped>
-/* 筛选栏：EP inline 默认项距 32px 过疏——收半使首行多容一个字段；尾行「勾选居左+查询钉右」。
+/* 筛选栏：EP inline 默认项距 32px 过疏——收半使首行多容一个字段；尾行「勾选居左+重置钉右」。
    inline 原生是 inline-flex 文本流（margin-left:auto 无效），转 flex+wrap 后 ml-auto 才成立 */
 .ticket-filter {
   display: flex;

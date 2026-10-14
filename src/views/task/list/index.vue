@@ -103,6 +103,16 @@ useAutoFilterRun(
   () => runsTableRef.value?.refresh({ resetPage: true }),
 )
 
+// 重置=清空筛选回首页（筛选栏配方「查询钮移除、重置保留」——与 audit/ticket/user 三页同款）
+function onResetRuns() {
+  runsSearch.seq = ''
+  runsSearch.request_id = ''
+  runsSearch.action = ''
+  runsSearch.status = ''
+  runsSearch.mine = false
+  runsTableRef.value?.refresh({ resetPage: true })
+}
+
 function statusInfo(s: string) {
   return RUN_STATUS[s] ?? { label: s, tag: 'info' as const }
 }
@@ -446,6 +456,9 @@ useTableFit(deadTable, () => deadList.value)
                 </el-form-item>
                 <el-form-item label="只看我提交的">
                   <el-switch v-model="runsSearch.mine" />
+                </el-form-item>
+                <el-form-item class="ml-auto !mr-0">
+                  <el-button @click="onResetRuns">重置</el-button>
                 </el-form-item>
 
               </el-form>
