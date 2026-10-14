@@ -12,7 +12,7 @@ import request from '@vea/request'
 
 /** 执行记录行（RunView 投影——params 是字符串快照非对象） */
 export interface TaskRunRow {
-  id: number
+  id: string
   task_id: string
   request_id: string
   action: string
@@ -89,7 +89,7 @@ export async function getTaskApi(taskId: string): Promise<TaskDetail> {
 
 export interface RunListQuery {
   /** 任务序号（=job_runs.id 自增，精确匹配）——人类可读主检索键；request_id 为链路追踪键 */
-  id?: number
+  id?: string
   request_id?: string
   action?: string
   status?: string
