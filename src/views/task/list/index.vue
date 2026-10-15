@@ -363,6 +363,9 @@ watch(selectedJobId, () => {
 })
 
 async function onSubmitTask() {
+  // 设计口径（§1 零权限判定注记）：canManageJobs 分支仅选择「表单形态」——
+  // admin 走定义下拉取 action_id、operator 走手填 action，产出同一 wire 形态；
+  // 真实边界在后端 task:submit，此处权限码不作任何业务许可判断
   const action = canManageJobs.value ? (selectedJob.value?.action_id ?? '') : submitForm.action
   if (!action.trim()) {
     submitError.value = canManageJobs.value ? '请选择任务定义' : '请输入 action（须在服务端动作注册表内）'
