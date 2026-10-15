@@ -12,7 +12,9 @@
 ## 页面骨架：三种形态
 
 所有页面根节点都用 `fill-page`（全局类，`@vea/styles` index.less）——锁定视口高度的弹性列。
-区别只在「哪个内部元素负责滚动」：
+**根层四向 padding 已全局归零**（2026-10-14 用户反馈三连：上下贴边+左右收窄）——呼吸间距由
+section 一层统一承担（`--app-content-padding` 24px），页面根不再叠第二层；框体纵向拉满
+（贴底 copyright）、横向对称 24px。区别只在「哪个内部元素负责滚动」：
 
 | 形态 | 判定 | 滚动元素 | 配方 |
 |---|---|---|---|
@@ -85,7 +87,13 @@ overflow-y-auto 仅为兜底——正常页面不该用到它）→ 页面根 .f
 4. **登录卡信息条**：环境徽标（base/dev/test/pro，生产转绿）+ 定位一句话 + 非 prod
    测试账号提示（防生产凭据外泄）——见 Login.vue `form-foot/form-hint`；
 5. **统计卡/实体卡可点**：首页状态卡点击=按该口径过滤跳列表（URL 参数化依赖），
-   卡片必须 `cursor-pointer` 且 hover 有反馈。
+   卡片必须 `cursor-pointer` 且 hover 有反馈；
+6. **侧栏折叠过渡纪律（2026-10-14）**：侧栏宽度有 0.2s 过渡，**凡随折叠显隐的元素一律
+   常驻渲染+opacity 同周期过渡**，禁止 v-if 瞬时卸载——logo 标题（常驻+淡出裁剪）与
+   菜单文字（`.v-menu__title` opacity/visibility 过渡）均已按此实现；
+7. **导航开关图标=动作语义**（Geeker CollapseIcon 同款）：展开态=Fold（点击收起）、
+   收起态=Expand（点击展开），aria-label 同步状态。⚠ 现状用离线包 chevron 字形——
+   `@element-plus/icons-vue` 见踩坑⑨。
 
 ## 滚动条归属
 
@@ -112,10 +120,15 @@ overflow-y-auto 仅为兜底——正常页面不该用到它）→ 页面根 .f
    首次拟合宽度——右侧残留死区或表内横向滚动条，window resize 也不自愈）。兜底=`useTableFit`
    （`@vea/hooks`，ResizeObserver 盯表格父容器+window resize→`doLayout`，数据晚到传 watchSource）；
    **ProTable 已内置**，手动 el-table 必须自行挂接（用法见 composable 头注释）。
+9. **`@element-plus/icons-vue` 显式依赖在本仓 pnpm 布局下解析失败**（CI+本地双实证：
+   顶层软链指向无 peer 后缀的 store 路径，实际目录带 `_vue@..._` 后缀；手工修链仅本地
+   生效，CI 全新安装复现）——EP 图标字形一律走 `src/icons.ts` 在册 MDI 字形+`<Icon>`
+   包装；Fold/Expand 形态待工具链修复后再对齐（Collapse 组件注释留痕）。
 
 ## 新增页面 checklist
 
-1. 根节点 `fill-page p-4`（居中窄栏叠 `max-w-[N] mx-auto`；tabs 叠 `fill-tabs`）。
+1. 根节点 `fill-page`（**无需再叠 p-4**——根层 padding 已全局归零，写了也被覆盖；
+   居中窄栏叠 `max-w-[N] mx-auto`；tabs 叠 `fill-tabs`）。
 2. 选形态：列表页→表格内滚配方；内容页→内容区包 `min-h-0 flex-1 overflow-y-auto`。
 3. 列定义：≥1 个内容列 `minWidth`；操作列 `fixed:'right'` 固定宽。
 4. 分页走 ProTable 默认；特殊形态按「分页」节口径，页头注释写明理由。

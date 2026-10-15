@@ -29,10 +29,11 @@
   flex: 1;
   flex-direction: column;
   min-height: 0;
-  // 框体贴底(2026-10-14 用户反馈:copyright 与框体间空白带):抵消页面根与
-  // section 的下 padding,框体底边直抵 copyright 行——拉满后框内紧凑语义不变
+  // 四向收窄(2026-10-14 用户反馈三连:上/下贴边+左右收窄):根层 padding 全去,
+  // 统一留 section 一层(var 24px)作呼吸——框体纵向拉满、左右对称收窄,
+  // 框内紧凑语义不变
   margin-bottom: calc(-1 * var(--app-content-padding));
-  padding-bottom: 0;
+  padding: 0;
 
   > .el-card {
     display: flex;

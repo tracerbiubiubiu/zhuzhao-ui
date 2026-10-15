@@ -155,6 +155,24 @@
       }
     }
 
+    // 菜单文字随折叠状态淡入淡出(2026-10-14 用户反馈「展开不丝滑」):EP collapse
+    // 对 span 的隐藏是瞬时的(width/height/visibility 硬切)——与侧栏宽度过渡不同周期。
+    // 这里给文字补 opacity/visibility 同周期过渡:收起时文字随宽度收窄淡出,展开时随
+    // 宽度展开淡入(visibility 离散翻转被过渡延迟到动画末尾,肉眼呈平滑交叉淡)
+    :deep(.el-menu-item .v-menu__title),
+    :deep(.el-sub-menu__title .v-menu__title) {
+      transition:
+        opacity var(--transition-time-02),
+        visibility var(--transition-time-02);
+    }
+
+    :deep(.el-menu--collapse) {
+      .el-menu-item .v-menu__title,
+      .el-sub-menu__title .v-menu__title {
+        opacity: 0;
+      }
+    }
+
     :deep(.el-menu--collapse) {
       width: var(--left-menu-min-width);
 
