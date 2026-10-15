@@ -2971,6 +2971,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/compat/echo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 存量协议兼容层验证端点
+         * @description AK/SK 验签通过即回显 caller/request_id——存量调用场景就位前按 runbook §5.2 完成线协议比对的判定靶；无业务副作用。存量 x-auth-* 签名（非 JWT），鉴权走 compat 中间件
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["response.Response"];
+                    };
+                };
+                /** @description Unauthorized */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["response.Response"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/internal/jobs/callback": {
         parameters: {
             query?: never;
@@ -3015,7 +3063,7 @@ export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
         "github_com_tracerbiubiubiu_zhuzhao_internal_model.AssignMenusRequest": {
-            menu_ids: number[];
+            menu_ids: string[];
             /** @example 0 */
             role_id: string;
         };
@@ -3064,7 +3112,8 @@ export interface components {
             name: string;
             /**
              * @description BK-12：继承父（可选）。校验规则（2026-08-31 拍板）：child.priority ≤ parent.priority
-             *     （子不弱于父）+ 父启用/非系统/无环/非自身
+             *     （子不弱于父）+ 父启用/非系统/无环/非自身。omitempty 已去（§3-14① 同概念同形态）：
+             *     与 menu/org 请求侧对齐 null 形态，未传 = null = 不设父
              * @example 0
              */
             parent_id?: string;
@@ -3113,14 +3162,14 @@ export interface components {
             domain_account?: string;
             email?: string;
             employee_no?: string;
-            org_ids?: number[];
+            org_ids?: string[];
             /** @description F-9：最小长度（完整复杂度策略 Phase 2） */
             password: string;
             phone?: string;
             /** @example 0 */
             primary_org_id?: string;
             real_name?: string;
-            role_ids?: number[];
+            role_ids?: string[];
             user_domain?: string;
             username: string;
         };
@@ -3225,17 +3274,17 @@ export interface components {
             /** @example 0 */
             org_id: string;
             /** @description 元素为字符串 ID（项目惯例）；空数组=清空（仅全局） */
-            owner_user_ids: number[];
+            owner_user_ids: string[];
         };
         "github_com_tracerbiubiubiu_zhuzhao_internal_model.SetUserOrgsRequest": {
-            org_ids?: number[];
+            org_ids?: string[];
             /** @example 0 */
             primary_org_id?: string;
             /** @example 0 */
             user_id: string;
         };
         "github_com_tracerbiubiubiu_zhuzhao_internal_model.SetUserRolesRequest": {
-            role_ids?: number[];
+            role_ids?: string[];
             /** @example 0 */
             user_id: string;
         };
@@ -3268,7 +3317,8 @@ export interface components {
             id: string;
             name: string;
             /**
-             * @description BK-12：ParentID 显式变更（nil=保持现值）；ClearParent=true 清除继承
+             * @description BK-12：ParentID 显式变更（nil=保持现值）；ClearParent=true 清除继承。
+             *     omitempty 已去（§3-14①，与 Create/menu/org 请求侧对齐 null 形态）
              * @example 0
              */
             parent_id?: string;
