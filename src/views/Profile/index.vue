@@ -11,7 +11,7 @@
 import { reactive, ref, computed } from 'vue'
 import {
   ElCard, ElForm, ElFormItem, ElInput, ElButton, ElDescriptions,
-  ElDescriptionsItem, ElAlert, ElTag, ElAvatar, ElMessage, ElMessageBox,
+  ElDescriptionsItem, ElAlert, ElTag, ElMessage, ElMessageBox,
   ElTable, ElTableColumn, ElDialog, ElInputNumber,
 } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
@@ -19,6 +19,7 @@ import { useRouter } from 'vue-router'
 import { useUserStore } from '@/store/modules/user'
 import { updateProfileApi, fetchProfileApi } from '@/api/user'
 import { createPatApi, listPatsApi, revokePatApi, type PatRow } from '@/api/user/pat'
+import StorageAvatarUpload from '@/components/StorageAvatarUpload.vue'
 import { useTableFit } from '@vea/hooks'
 
 // keep-alive 契约：name=路由名（静态补充路由 §3.2④，tagsView.cachedViews 存路由名）
@@ -173,9 +174,10 @@ function formatTime(iso?: string | null): string {
     <el-card shadow="hover" class="mb-4">
       <template #header><span class="font-semibold">基本信息</span></template>
       <div class="flex items-center gap-4 mb-2">
-        <el-avatar :size="64" :src="userStore.profile?.avatar || undefined">
-          {{ userStore.profile?.username?.slice(0, 1)?.toUpperCase() }}
-        </el-avatar>
+        <StorageAvatarUpload
+          :current-avatar="userStore.profile?.avatar || undefined"
+          @avatar-changed="(url: string) => userStore.profile && (userStore.profile.avatar = url)"
+        />
         <el-descriptions :column="2" border>
           <el-descriptions-item label="用户名">{{ userStore.profile?.username ?? '—' }}</el-descriptions-item>
           <el-descriptions-item label="工号">{{ userStore.profile?.employee_no ?? '—' }}</el-descriptions-item>

@@ -26,6 +26,7 @@ import {
 } from '@/api/ticket'
 import { useUserStoreWithOut } from '@/store/modules/user'
 import UserNameText from '@/components/UserNameText/index.vue'
+import TicketAttachments from '@/components/TicketAttachments.vue'
 
 // keep-alive 契约：name=静态路由名（参数路由——同工单不同 ID 依赖 :key 路由 fullPath 分实例）
 defineOptions({ name: 'TicketDetail' })
@@ -314,6 +315,12 @@ async function submitRelation() {
     <el-card shadow="hover" class="mb-4">
       <template #header><span class="font-semibold">描述</span></template>
       <pre class="whitespace-pre-wrap text-sm">{{ ticket?.description || '（无描述）' }}</pre>
+    </el-card>
+
+    <!-- B5-3 工单附件区（05 号 §5——列表/上传/删除/下载，代理端点稳定 URL） -->
+    <el-card shadow="hover" class="mb-4">
+      <template #header><span class="font-semibold">附件</span></template>
+      <TicketAttachments :ticket-id="ticketId" :can-edit="userStore.hasPermission('ticket:update')" />
     </el-card>
 
     <!-- 评论/备注（S10 分层：is_internal 标内部备注；可见性由服务端过滤） -->
