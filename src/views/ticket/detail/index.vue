@@ -26,6 +26,7 @@ import {
 } from '@/api/ticket'
 import { useUserStoreWithOut } from '@/store/modules/user'
 import UserNameText from '@/components/UserNameText/index.vue'
+import { getTicketTypeFieldsApi, type TicketTypeFieldDef } from '@/api/ticket'
 import UserPicker from '@/components/UserPicker/index.vue'
 import TicketAttachments from '@/components/TicketAttachments.vue'
 
@@ -61,6 +62,27 @@ const typeLabel = computed(
   () => typesQuery.data.value?.find((t) => t.code === ticket.value?.type_code)?.name ?? ticket.value?.type_code ?? '—',
 )
 const isClosed = computed(() => ticket.value?.status === 'closed')
+
+// B1-5 自定义字段 schema + 回显（01 号 §3.5——"填了看不见"痛点收口件）
+const typeFieldsQuery = useQuery({
+  queryKey: ['ticket', 'typeFields', ticket.value?.type_code],
+  queryFn: () => getTicketTypeFieldsApi(ticket.value!.type_code),
+  enabled: computed(() => !!ticket.value?.type_code),
+  staleTime: 60_000,
+})
+const customFields = computed(() => typeFieldsQuery.data.value ?? [])
+const customValue = (key: string): unknown => {
+  const cd = (ticket.value?.custom_data ?? {}) as Record<string, unknown>
+  return cd[key]
+}
+const formatCustomValue = (f: TicketTypeFieldDef): string => {
+  const v = customValue(f.field_key)
+  if (v === undefined || v === null) return '—'
+  if (f.field_type === 'tips') return f.field_label
+  if (typeof v === 'boolean') return v ? '是' : '否'
+  return String(v)
+}
+
 
 function formatTime(iso?: string): string {
   if (!iso) return '—'
@@ -318,6 +340,27 @@ async function submitRelation() {
       <pre class="whitespace-pre-wrap text-sm">{{ ticket?.description || '（无描述）' }}</pre>
     </el-card>
 
+    <!-- B1-5 自定义字段回显（01 号 §3.5——"填了看不见"痛点收口件） -->
+    <el-card v-if="customFields.length" shadow="hover" class="mb-4">
+      <template #header><span class="font-semibold">自定义字段</span></template>
+      <el-descriptions :column="2" border size="small">
+        <el-descriptions-item
+          v-for="f in customFields"
+          :key="f.field_key"
+          :label="f.field_label"
+          :span="f.field_type === 'richtext' || f.field_type === 'textarea' ? 2 : 1"
+        >
+          <!-- richtext=服务端渲染 HTML（goldmark+bluemonday 消毒 SSOT——非前端自渲染） -->
+          <!-- eslint-disable-next-line vue/no-v-html -- XSS SSOT：服务端 goldmark+bluemonday 消毒（B5-4 先例） -->
+          <div v-if="f.field_type === 'richtext' && customValue(f.field_key)" class="richtext-view" v-html="customValue(f.field_key)" />
+          <span v-else-if="f.field_type === 'multi_select' && Array.isArray(customValue(f.field_key))">
+            <el-tag v-for="v in customValue(f.field_key) as string[]" :key="v" size="small" class="mr-1">{{ v }}</el-tag>
+          </span>
+          <span v-else>{{ formatCustomValue(f) }}</span>
+        </el-descriptions-item>
+      </el-descriptions>
+    </el-card>
+
     <!-- B5-3 工单附件区（05 号 §5——列表/上传/删除/下载，代理端点稳定 URL） -->
     <el-card shadow="hover" class="mb-4">
       <template #header><span class="font-semibold">附件</span></template>
@@ -439,3 +482,9 @@ async function submitRelation() {
     </el-dialog>
   </div>
 </template>
+
+<style scoped>
+.richtext-view :deep(img) { max-width: 100%; border-radius: 4px; }
+.richtext-view :deep(code) { background: var(--el-fill-color-light); padding: 1px 4px; border-radius: 2px; font-size: 0.9em; }
+.richtext-view :deep(pre) { background: var(--el-fill-color-light); padding: 8px; border-radius: 4px; overflow-x: auto; }
+</style>
