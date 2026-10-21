@@ -86,6 +86,7 @@ export function createDesignerState(): DesignerState {
           ? cur.field_options?.length ? cur.field_options : [{ label: '选项一', value: 'opt1' }]
           : null
         if (patch.field_type === 'tips') cur.field_key = ''
+        if (!catalogOf(patch.field_type).hasOptions) cur.dictRef = undefined
       }
     },
     addOption(idx) {

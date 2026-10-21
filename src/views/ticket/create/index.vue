@@ -27,6 +27,7 @@ import {
 } from '@/api/ticket'
 import { getMyOrgsApi } from '@/api/org/selfService'
 import { getOrgTreeApi, type OrgTreeNode } from '@/api/system/org'
+import { getDictItemsByCodeApi } from '@/api/system/dict'
 
 defineOptions({ name: 'TicketCreate' })
 
@@ -89,10 +90,35 @@ const fieldRules = computed(() => {
   return out
 })
 
-/** select 选项归一（field_options 可能是字符串数组或 {value,label} 数组） */
+// ── B1-2 字典引用预载：field_options 单元素 "dict:<code>" → 拉启用项缓存（optionsOf 同步查） ──
+const dictCache = ref<Record<string, Array<{ value: string; label: string }>>>({})
+watch(
+  () => fields.value,
+  async (fs) => {
+    const codes = new Set<string>()
+    for (const f of fs ?? []) {
+      const raw = f.field_options
+      if (Array.isArray(raw) && raw.length === 1 && typeof raw[0] === 'string' && raw[0].startsWith('dict:')) {
+        codes.add(raw[0].slice(5))
+      }
+    }
+    for (const code of codes) {
+      if (dictCache.value[code]) continue
+      const items = (await getDictItemsByCodeApi(code).catch(() => [])) ?? []
+      dictCache.value[code] = items.map((i) => ({ value: i.code, label: i.label }))
+    }
+  },
+  { immediate: true },
+)
+
+/** select 选项归一（字符串数组 / {value,label} 数组 / dict:<code> 引用——B1-2 三形态） */
 function optionsOf(f: TicketTypeFieldDef): Array<{ value: string; label: string }> {
   const raw = f.field_options
   if (Array.isArray(raw)) {
+    // 挂字典引用：展开启用项（缓存未到时暂空——watch immediate 补齐后响应式刷新）
+    if (raw.length === 1 && typeof raw[0] === 'string' && raw[0].startsWith('dict:')) {
+      return dictCache.value[raw[0].slice(5)] ?? []
+    }
     return raw.map((o) =>
       typeof o === 'object' && o !== null && 'value' in (o as Record<string, unknown>)
         ? { value: String((o as Record<string, unknown>).value), label: String((o as Record<string, unknown>).label ?? (o as Record<string, unknown>).value) }

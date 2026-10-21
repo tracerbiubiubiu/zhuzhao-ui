@@ -94,3 +94,26 @@ describe('validateDraft 负向（保存前闸）', () => {
     expect(validateDraft([badRe])).toHaveLength(1)
   })
 })
+
+describe('B1-2 字典引用（dict:<code> 形态）', () => {
+  it('defToDraft 解析单元素 dict: 引用 → dictRef；serialize 回写', () => {
+    const d = defToDraft(def({ field_type: 'select', field_options: ['dict:severity'] }))
+    expect(d.dictRef).toBe('severity')
+    expect(d.field_options).toBeNull()
+    const out = serialize([d])
+    expect(out[0].field_options).toEqual(['dict:severity'])
+  })
+
+  it('非 dict: 普通选项不受影响（无 dictRef）', () => {
+    const d = defToDraft(def({ field_type: 'select', field_options: ['高', '中'] }))
+    expect(d.dictRef).toBeUndefined()
+    expect(serialize([d])[0].field_options).toEqual(['高', '中'])
+  })
+
+  it('validateDraft：挂字典模式 dictRef 空拒；dictRef 存在时不走空选项校验', () => {
+    const withRef = defToDraft(def({ field_type: 'select', field_options: ['dict:sev'] }))
+    expect(validateDraft([withRef])).toHaveLength(0)
+    const noRef = { ...withRef, dictRef: '', field_options: null }
+    expect(validateDraft([noRef])).toHaveLength(1)
+  })
+})

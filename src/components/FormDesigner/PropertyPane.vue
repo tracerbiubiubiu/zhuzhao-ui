@@ -23,7 +23,31 @@
         </el-form-item>
 
         <template v-if="isOptionType(field.field_type)">
-          <el-form-item label="选项（field_options）">
+          <el-form-item label="选项来源">
+            <el-radio-group v-model="optMode" size="small" data-testid="fd-opt-mode">
+              <el-radio-button value="static">静态选项</el-radio-button>
+              <el-radio-button value="dict">挂字典</el-radio-button>
+            </el-radio-group>
+          </el-form-item>
+
+          <el-form-item v-if="optMode === 'dict'" label="字典类型（选项全系统联动——字典项变更即生效）">
+            <el-select
+              v-model="dictSel"
+              filterable
+              allow-create
+              :loading="dictTypesLoading"
+              placeholder="选择或输入字典 code"
+              data-testid="fd-dict-ref"
+            >
+              <el-option v-for="d in dictTypes" :key="d.code" :label="`${d.name}（${d.code}）`" :value="d.code" />
+            </el-select>
+            <div v-if="dictPreview.length" class="fd-hint">
+              预览：{{ dictPreview.map((i) => i.label).join(' / ') }}
+            </div>
+            <div v-else class="fd-hint">（字典无启用项或 code 手输——保存后守卫保引用）</div>
+          </el-form-item>
+
+          <el-form-item v-else label="选项（field_options）">
             <div class="fd-opts">
               <div v-for="(o, oi) in field.field_options" :key="oi" class="fd-opt-row">
                 <el-input v-model="o.label" placeholder="标签（回显用）" />
@@ -31,7 +55,6 @@
                 <el-button link type="danger" @click="emit('remove-option', selected, oi)">删</el-button>
               </div>
               <el-button size="small" @click="emit('add-option', selected)">+ 选项</el-button>
-              <div class="fd-hint">选项挂字典键随 B1-2 扩展（此处静态选项）</div>
             </div>
           </el-form-item>
         </template>
@@ -55,8 +78,9 @@
  * useDesigner 的 keyError/regexError 提供（G2 同款预检，服务端为 SSOT）。
  * 字段类型可在面板内切换（选项面随类型重建——useDesigner.update）。
  */
-import { computed } from 'vue'
-import { ElButton, ElForm, ElFormItem, ElInput, ElOption, ElSelect, ElSwitch } from 'element-plus'
+import { computed, ref, watch } from 'vue'
+import { ElButton, ElForm, ElFormItem, ElInput, ElOption, ElRadioButton, ElRadioGroup, ElSelect, ElSwitch } from 'element-plus'
+import { listDictTypesApi, getDictItemsByCodeApi, type DictTypeRow, type DictItemRow } from '@/api/system/dict'
 import { isOptionType } from './schemaAdapter'
 import { FIELD_CATALOG, catalogOf, type DesignerField } from './types'
 
@@ -69,6 +93,51 @@ const props = defineProps<{
 const emit = defineEmits<{ (e: 'add-option', idx: number): void; (e: 'remove-option', idx: number, optIdx: number): void }>()
 
 const field = computed(() => props.field)
+
+// ── B1-2 挂字典：模式切换（静态/字典互斥——dictRef 即模式态） ──
+const optMode = computed({
+  get: () => (field.value?.dictRef ? 'dict' : 'static'),
+  set: (m: 'static' | 'dict') => {
+    if (!field.value) return
+    if (m === 'dict' && !field.value.dictRef) {
+      field.value.dictRef = dictTypes.value[0]?.code ?? ''
+      field.value.field_options = field.value.field_options?.length ? field.value.field_options : [{ label: '选项一', value: 'opt1' }]
+    } else if (m === 'static') {
+      field.value.dictRef = undefined
+    }
+  },
+})
+const dictSel = computed({
+  get: () => field.value?.dictRef ?? '',
+  set: (code: string) => {
+    if (field.value) field.value.dictRef = code
+  },
+})
+
+// 字典类型清单（管理面 listTypes——无 dict:read 时降级手输 code）
+const dictTypes = ref<DictTypeRow[]>([])
+const dictTypesLoading = ref(false)
+;(async () => {
+  dictTypesLoading.value = true
+  try {
+    const r = await listDictTypesApi({ page: 1, page_size: 100 }).catch(() => null)
+    dictTypes.value = r?.list ?? []
+  } finally {
+    dictTypesLoading.value = false
+  }
+})()
+
+// 选中字典的启用项预览
+const dictPreview = ref<DictItemRow[]>([])
+watch(
+  () => field.value?.dictRef,
+  async (code) => {
+    dictPreview.value = []
+    if (!code) return
+    dictPreview.value = (await getDictItemsByCodeApi(code).catch(() => [])) ?? []
+  },
+  { immediate: true },
+)
 </script>
 
 <style scoped>

@@ -22,6 +22,8 @@ export interface DesignerField {
   required: boolean
   /** 仅 select/multi_select 有；其余 null */
   field_options: DesignerOption[] | null
+  /** B1-2 挂字典键（`dict:<code>` 引用形态）——与 field_options 互斥；undefined=静态选项模式 */
+  dictRef?: string
   validate_regex: string
   sort_order: number
 }

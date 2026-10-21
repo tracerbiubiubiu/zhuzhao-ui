@@ -26,6 +26,7 @@ import {
 } from '@/api/ticket'
 import { useUserStoreWithOut } from '@/store/modules/user'
 import UserNameText from '@/components/UserNameText/index.vue'
+import UserPicker from '@/components/UserPicker/index.vue'
 import TicketAttachments from '@/components/TicketAttachments.vue'
 
 // keep-alive 契约：name=静态路由名（参数路由——同工单不同 ID 依赖 :key 路由 fullPath 分实例）
@@ -416,10 +417,10 @@ async function submitRelation() {
     <el-dialog v-model="assignVisible" title="分派工单" width="420px">
       <el-form label-width="80px" @submit.prevent>
         <el-form-item label="处理人">
-          <el-input v-model="assignForm.userId" placeholder="用户 ID（数字）" />
+          <UserPicker v-model="assignForm.userId" />
         </el-form-item>
       </el-form>
-      <div class="text-xs text-gray-400 mb-2">分派后工单进入「已分派」；填错 ID 后端会拒绝并回显原因。</div>
+      <div class="text-xs text-gray-400 mb-2">分派后工单进入「已分派」（B1-2 起选人补全替代手输 ID——姓名（工号）搜索）。</div>
       <el-alert v-if="assignError" :title="assignError" type="error" show-icon :closable="false" />
       <template #footer>
         <el-button @click="assignVisible = false">取消</el-button>
