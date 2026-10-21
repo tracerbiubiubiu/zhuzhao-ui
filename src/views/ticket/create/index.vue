@@ -111,6 +111,11 @@ watch(
   { immediate: true },
 )
 
+/** B1-3 formula 字段判定（field_meta.formula 非空——服务端求值 SSOT，前端禁编辑） */
+function isFormulaField(f: TicketTypeFieldDef): boolean {
+  return !!(f as { field_meta?: { formula?: string } | null }).field_meta?.formula
+}
+
 /** select 选项归一（字符串数组 / {value,label} 数组 / dict:<code> 引用——B1-2 三形态） */
 function optionsOf(f: TicketTypeFieldDef): Array<{ value: string; label: string }> {
   const raw = f.field_options
@@ -219,15 +224,25 @@ async function handleSubmit() {
           </div>
           <el-form-item v-else :label="f.field_label" :prop="`custom.${f.field_key}`" :rules="fieldRules[f.field_key]">
             <el-input
-              v-if="f.field_type === 'input'" v-model="(form.custom[f.field_key] as string | undefined)"
+              v-if="f.field_type === 'input' && !isFormulaField(f)" v-model="(form.custom[f.field_key] as string | undefined)"
               :placeholder="f.required ? '必填' : ''"
             />
+            <el-input
+              v-else-if="f.field_type === 'input' && isFormulaField(f)" :model-value="String(form.custom[f.field_key] ?? '—')"
+              disabled
+            >
+              <template #suffix><span class="text-xs text-blue-400">自动计算</span></template>
+            </el-input>
             <el-input
               v-else-if="f.field_type === 'textarea'" v-model="(form.custom[f.field_key] as string | undefined)"
               type="textarea" :rows="3"
             />
             <el-input-number
-              v-else-if="f.field_type === 'number'" v-model="form.custom[f.field_key] as number | undefined"
+              v-else-if="f.field_type === 'number' && !isFormulaField(f)" v-model="form.custom[f.field_key] as number | undefined"
+            />
+            <el-input-number
+              v-else-if="f.field_type === 'number' && isFormulaField(f)" :model-value="(form.custom[f.field_key] as number | undefined)"
+              disabled
             />
             <!-- 后端 validateFieldValue 严格校验 YYYY-MM-DD——value-format 直出字符串，
                  防 Date 对象被序列化成 ISO datetime 而吃 400 -->

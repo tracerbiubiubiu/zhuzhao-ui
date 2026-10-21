@@ -25,6 +25,8 @@ export interface DesignerField {
   /** B1-2 挂字典键（`dict:<code>` 引用形态）——与 field_options 互斥；undefined=静态选项模式 */
   dictRef?: string
   validate_regex: string
+  /** B1-3 formula（field_meta.formula——仅 number/input 型；服务端求值 SSOT） */
+  formula: string
   sort_order: number
 }
 

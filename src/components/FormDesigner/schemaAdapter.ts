@@ -49,6 +49,8 @@ export function defToDraft(f: TicketTypeFieldDef): DesignerField {
     required: !!f.required,
     field_options: isOptionType(f.field_type) && !dictRef ? normalizeOptions(f.field_options) : null,
     validate_regex: f.validate_regex ?? '',
+    formula:
+      (f as { field_meta?: { formula?: string } | null }).field_meta?.formula ?? '',
     sort_order: f.sort_order ?? 0,
   }
 }
@@ -66,6 +68,7 @@ export function serialize(fields: DesignerField[]): TicketTypeFieldInput[] {
       : {}),
     required: f.required,
     ...(f.validate_regex.trim() ? { validate_regex: f.validate_regex.trim() } : {}),
+    ...(f.formula.trim() ? { field_meta: { formula: f.formula.trim() } } : {}),
     sort_order: i + 1,
   }))
 }
@@ -95,6 +98,9 @@ export function validateDraft(fields: DesignerField[]): FieldError[] {
       } else if (!(f.field_options ?? []).some((o) => o.label.trim())) {
         errs.push({ field_index: i, message: `「${f.field_label || '未命名字段'}」为选项类型，须挂字典或至少一个静态选项` })
       }
+    }
+    if (f.formula.trim() && f.field_type !== 'number' && f.field_type !== 'input') {
+      errs.push({ field_index: i, message: `「${f.field_label || f.field_key}」formula 仅允许 number/input 型字段` })
     }
     const re = f.validate_regex.trim()
     if (re) {

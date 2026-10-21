@@ -63,6 +63,14 @@
           <el-input v-model="field.validate_regex" placeholder="如 ^\d{1,3}$" data-testid="fd-regex" />
         </el-form-item>
 
+        <el-form-item
+          v-if="field.field_type === 'number' || field.field_type === 'input'"
+          label="计算公式（field_meta.formula · 服务端求值 SSOT——提交时自动算入）"
+        >
+          <el-input v-model="field.formula" placeholder="如 price * qty（引用其他字段键）" data-testid="fd-formula" />
+          <div class="fd-hint">公式字段提交时服务端重算覆盖手填值（前端预览值不可信）</div>
+        </el-form-item>
+
         <div class="fd-hint">sort_order = {{ field.sort_order }}（画布拖拽调整顺序）</div>
       </el-form>
     </template>

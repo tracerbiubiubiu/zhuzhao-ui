@@ -91,6 +91,8 @@ export interface TicketTypeFieldInput {
   field_label: string
   field_type: 'input' | 'textarea' | 'number' | 'date' | 'select' | 'multi_select' | 'tips' | 'richtext'
   field_options?: string[]
+  /** B1-3 formula/extension 元数据（附录 A.2 方案 b）——`{"formula":"price*qty"}` */
+  field_meta?: Record<string, unknown>
   required: boolean
   validate_regex?: string
   sort_order: number
@@ -193,6 +195,7 @@ export interface TicketTypeFieldDef {
   field_type: 'input' | 'textarea' | 'number' | 'date' | 'select' | 'multi_select' | 'tips' | 'richtext'
   /** select/multi_select 的选项（JSON——[{value,label}] 或字符串数组，渲染时归一） */
   field_options?: unknown
+  field_meta?: Record<string, unknown> | null
   required: boolean
   validate_regex?: string
   sort_order: number

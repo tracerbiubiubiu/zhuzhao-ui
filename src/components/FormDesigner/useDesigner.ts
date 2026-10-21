@@ -53,6 +53,7 @@ export function createDesignerState(): DesignerState {
         required: false,
         field_options: catalogOf(type).hasOptions ? [{ label: '选项一', value: 'opt1' }] : null,
         validate_regex: '',
+        formula: '',
         sort_order: fields.value.length + 1,
       })
       selected.value = fields.value.length - 1
@@ -130,7 +131,7 @@ export function createDesignerState(): DesignerState {
     saveBlocked: () => validateDraft(fields.value).length > 0,
     serialize: () => serialize(fields.value),
     loadFromDefs(defs) {
-      fields.value = defs.map(defToDraft)
+      fields.value = defs.map(defToDraft)  // defToDraft 已产 formula 字段
       seq = fields.value.length
       resort()
       selected.value = -1
