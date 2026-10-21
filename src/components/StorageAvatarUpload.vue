@@ -23,9 +23,9 @@
  * → bindAvatar 回写 users.avatar → 父组件刷 profile。
  */
 import { ref, computed } from 'vue'
-import { ElMessage } from 'element-plus'
-import { uploadAndConfirm, bindAvatar } from '@/api/storage'
+import { ElAvatar, ElUpload, ElMessage } from 'element-plus'
 import type { UploadFile } from 'element-plus'
+import { uploadAndConfirm, bindAvatar } from '@/api/storage'
 
 const props = defineProps<{ currentAvatar?: string }>()
 const emit = defineEmits<{ avatarChanged: [url: string] }>()

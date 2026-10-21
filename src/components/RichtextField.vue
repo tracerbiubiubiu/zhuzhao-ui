@@ -26,6 +26,7 @@
  * 禁 base64 内联（既定纪律——图片一律走对象存储稳定 URL）。
  */
 import { ref, watch, onMounted } from 'vue'
+import { ElAlert, ElButton } from 'element-plus'
 import { MdEditor } from 'md-editor-rt'
 import 'md-editor-rt/lib/style.css'
 import { uploadAndConfirm } from '@/api/storage'

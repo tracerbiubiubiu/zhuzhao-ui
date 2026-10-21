@@ -45,14 +45,14 @@
  * L2 由后端 handler 编排（附件属 ticket:update 面）；cookie 自动带无需手动 auth。
  */
 import { ref, onMounted } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElButton, ElEmpty, ElUpload, ElMessage, ElMessageBox } from 'element-plus'
+import type { UploadFile } from 'element-plus'
 import {
   listAttachments,
   deleteAttachment,
   uploadAndConfirm,
   type AttachmentView,
 } from '@/api/storage'
-import type { UploadFile } from 'element-plus'
 
 const props = defineProps<{
   ticketId: string

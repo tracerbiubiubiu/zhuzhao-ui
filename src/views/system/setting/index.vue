@@ -2,7 +2,7 @@
   <div class="fill-page p-4">
     <el-card shadow="hover">
       <template #header><span class="font-semibold">系统设置</span></template>
-      <el-table :data="settings" v-loading="loading" border>
+      <el-table ref="settingsTable" :data="settings" v-loading="loading" border>
         <el-table-column prop="key" label="设置键" width="280" />
         <el-table-column label="当前值" min-width="200">
           <template #default="{ row }">
@@ -32,7 +32,7 @@
             <el-button
               v-if="canEdit()"
               size="small" type="primary" link
-              @click="openEdit(row)"
+              @click="openEdit(row as unknown as SettingRow)"
             >编辑</el-button>
             <el-tooltip v-else content="需超级管理员权限" placement="top">
               <span class="text-xs text-gray-400">只读</span>
@@ -47,7 +47,7 @@
         <el-form-item :label="editing?.description || '值'">
           <el-input-number
             v-if="editing?.key.includes('bytes') || editing?.key.includes('per_ticket') || editing?.key.includes('batch')"
-            v-model="editValue"
+            v-model="editNumberValue"
             :min="1"
             :max="editing?.key.includes('bytes') ? 104857600 : 100"
             style="width: 200px"
@@ -80,10 +80,15 @@
  * catalog 四键（存储限制类全 superadmin-only）；tier 分层在服务端校验，
  * UI 只读展示低层级不可编辑提示。
  */
-import { ref, onMounted } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ref, computed, onMounted } from 'vue'
+import {
+  ElCard, ElTable, ElTableColumn, ElTag, ElButton, ElTooltip,
+  ElDialog, ElForm, ElFormItem, ElInput, ElInputNumber,
+  ElSelect, ElOption, ElMessage,
+} from 'element-plus'
 import request from '@vea/request'
 import { useUserStoreWithOut } from '@/store/modules/user'
+import { useTableFit } from '@vea/hooks'
 
 interface SettingRow {
   key: string
@@ -97,10 +102,17 @@ interface SettingRow {
 
 const userStore = useUserStoreWithOut()
 const settings = ref<SettingRow[]>([])
+const settingsTable = ref()
+useTableFit(settingsTable, () => settings.value)
 const loading = ref(false)
 const editVisible = ref(false)
 const editing = ref<SettingRow | null>(null)
 const editValue = ref<number | string>(0)
+/** el-input-number 需纯 number——computed 代理双向绑定 */
+const editNumberValue = computed({
+  get: () => (typeof editValue.value === 'number' ? editValue.value : Number(editValue.value) || 0),
+  set: (v: number) => { editValue.value = v },
+})
 const editMimeList = ref<string[]>([])
 const saving = ref(false)
 
