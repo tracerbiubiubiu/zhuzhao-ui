@@ -27,6 +27,7 @@ import {
   type TicketTemplateRow,
 } from '@/api/ticket'
 import { getOrgTreeApi, type OrgTreeNode } from '@/api/system/org'
+import FormDesigner from '@/components/FormDesigner/index.vue'
 
 // keep-alive 契约：name=动态路由名（菜单 code ticket_type_manage）
 defineOptions({ name: 'ticket_type_manage' })
@@ -170,7 +171,8 @@ interface FieldDraft {
   sort_order: number
 }
 
-const fieldsDialog = reactive({ visible: false, loading: false, saving: false, error: '', code: '', name: '', version: 0 })
+const fieldsDialog = reactive({ visible: false, loading: false, saving: false, error: '', code: '', name: '', version: 0, mode: 'designer' as 'designer' | 'expert' })
+const designerRef = ref<InstanceType<typeof FormDesigner>>()
 const fieldRows = ref<FieldDraft[]>([])
 
 function draftOf(f: TicketTypeFieldDef): FieldDraft {
@@ -194,6 +196,7 @@ async function openFields(row: TicketTypeFullRow) {
   try {
     const fields = await getTicketTypeFieldsApi(row.code)
     fieldRows.value = fields.map(draftOf)
+    designerRef.value?.loadFromDefs(fields)
   } catch {
     fieldsDialog.error = '字段加载失败，请关闭后重试'
   } finally {
@@ -213,6 +216,17 @@ function removeFieldRow(idx: number) {
 const fieldHasOptions = (t: TicketTypeFieldInput['field_type']) => t === 'select' || t === 'multi_select'
 
 async function saveFields() {
+  // 设计模式：设计器序列化（保存前闸在设计器内——saveBlocked 时此按钮已禁用）
+  if (fieldsDialog.mode === 'designer') {
+    const d = designerRef.value
+    if (!d) return
+    if (d.saveBlocked()) {
+      fieldsDialog.error = d.validate().map((e: { field_index: number; message: string }) => `第 ${e.field_index + 1} 项：${e.message}`).join('；')
+      return
+    }
+    await doReplace(d.serialize())
+    return
+  }
   const fields: TicketTypeFieldInput[] = []
   for (const [i, r] of fieldRows.value.entries()) {
     if (!r.field_key.trim() || !r.field_label.trim()) {
@@ -231,6 +245,11 @@ async function saveFields() {
       sort_order: r.sort_order,
     })
   }
+  await doReplace(fields)
+}
+
+/** 全量替换共用管线（设计/专家两模式同路——危险确认 + replace + 回填） */
+async function doReplace(fields: TicketTypeFieldInput[]) {
   // S12/S23 硬要求：全量替换语义——保存前危险确认（存量字段将被整组覆盖）
   try {
     await ElMessageBox.confirm(
@@ -477,12 +496,20 @@ useTableFit(tplTable, () => templatesQuery.data.value)
     </el-dialog>
 
     <!-- 字段编辑器（全量替换——危险确认） -->
-    <el-dialog v-model="fieldsDialog.visible" :title="`字段配置 — ${fieldsDialog.name}`" width="860px">
-      <div class="mb-2 flex items-center justify-between">
-        <span class="text-xs text-gray-400">保存为「全量替换」：未列出的存量字段将被删除。字段类型七枚举：input/textarea/number/date/select/multi_select/tips。</span>
-        <el-button v-permission="'ticket:type:manage'" size="small" @click="addFieldRow">添加字段</el-button>
-      </div>
-      <el-table v-loading="fieldsDialog.loading" :data="fieldRows" size="small" border>
+    <el-dialog v-model="fieldsDialog.visible" :title="`字段配置 — ${fieldsDialog.name}`" width="960px">
+      <el-tabs v-model="fieldsDialog.mode">
+        <el-tab-pane label="设计模式" name="designer">
+          <div v-loading="fieldsDialog.loading" class="mb-1 text-xs text-gray-400">
+            拖拽排序 / 属性面板编辑；保存为「全量替换」（与专家模式同一管线）。
+          </div>
+          <FormDesigner ref="designerRef" />
+        </el-tab-pane>
+        <el-tab-pane label="专家模式（表格）" name="expert">
+          <div class="mb-2 flex items-center justify-between">
+            <span class="text-xs text-gray-400">保存为「全量替换」：未列出的存量字段将被删除。字段类型八枚举：input/textarea/number/date/select/multi_select/tips/richtext。</span>
+            <el-button v-permission="'ticket:type:manage'" size="small" @click="addFieldRow">添加字段</el-button>
+          </div>
+          <el-table v-loading="fieldsDialog.loading" :data="fieldRows" size="small" border>
         <el-table-column label="field_key" width="150">
           <template #default="{ row }"><el-input v-model="row.field_key" size="small" placeholder="英文键" maxlength="50" /></template>
         </el-table-column>
@@ -517,6 +544,8 @@ useTableFit(tplTable, () => templatesQuery.data.value)
           </template>
         </el-table-column>
       </el-table>
+        </el-tab-pane>
+      </el-tabs>
       <el-alert v-if="fieldsDialog.error" :title="fieldsDialog.error" type="error" show-icon class="mt-2" :closable="false" />
       <template #footer>
         <el-button @click="fieldsDialog.visible = false">取消</el-button>

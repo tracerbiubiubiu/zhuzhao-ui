@@ -36,6 +36,7 @@
     "nprogress": "^0.2.0",
     "pinia": "^4.0.2",
     "pinia-plugin-persistedstate": "^4.7.1",
+    "sortablejs": "^1.15.7",
     "vue": "3.5.43",
     "vue-i18n": "11.4.8",
     "vue-router": "^5.2.0"
@@ -45,6 +46,7 @@
     "@playwright/test": "^1.63.0",
     "@types/node": "^26.2.0",
     "@types/nprogress": "^0.2.3",
+    "@types/sortablejs": "^1.15.9",
     "@unocss/transformer-variant-group": "^66.7.5",
     "@vitejs/plugin-vue": "^6.0.8",
     "@vitejs/plugin-vue-jsx": "^5.1.6",

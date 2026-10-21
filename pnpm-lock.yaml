@@ -145,6 +145,9 @@ importers:
       pinia-plugin-persistedstate:
         specifier: ^4.7.1
         version: 4.7.1(pinia@4.1.0(@vue/devtools-api@8.2.1)(typescript@5.9.3)(vue@3.5.43(typescript@5.9.3)))
+      sortablejs:
+        specifier: ^1.15.7
+        version: 1.15.7
       vue:
         specifier: 3.5.43
         version: 3.5.43(typescript@5.9.3)
@@ -167,6 +170,9 @@ importers:
       '@types/nprogress':
         specifier: ^0.2.3
         version: 0.2.3
+      '@types/sortablejs':
+        specifier: ^1.15.9
+        version: 1.15.9
       '@unocss/transformer-variant-group':
         specifier: ^66.7.5
         version: 66.11.0
@@ -1336,6 +1342,9 @@ packages:
 
   '@types/nprogress@0.2.3':
     resolution: {integrity: sha512-k7kRA033QNtC+gLc4VPlfnue58CM1iQLgn1IMAU8VPHGOj7oIHPp9UlhedEnD/Gl8evoCjwkZjlBORtZ3JByUA==}
+
+  '@types/sortablejs@1.15.9':
+    resolution: {integrity: sha512-7HP+rZGE2p886PKV9c9OJzLBI6BBJu1O7lJGYnPyG3fS4/duUCcngkNCjsLwIMV+WMqANe3tt4irrXHSIe68OQ==}
 
   '@types/web-bluetooth@0.0.21':
     resolution: {integrity: sha512-oIQLCGWtcFZy2JW77j9k8nHzAOpqMHLQejDA48XXMWH6tjCQHz5RCFz1bzsmROyL6PUm+LLnUiI4BCn221inxA==}
@@ -2903,6 +2912,9 @@ packages:
   should@13.2.3:
     resolution: {integrity: sha512-ggLesLtu2xp+ZxI+ysJTmNjh2U0TsC+rQ/pfED9bUZZ4DKefP27D+7YJVVTvKsmjLpIi9jAa7itwDGkDDmt1GQ==}
 
+  sortablejs@1.15.7:
+    resolution: {integrity: sha512-Kk8wLQPlS+yi1ZEf48a4+fzHa4yxjC30M/Sr2AnQu+f/MPwvvX9XjZ6OWejiz8crBsLwSq8GHqaxaET7u6ux0A==}
+
   source-map-js@1.2.2:
     resolution: {integrity: sha512-KGj/8Y43x35aZVDtt+J4mK1hoLGHULMYfSkODJNQjNDC3oW1PqPoxMwo0pLUsWM/UEGzON/NxeHywEfNXNP3Vw==}
     engines: {node: '>=0.10.0'}
@@ -4422,6 +4434,8 @@ snapshots:
       undici-types: 8.9.0
 
   '@types/nprogress@0.2.3': {}
+
+  '@types/sortablejs@1.15.9': {}
 
   '@types/web-bluetooth@0.0.21': {}
 
@@ -6189,6 +6203,8 @@ snapshots:
       should-type: 1.4.0
       should-type-adaptors: 1.1.0
       should-util: 1.0.1
+
+  sortablejs@1.15.7: {}
 
   source-map-js@1.2.2: {}
 

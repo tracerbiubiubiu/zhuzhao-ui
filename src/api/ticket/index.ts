@@ -89,7 +89,7 @@ export interface TicketTypeFullRow extends TicketTypeRow {
 export interface TicketTypeFieldInput {
   field_key: string
   field_label: string
-  field_type: 'input' | 'textarea' | 'number' | 'date' | 'select' | 'multi_select' | 'tips'
+  field_type: 'input' | 'textarea' | 'number' | 'date' | 'select' | 'multi_select' | 'tips' | 'richtext'
   field_options?: string[]
   required: boolean
   validate_regex?: string
@@ -190,7 +190,7 @@ export interface TicketTypeFieldDef {
   type_code: string
   field_key: string
   field_label: string
-  field_type: 'input' | 'textarea' | 'number' | 'date' | 'select' | 'multi_select' | 'tips'
+  field_type: 'input' | 'textarea' | 'number' | 'date' | 'select' | 'multi_select' | 'tips' | 'richtext'
   /** select/multi_select 的选项（JSON——[{value,label}] 或字符串数组，渲染时归一） */
   field_options?: unknown
   required: boolean
