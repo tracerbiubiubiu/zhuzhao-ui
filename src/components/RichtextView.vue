@@ -1,4 +1,5 @@
 <template>
+  <!-- eslint-disable-next-line vue/no-v-html — XSS SSOT：HTML 经服务端 goldmark+bluemonday 白名单消毒出站（B5-4 05 号 §6），前端不自行渲染用户输入 -->
   <div class="richtext-view" v-html="renderedHtml"></div>
 </template>
 
