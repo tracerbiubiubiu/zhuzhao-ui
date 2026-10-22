@@ -15,7 +15,7 @@
 import { computed, reactive, ref, watch } from 'vue'
 import {
   ElButton, ElCard, ElDatePicker, ElForm, ElFormItem, ElInput, ElInputNumber,
-  ElMessage, ElOption, ElRadio, ElRadioGroup, ElRate, ElSelect,
+  ElMessage, ElOption, ElRadio, ElRadioGroup, ElRate, ElSelect, ElTag,
   ElAlert,
 } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
@@ -25,6 +25,7 @@ import {
   createTicketApi, getTicketTypeFieldsApi, listTicketTypesApi,
   type TicketTypeFieldDef,
 } from '@/api/ticket'
+import { uploadAndConfirm } from '@/api/storage'
 import { getMyOrgsApi } from '@/api/org/selfService'
 import { getOrgTreeApi, type OrgTreeNode } from '@/api/system/org'
 import { getDictItemsByCodeApi } from '@/api/system/dict'
@@ -93,6 +94,54 @@ function isVisibleField(f: TicketTypeFieldDef): boolean {
 // ── B1-6 批3：布局渲染投影（col_span 栅格 + group 折叠 + visible_when 过滤） ──
 const visibleFields = computed(() => fields.value.filter((f) => isVisibleField(f)))
 
+
+// ── B1-6 批3 file：上传字段（presign→PUT→confirm 三步直传→object_key 入 custom_data） ──
+const fileUploading = ref<Record<string, boolean>>({})
+const fileErrors = ref<Record<string, string>>({})
+
+function fileKeys(f: TicketTypeFieldDef): string[] {
+  return ((form.custom as Record<string, unknown>)[f.field_key] as string[] | undefined) ?? []
+}
+
+function setFileKeys(f: TicketTypeFieldDef, keys: string[]) {
+  ;(form.custom as Record<string, unknown>)[f.field_key] = keys.length ? keys : undefined
+}
+
+function mimeAllowed(f: TicketTypeFieldDef, file: File): boolean {
+  const raw = f.field_options
+  if (!Array.isArray(raw) || raw.length === 0) return true
+  return raw.some((m) => typeof m === 'string' && file.type === m)
+}
+
+async function handleFileUpload(f: TicketTypeFieldDef, event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''
+  if (!file) return
+  fileErrors.value[f.field_key] = ''
+  if (!mimeAllowed(f, file)) {
+    fileErrors.value[f.field_key] = `文件类型 ${file.type} 不在白名单内`
+    return
+  }
+  fileUploading.value[f.field_key] = true
+  try {
+    const result = await uploadAndConfirm(file, 'attachment_create')
+    setFileKeys(f, [...fileKeys(f), result.object_key])
+  } catch (e) {
+    fileErrors.value[f.field_key] = e instanceof Error ? e.message : '上传失败'
+  } finally {
+    fileUploading.value[f.field_key] = false
+  }
+}
+
+function removeFileKey(f: TicketTypeFieldDef, key: string) {
+  setFileKeys(f, fileKeys(f).filter((k) => k !== key))
+}
+
+function shortName(key: string): string {
+  const parts = key.split('/')
+  return parts[parts.length - 1] ?? key
+}
 
 /** 字段动态校验规则（required + regex 预检——03 S8） */
 const fieldRules = computed(() => {
@@ -308,6 +357,32 @@ async function handleSubmit() {
               v-else-if="f.field_type === 'rating' && isFormulaField(f)"
               :model-value="Number(form.custom[f.field_key] ?? 0)" disabled
             />
+            <!-- B1-6 批3 file：上传字段（presign→confirm 直传→object_key 数组） -->
+            <div v-else-if="f.field_type === 'file'" class="file-upload-field">
+              <input
+                type="file"
+                :data-field-key="f.field_key"
+                class="hidden"
+                @change="handleFileUpload(f, $event)"
+              />
+              <el-button
+                size="small"
+                :loading="fileUploading[f.field_key]"
+                @click="(($event?.target as HTMLElement)?.closest('.file-upload-field')?.querySelector('input[type=file]') as HTMLInputElement | null)?.click()"
+              >
+                选择文件
+              </el-button>
+              <div v-if="fileKeys(f).length" class="mt-1 flex flex-wrap gap-1">
+                <el-tag
+                  v-for="k in fileKeys(f)"
+                  :key="k"
+                  size="small"
+                  closable
+                  @close="removeFileKey(f, k)"
+                >{{ shortName(k) }}</el-tag>
+              </div>
+              <div v-if="fileErrors[f.field_key]" class="text-xs text-red-500 mt-1">{{ fileErrors[f.field_key] }}</div>
+            </div>
             <!-- richtext=md-editor-rt 富文本编辑器（工具栏+图片粘贴直传+本地草草稿） -->
             <RichtextField
               v-else-if="f.field_type === 'richtext' && !isFormulaField(f)"
