@@ -73,10 +73,10 @@ test.describe('S5 存储面冒烟', () => {
       data: { type_code: 'incident', title: 'E2E 附件冒烟', priority: 3, org_id: 1 },
     })
     const createBody = await createRes.json() as Envelope<{ id: string }>
-    if (createBody.code === 0) {
-      await page.goto(`/ticket/detail/${createBody.data.id}`)
-      // TicketAttachments 卡片应存在
-      await expect(page.locator('.ticket-attachments')).toBeVisible({ timeout: 5_000 })
-    }
+    // B1-7 批3（三路F-E-3）：硬断言建单成功——原 if(code===0) 包裹使建单失败静默通过
+    expect(createBody.code, '建单失败——附件断言须红').toBe(0)
+    await page.goto(`/ticket/detail/${createBody.data.id}`)
+    // TicketAttachments 卡片应存在
+    await expect(page.locator('.ticket-attachments')).toBeVisible({ timeout: 5_000 })
   })
 })

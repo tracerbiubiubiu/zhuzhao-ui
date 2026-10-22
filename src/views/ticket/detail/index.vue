@@ -27,6 +27,7 @@ import {
 import { useUserStoreWithOut } from '@/store/modules/user'
 import UserNameText from '@/components/UserNameText/index.vue'
 import { getTicketTypeFieldsApi, type TicketTypeFieldDef , renderRichtextApi } from '@/api/ticket'
+import { getDictItemsByCodeApi } from '@/api/system/dict'
 import UserPicker from '@/components/UserPicker/index.vue'
 import TicketAttachments from '@/components/TicketAttachments.vue'
 
@@ -98,6 +99,46 @@ const formatCustomValue = (f: TicketTypeFieldDef): string => {
   if (f.field_type === 'tips') return f.field_label
   if (typeof v === 'boolean') return v ? '是' : '否'
   return String(v)
+}
+
+// ── B1-7 批3（三路F-E-4）：字典引用选项预载——select/multi_select 显示 label 而非 code ──
+const dictCache = ref<Record<string, Array<{ value: string; label: string }>>>({})
+watch(
+  () => customFields.value,
+  async (fs) => {
+    const codes = new Set<string>()
+    for (const f of fs ?? []) {
+      const raw = f.field_options
+      if (Array.isArray(raw) && raw.length === 1 && typeof raw[0] === 'string' && raw[0].startsWith('dict:')) {
+        codes.add(raw[0].slice(5))
+      }
+    }
+    for (const code of codes) {
+      if (dictCache.value[code]) continue
+      const items = (await getDictItemsByCodeApi(code).catch(() => [])) ?? []
+      dictCache.value[code] = items.map((i) => ({ value: i.code, label: i.label }))
+    }
+  },
+  { immediate: true },
+)
+
+/** 选项 label 解析（三形态与 create 页 optionsOf 同款——dict 引用展开缓存，兜底原值） */
+function labelOf(f: TicketTypeFieldDef, v: string): string {
+  const raw = f.field_options
+  if (Array.isArray(raw)) {
+    let opts: Array<{ value: string; label: string }>
+    if (raw.length === 1 && typeof raw[0] === 'string' && raw[0].startsWith('dict:')) {
+      opts = dictCache.value[raw[0].slice(5)] ?? []
+    } else {
+      opts = raw.map((o) =>
+        typeof o === 'object' && o !== null && 'value' in (o as Record<string, unknown>)
+          ? { value: String((o as Record<string, unknown>).value), label: String((o as Record<string, unknown>).label ?? (o as Record<string, unknown>).value) }
+          : { value: String(o), label: String(o) },
+      )
+    }
+    return opts.find((o) => o.value === v)?.label ?? v
+  }
+  return v
 }
 
 
@@ -371,8 +412,12 @@ async function submitRelation() {
           <!-- eslint-disable-next-line vue/no-v-html -- XSS SSOT：服务端 goldmark+bluemonday 消毒出站 HTML（F-E-1 修复 2026-10-22——不直接注入 MD 源文本） -->
           <div v-if="f.field_type === 'richtext' && renderedHtml[f.field_key]" class="richtext-view" v-html="renderedHtml[f.field_key]" />
           <span v-else-if="f.field_type === 'multi_select' && Array.isArray(customValue(f.field_key))">
-            <el-tag v-for="v in customValue(f.field_key) as string[]" :key="v" size="small" class="mr-1">{{ v }}</el-tag>
+            <!-- B1-7 批3（三路F-E-4）：字典项显示 label 而非 code -->
+            <el-tag v-for="v in customValue(f.field_key) as string[]" :key="v" size="small" class="mr-1">{{ labelOf(f, v) }}</el-tag>
           </span>
+          <span v-else-if="f.field_type === 'select' && customValue(f.field_key) != null">{{
+            labelOf(f, String(customValue(f.field_key)))
+          }}</span>
           <span v-else>{{ formatCustomValue(f) }}</span>
         </el-descriptions-item>
       </el-descriptions>
