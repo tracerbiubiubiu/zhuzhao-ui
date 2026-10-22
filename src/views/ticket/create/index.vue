@@ -28,6 +28,7 @@ import {
 import { getMyOrgsApi } from '@/api/org/selfService'
 import { getOrgTreeApi, type OrgTreeNode } from '@/api/system/org'
 import { getDictItemsByCodeApi } from '@/api/system/dict'
+import RichtextField from '@/components/RichtextField.vue'
 
 defineOptions({ name: 'TicketCreate' })
 
@@ -262,6 +263,21 @@ async function handleSubmit() {
             >
               <el-option v-for="o in optionsOf(f)" :key="o.value" :label="o.label" :value="o.value" />
             </el-select>
+            <!-- richtext=md-editor-rt 富文本编辑器（工具栏+图片粘贴直传+本地草草稿） -->
+            <RichtextField
+              v-else-if="f.field_type === 'richtext' && !isFormulaField(f)"
+              :model-value="(form.custom[f.field_key] as string | undefined) ?? ''"
+              :placeholder="f.required ? '必填' : ''"
+              :draft-key="`ticket_create_${f.field_key}`"
+              @update:model-value="(v: string) => { form.custom[f.field_key] = v }"
+            />
+            <el-input
+              v-else-if="f.field_type === 'richtext' && isFormulaField(f)"
+              :model-value="String(form.custom[f.field_key] ?? '—')"
+              disabled
+            >
+              <template #suffix><span class="text-xs text-blue-400">自动计算</span></template>
+            </el-input>
           </el-form-item>
         </template>
 
