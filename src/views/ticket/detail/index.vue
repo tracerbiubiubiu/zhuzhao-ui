@@ -11,7 +11,7 @@
  * - 按钮码（000010/000031 种子）：ticket:update/close/assign/delete/comment/note/relation
  * - 静态路由（§3.2④，菜单外——入口在列表页「详情」按钮，挂 ticket:read 码）
  */
-import { computed, reactive, ref } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   ElAlert, ElButton, ElCard, ElCheckbox, ElDescriptions, ElDescriptionsItem, ElDialog,
@@ -26,7 +26,7 @@ import {
 } from '@/api/ticket'
 import { useUserStoreWithOut } from '@/store/modules/user'
 import UserNameText from '@/components/UserNameText/index.vue'
-import { getTicketTypeFieldsApi, type TicketTypeFieldDef } from '@/api/ticket'
+import { getTicketTypeFieldsApi, type TicketTypeFieldDef , renderRichtextApi } from '@/api/ticket'
 import UserPicker from '@/components/UserPicker/index.vue'
 import TicketAttachments from '@/components/TicketAttachments.vue'
 
@@ -71,6 +71,23 @@ const typeFieldsQuery = useQuery({
   staleTime: 60_000,
 })
 const customFields = computed(() => typeFieldsQuery.data.value ?? [])
+
+// F-E-1 修复：richtext 字段经服务端 render 端点消毒出站 HTML——不直接注入 MD 源
+const renderedHtml = ref<Record<string, string>>({})
+watch(
+  () => customFields.value.filter((f) => f.field_type === 'richtext').map((f) => ({
+    key: f.field_key,
+    src: String(customValue(f.field_key) ?? ''),
+  })).filter((x) => x.src),
+  async (items: Array<{ key: string; src: string }>) => {
+    for (const { key, src } of items) {
+      if (renderedHtml.value[key] !== undefined) continue
+      renderedHtml.value[key] = '' // 占位防重复请求
+      renderedHtml.value[key] = await renderRichtextApi(src).catch(() => '')
+    }
+  },
+  { immediate: true },
+)
 const customValue = (key: string): unknown => {
   const cd = (ticket.value?.custom_data ?? {}) as Record<string, unknown>
   return cd[key]
@@ -351,8 +368,8 @@ async function submitRelation() {
           :span="f.field_type === 'richtext' || f.field_type === 'textarea' ? 2 : 1"
         >
           <!-- richtext=服务端渲染 HTML（goldmark+bluemonday 消毒 SSOT——非前端自渲染） -->
-          <!-- eslint-disable-next-line vue/no-v-html -- XSS SSOT：服务端 goldmark+bluemonday 消毒（B5-4 先例） -->
-          <div v-if="f.field_type === 'richtext' && customValue(f.field_key)" class="richtext-view" v-html="customValue(f.field_key)" />
+          <!-- eslint-disable-next-line vue/no-v-html -- XSS SSOT：服务端 goldmark+bluemonday 消毒出站 HTML（F-E-1 修复 2026-10-22——不直接注入 MD 源文本） -->
+          <div v-if="f.field_type === 'richtext' && renderedHtml[f.field_key]" class="richtext-view" v-html="renderedHtml[f.field_key]" />
           <span v-else-if="f.field_type === 'multi_select' && Array.isArray(customValue(f.field_key))">
             <el-tag v-for="v in customValue(f.field_key) as string[]" :key="v" size="small" class="mr-1">{{ v }}</el-tag>
           </span>

@@ -325,3 +325,9 @@ export async function assignTicketApi(id: string, assignedTo: string | null): Pr
 export async function deleteTicketApi(id: string): Promise<void> {
   await request.post('/api/v1/tickets/delete', { id }, { _silentError: true })
 }
+
+/** B5-4 richtext 渲染（服务端消毒 SSOT——goldmark+bluemonday） */
+export async function renderRichtextApi(content: string): Promise<string> {
+  const data = await request.post('/api/v1/tickets/richtext/render', { content })
+  return ((data as unknown as { html?: string })?.html ?? '')
+}
