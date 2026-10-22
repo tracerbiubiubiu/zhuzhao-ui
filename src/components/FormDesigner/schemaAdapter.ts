@@ -5,7 +5,7 @@
  * 语义对齐专家模式既有口径：field_options 双形态归一（label 为准）；空 regex 不产字段（omitempty）。
  */
 import type { TicketTypeFieldDef, TicketTypeFieldInput } from '@/api/ticket'
-import { KEY_PATTERN, type DesignerField, type FieldType8 } from './types'
+import { KEY_PATTERN, type DesignerField, type FieldType11 } from './types'
 
 /** field_options 双形态归一：字符串数组 / [{value,label}] 数组 → DesignerOption[] */
 function normalizeOptions(raw: unknown): DesignerField['field_options'] {
@@ -22,7 +22,7 @@ function normalizeOptions(raw: unknown): DesignerField['field_options'] {
   })
 }
 
-const isOptionType = (t: FieldType8) => t === 'select' || t === 'multi_select'
+const isOptionType = (t: FieldType11) => t === 'select' || t === 'multi_select' || t === 'radio'
 
 /** B1-2 字典引用形态：单元素 "dict:<code>" → dictRef（01 号 §3.2 挂字典键） */
 const DICT_PREFIX = 'dict:'
@@ -51,6 +51,9 @@ export function defToDraft(f: TicketTypeFieldDef): DesignerField {
     validate_regex: f.validate_regex ?? '',
     formula:
       (f as { field_meta?: { formula?: string } | null }).field_meta?.formula ?? '',
+    col_span: (f.field_meta as { col_span?: number } | null | undefined)?.col_span,
+    group: (f.field_meta as { group?: string } | null | undefined)?.group ?? '',
+    visible_when: (f.field_meta as { visible_when?: string } | null | undefined)?.visible_when ?? '',
     sort_order: f.sort_order ?? 0,
   }
 }
@@ -68,9 +71,19 @@ export function serialize(fields: DesignerField[]): TicketTypeFieldInput[] {
       : {}),
     required: f.required,
     ...(f.validate_regex.trim() ? { validate_regex: f.validate_regex.trim() } : {}),
-    ...(f.formula.trim() ? { field_meta: { formula: f.formula.trim() } } : {}),
+    ...buildFieldMeta(f),
     sort_order: i + 1,
   }))
+}
+
+/** B1-6 批3：field_meta 合并构建（formula/col_span/group/visible_when 同列承载） */
+function buildFieldMeta(f: DesignerField): { field_meta?: Record<string, unknown> } {
+  const meta: Record<string, unknown> = {}
+  if (f.formula.trim()) meta.formula = f.formula.trim()
+  if (f.col_span && f.col_span >= 1 && f.col_span <= 24) meta.col_span = f.col_span
+  if (f.group?.trim()) meta.group = f.group.trim()
+  if (f.visible_when?.trim()) meta.visible_when = f.visible_when.trim()
+  return Object.keys(meta).length ? { field_meta: meta } : {}
 }
 
 export interface FieldError {
@@ -109,6 +122,10 @@ export function validateDraft(fields: DesignerField[]): FieldError[] {
       } catch {
         errs.push({ field_index: i, message: `正则语法错误：${re}` })
       }
+    }
+    // B1-6 批3：col_span 1–24（与后端 G2 同款）
+    if (f.col_span != null && (f.col_span < 1 || f.col_span > 24)) {
+      errs.push({ field_index: i, message: `「${f.field_label || f.field_key}」col_span 须为 1–24` })
     }
   })
   return errs

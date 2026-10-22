@@ -89,7 +89,7 @@ export interface TicketTypeFullRow extends TicketTypeRow {
 export interface TicketTypeFieldInput {
   field_key: string
   field_label: string
-  field_type: 'input' | 'textarea' | 'number' | 'date' | 'select' | 'multi_select' | 'tips' | 'richtext'
+  field_type: 'input' | 'textarea' | 'number' | 'date' | 'select' | 'multi_select' | 'tips' | 'richtext' | 'radio' | 'rating' | 'file'
   field_options?: string[]
   /** B1-3 formula/extension 元数据（附录 A.2 方案 b）——`{"formula":"price*qty"}` */
   field_meta?: Record<string, unknown>
@@ -192,7 +192,7 @@ export interface TicketTypeFieldDef {
   type_code: string
   field_key: string
   field_label: string
-  field_type: 'input' | 'textarea' | 'number' | 'date' | 'select' | 'multi_select' | 'tips' | 'richtext'
+  field_type: 'input' | 'textarea' | 'number' | 'date' | 'select' | 'multi_select' | 'tips' | 'richtext' | 'radio' | 'rating' | 'file'
   /** select/multi_select 的选项（JSON——[{value,label}] 或字符串数组，渲染时归一） */
   field_options?: unknown
   field_meta?: Record<string, unknown> | null

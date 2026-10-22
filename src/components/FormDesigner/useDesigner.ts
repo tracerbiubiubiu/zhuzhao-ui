@@ -7,13 +7,13 @@
 import { ref, type Ref } from 'vue'
 import type { TicketTypeFieldDef, TicketTypeFieldInput } from '@/api/ticket'
 import { defToDraft, serialize, validateDraft } from './schemaAdapter'
-import { KEY_PATTERN, catalogOf, type DesignerField, type FieldType8 } from './types'
+import { KEY_PATTERN, catalogOf, type DesignerField, type FieldType11 } from './types'
 import { nextUid } from './schemaAdapter'
 
 export interface DesignerState {
   fields: Ref<DesignerField[]>
   selected: Ref<number>
-  add: (type: FieldType8) => void
+  add: (type: FieldType11) => void
   select: (idx: number) => void
   remove: (idx: number) => void
   /** sortablejs onEnd 语义：oldIndex → newIndex（越界钳制） */

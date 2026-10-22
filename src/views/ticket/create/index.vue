@@ -15,7 +15,7 @@
 import { computed, reactive, ref, watch } from 'vue'
 import {
   ElButton, ElCard, ElDatePicker, ElForm, ElFormItem, ElInput, ElInputNumber,
-  ElMessage, ElOption, ElSelect,
+  ElMessage, ElOption, ElRadio, ElRadioGroup, ElRate, ElSelect,
   ElAlert,
 } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
@@ -64,6 +64,35 @@ watch(() => form.type_code, async (code) => {
   if (seq !== fieldsSeq) return
   fields.value = next
 })
+
+// ── B1-6 批3：条件显隐（渲染端 watch 联动——服务端 G2 提交时兜底断言） ──
+function isVisibleField(f: TicketTypeFieldDef): boolean {
+  const vw = (f.field_meta as { visible_when?: string } | null | undefined)?.visible_when
+  if (!vw) return true
+  try {
+    const m = vw.match(/^(\w+)\s*(==|!=|>=|<=|>|<)\s*(.+)$/)
+    if (!m) return true
+    const [, key, op, rawVal] = m
+    const cur = (form.custom as Record<string, unknown>)[key]
+    const target = rawVal.replace(/'/g, '').replace(/"/g, '').trim()
+    const curStr = String(cur ?? '')
+    switch (op) {
+      case '==': return curStr === target
+      case '!=': return curStr !== target
+      case '>': return Number(cur) > Number(target)
+      case '<': return Number(cur) < Number(target)
+      case '>=': return Number(cur) >= Number(target)
+      case '<=': return Number(cur) <= Number(target)
+    }
+    return true
+  } catch {
+    return true
+  }
+}
+
+// ── B1-6 批3：布局渲染投影（col_span 栅格 + group 折叠 + visible_when 过滤） ──
+const visibleFields = computed(() => fields.value.filter((f) => isVisibleField(f)))
+
 
 /** 字段动态校验规则（required + regex 预检——03 S8） */
 const fieldRules = computed(() => {
@@ -218,7 +247,7 @@ async function handleSubmit() {
         </el-form-item>
 
         <!-- 动态自定义字段（七类型渲染器；类型切换时重置） -->
-        <template v-for="f in fields" :key="f.field_key">
+        <template v-for="f in visibleFields" :key="f.field_key">
           <!-- tips=说明块无值：脱离 label 列整行呈现（此前 label/内容双显同文案） -->
           <div v-if="f.field_type === 'tips'" class="text-xs text-gray-400 -mt-1 mb-3">
             {{ f.field_label }}
@@ -263,6 +292,22 @@ async function handleSubmit() {
             >
               <el-option v-for="o in optionsOf(f)" :key="o.value" :label="o.label" :value="o.value" />
             </el-select>
+            <!-- B1-6 批3 radio：与 select 同数据模型不同渲染（el-radio-group） -->
+            <el-radio-group
+              v-else-if="f.field_type === 'radio'" v-model="form.custom[f.field_key] as string | undefined"
+            >
+              <el-radio v-for="o in optionsOf(f)" :key="o.value" :value="o.value">{{ o.label }}</el-radio>
+            </el-radio-group>
+            <!-- B1-6 批3 rating：与 number 同数据模型（el-rate 1–5 整数） -->
+            <el-rate
+              v-else-if="f.field_type === 'rating' && !isFormulaField(f)"
+              :model-value="Number(form.custom[f.field_key] ?? 0)"
+              @update:model-value="(v: number | undefined) => { form.custom[f.field_key] = v ?? 0 }"
+            />
+            <el-input-number
+              v-else-if="f.field_type === 'rating' && isFormulaField(f)"
+              :model-value="Number(form.custom[f.field_key] ?? 0)" disabled
+            />
             <!-- richtext=md-editor-rt 富文本编辑器（工具栏+图片粘贴直传+本地草草稿） -->
             <RichtextField
               v-else-if="f.field_type === 'richtext' && !isFormulaField(f)"

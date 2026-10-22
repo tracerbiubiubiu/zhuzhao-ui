@@ -71,6 +71,20 @@
           <div class="fd-hint">公式字段提交时服务端重算覆盖手填值（前端预览值不可信）</div>
         </el-form-item>
 
+        <!-- B1-6 批3：布局键（field_meta.col_span/group/visible_when——零后端迁移） -->
+        <el-form-item label="列宽（field_meta.col_span · 1–24 / 24 栅格）">
+          <el-slider v-model="field.col_span" :min="1" :max="24" :step="1" show-input data-testid="fd-col-span" />
+        </el-form-item>
+
+        <el-form-item label="分组（field_meta.group · 同名字段折叠为一组）">
+          <el-input v-model="field.group" maxlength="50" placeholder="如：基本信息" data-testid="fd-group" />
+        </el-form-item>
+
+        <el-form-item label="条件显隐（field_meta.visible_when · 表达式——求值 false 时隐藏且不校验）">
+          <el-input v-model="field.visible_when" placeholder="如 a == 1（引用其他字段键）" data-testid="fd-visible-when" />
+          <div class="fd-hint">服务端 G2 提交时兜底断言（隐藏字段 required 不校验、值不写入）；渲染端 watch 联动即时反馈</div>
+        </el-form-item>
+
         <div class="fd-hint">sort_order = {{ field.sort_order }}（画布拖拽调整顺序）</div>
       </el-form>
     </template>
@@ -87,7 +101,7 @@
  * 字段类型可在面板内切换（选项面随类型重建——useDesigner.update）。
  */
 import { computed, ref, watch } from 'vue'
-import { ElButton, ElForm, ElFormItem, ElInput, ElOption, ElRadioButton, ElRadioGroup, ElSelect, ElSwitch } from 'element-plus'
+import { ElButton, ElForm, ElFormItem, ElInput, ElOption, ElRadioButton, ElRadioGroup, ElSelect, ElSlider, ElSwitch } from 'element-plus'
 import { listDictTypesApi, getDictItemsByCodeApi, type DictTypeRow, type DictItemRow } from '@/api/system/dict'
 import { isOptionType } from './schemaAdapter'
 import { FIELD_CATALOG, catalogOf, type DesignerField } from './types'
