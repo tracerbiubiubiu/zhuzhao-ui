@@ -426,7 +426,7 @@ async function submitRelation() {
     <!-- B5-3 工单附件区（05 号 §5——列表/上传/删除/下载，代理端点稳定 URL） -->
     <el-card shadow="hover" class="mb-4">
       <template #header><span class="font-semibold">附件</span></template>
-      <TicketAttachments :ticket-id="ticketId" :can-edit="userStore.hasPermission('ticket:update')" />
+      <TicketAttachments :ticket-id="ticketId" :can-edit="true" />
     </el-card>
 
     <!-- 评论/备注（S10 分层：is_internal 标内部备注；可见性由服务端过滤） -->
