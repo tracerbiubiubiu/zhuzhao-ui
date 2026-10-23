@@ -56,7 +56,7 @@ import {
 
 const props = defineProps<{
   ticketId: string
-  canEdit: boolean // 有 ticket:update 权限时显示上传/删除按钮
+  canEdit: boolean // 是否显示上传/删除按钮（A.7 拍板：ticket 态存储端点=登录态+L2 零权限码，调用方传 true 常开）
 }>()
 
 const attachments = ref<AttachmentView[]>([])
