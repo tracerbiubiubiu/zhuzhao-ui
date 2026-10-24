@@ -3,7 +3,10 @@
 # vue-demi=true：@tanstack/vue-query 传递依赖的版本切换 postinstall（Vue 3 环境，
 # 生态标准做法）——pnpm add 落的占位符「set this to true or false」非布尔值，
 # CI --frozen-lockfile 下 ERR_PNPM_IGNORED_BUILDS 致命（run 36430052551）。
+# @logicflow/core=false：其 postinstall 仅向终端打印 AI 提示文案，无构建产物（lib/es/dist 随包预构建），
+# 禁跑即可（S2 B2-1 2026-10-24）。
 allowBuilds:
+  '@logicflow/core': false
   esbuild: true
   vue-demi: true
 # 传递依赖安全钉（GHSA-68fv-2mgg-jv7q 事件循环 DoS）——pnpm 12 不再读 package.json 的
