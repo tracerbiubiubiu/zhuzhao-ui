@@ -267,6 +267,32 @@ export async function createTicketCommentApi(ticketId: string, content: string):
   await request.post('/api/v1/tickets/comments', { ticket_id: ticketId, content }, { _silentError: true })
 }
 
+/** 抄送行（S10 B10-1——「人名(工号)」富化同 TicketRow 口径；软删用户保留 ID 行） */
+export interface TicketCCRow {
+  user_id: string
+  name?: string
+  employee_no?: string
+  role: string
+  created_at: string
+}
+
+/** 抄送列表（GET /tickets/:id/cc——L2 read 面，不可见单 404 同形） */
+export async function listTicketCCApi(id: string): Promise<TicketCCRow[]> {
+  const data = await request.get(`/api/v1/tickets/${id}/cc`)
+  return ((data as unknown as { cc?: TicketCCRow[] })?.cc ?? [])
+}
+
+/** 添加抄送（POST /tickets/cc——仅本人=读可见；含他人=update 权；幂等；user_ids 出站为数字数组） */
+export async function addTicketCCApi(input: { ticket_id: string; user_ids: number[] }): Promise<TicketCCRow[]> {
+  const data = await request.post('/api/v1/tickets/cc', input, { _silentError: true })
+  return ((data as unknown as { cc?: TicketCCRow[] })?.cc ?? [])
+}
+
+/** 移除抄送（POST /tickets/cc/remove——自摘=读可见；摘他人=update 权；幂等） */
+export async function removeTicketCCApi(input: { ticket_id: string; user_id: string }): Promise<void> {
+  await request.post('/api/v1/tickets/cc/remove', input, { _silentError: true })
+}
+
 /** 发表内部备注（POST /tickets/notes——仅创建人/处理人/admin 可见，服务端过滤） */
 export async function createTicketNoteApi(ticketId: string, content: string): Promise<void> {
   await request.post('/api/v1/tickets/notes', { ticket_id: ticketId, content }, { _silentError: true })

@@ -20,9 +20,10 @@ import {
 import type { FormInstance } from 'element-plus'
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
 import {
-  assignTicketApi, closeTicketApi, createTicketCommentApi, createTicketNoteApi,
+  addTicketCCApi, assignTicketApi, closeTicketApi, createTicketCommentApi, createTicketNoteApi,
   createTicketRelationApi, deleteTicketApi, getTicketApi, getTicketCommentsApi,
-  getTicketRelationsApi, listTicketTypesApi, STATUS_LABEL, updateTicketApi,
+  getTicketRelationsApi, listTicketCCApi, listTicketTypesApi, removeTicketCCApi,
+  STATUS_LABEL, updateTicketApi, type TicketCCRow,
 } from '@/api/ticket'
 import { useUserStoreWithOut } from '@/store/modules/user'
 import UserNameText from '@/components/UserNameText/index.vue'
@@ -54,6 +55,11 @@ const commentsQuery = useQuery({
 const relationsQuery = useQuery({
   queryKey: computed(() => ['ticket', 'relations', ticketId.value]),
   queryFn: () => getTicketRelationsApi(ticketId.value),
+  enabled: computed(() => ticketId.value !== ''),
+})
+const ccQuery = useQuery({
+  queryKey: computed(() => ['ticket', 'cc', ticketId.value]),
+  queryFn: () => listTicketCCApi(ticketId.value),
   enabled: computed(() => ticketId.value !== ''),
 })
 const typesQuery = useQuery({ queryKey: ['ticket', 'types'], queryFn: listTicketTypesApi })
@@ -99,6 +105,59 @@ const formatCustomValue = (f: TicketTypeFieldDef): string => {
   if (f.field_type === 'tips') return f.field_label
   if (typeof v === 'boolean') return v ? '是' : '否'
   return String(v)
+}
+
+// ─── S10 B10-1 抄送（L2 特例通道：抄送即可见；自加/自摘=读可见，加/摘他人=update 权）───
+const ccRows = computed(() => (ccQuery.data.value ?? []) as TicketCCRow[])
+const ccForm = reactive({ userId: '' })
+const ccSaving = ref(false)
+
+const ccLabel = (cc: TicketCCRow) => (cc.name ? `${cc.name}${cc.employee_no ? `(${cc.employee_no})` : ''}` : `用户 #${cc.user_id}`)
+
+async function refreshCC() {
+  await queryClient.invalidateQueries({ queryKey: ['ticket', 'cc'] })
+}
+
+async function doAddCC(userIds: number[]) {
+  ccSaving.value = true
+  try {
+    await addTicketCCApi({ ticket_id: ticketId.value, user_ids: userIds })
+    ElMessage.success('已抄送')
+    ccForm.userId = ''
+    await refreshCC()
+  } catch (err: unknown) {
+    const resp = (err as { response?: { data?: { message?: string } } })?.response?.data
+    ElMessage.error(resp?.message ?? '抄送失败')
+  } finally {
+    ccSaving.value = false
+  }
+}
+
+function addCC() {
+  if (!ccForm.userId) return
+  void doAddCC([Number(ccForm.userId)])
+}
+
+/** 抄送我：读可见面动作（无需 update 权） */
+function addSelfCC() {
+  const me = userStore.profile?.id
+  if (!me) return
+  if (ccRows.value.some((c) => c.user_id === me)) {
+    ElMessage.info('你已在抄送列表中')
+    return
+  }
+  void doAddCC([Number(me)])
+}
+
+async function removeCC(cc: TicketCCRow) {
+  try {
+    await removeTicketCCApi({ ticket_id: ticketId.value, user_id: cc.user_id })
+    ElMessage.success('已移除')
+    await refreshCC()
+  } catch (err: unknown) {
+    const resp = (err as { response?: { data?: { message?: string } } })?.response?.data
+    ElMessage.error(resp?.message ?? '移除失败（摘他人需编辑权限）')
+  }
 }
 
 // ── B1-7 批3（三路F-E-4）：字典引用选项预载——select/multi_select 显示 label 而非 code ──
@@ -427,6 +486,30 @@ async function submitRelation() {
     <el-card shadow="hover" class="mb-4">
       <template #header><span class="font-semibold">附件</span></template>
       <TicketAttachments :ticket-id="ticketId" :can-edit="true" />
+    </el-card>
+
+    <!-- S10 B10-1 抄送人区（抄送即可见——被抄送人收通知并可见此单；摘他人无权由后端 403 兜底） -->
+    <el-card shadow="hover" class="mb-4" data-testid="ticket-cc-card">
+      <template #header>
+        <div class="flex items-center justify-between flex-wrap gap-2">
+          <span class="font-semibold">抄送（{{ ccRows.length }}）</span>
+          <div class="flex items-center gap-2">
+            <el-button size="small" :loading="ccSaving" data-testid="cc-self" @click="addSelfCC">抄送我</el-button>
+            <UserPicker v-model="ccForm.userId" class="!w-[220px]" />
+            <el-button size="small" type="primary" plain :disabled="!ccForm.userId" :loading="ccSaving" data-testid="cc-add" @click="addCC">添加抄送</el-button>
+          </div>
+        </div>
+      </template>
+      <div v-if="ccRows.length" class="flex flex-wrap gap-2">
+        <el-tag
+          v-for="cc in ccRows"
+          :key="cc.user_id"
+          closable
+          :data-testid="`cc-row-${cc.user_id}`"
+          @close="removeCC(cc)"
+        >{{ ccLabel(cc) }}</el-tag>
+      </div>
+      <span v-else class="text-xs text-gray-400">暂无抄送人</span>
     </el-card>
 
     <!-- 评论/备注（S10 分层：is_internal 标内部备注；可见性由服务端过滤） -->
