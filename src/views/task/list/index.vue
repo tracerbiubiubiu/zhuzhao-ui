@@ -23,6 +23,7 @@ import {
   ElTableColumn, ElTag, ElDescriptions, ElDescriptionsItem,
 } from 'element-plus'
 import ProTable from '@/components/ProTable/index.vue'
+import CronBuilder from '@/components/CronBuilder/index.vue'
 import type { ProTableColumn } from '@/components/ProTable/types'
 import {
   cancelTaskApi, createJobApi, getTaskApi, listDeadLettersApi, listJobActionsApi, listJobsApi, listRunsApi,
@@ -663,7 +664,8 @@ useTableFit(deadTable, () => deadList.value)
           </el-select>
         </el-form-item>
         <el-form-item v-if="jobForm.trigger_type === 'cron'" label="cron 表达式">
-          <el-input v-model="jobForm.cron_spec" placeholder="如 0 3 * * *（每日 3 点）" />
+          <!-- S4 B4-2：cron 构造器（预设/专家双模式——产物仍 cron_spec 五段，taskrunner 零改动） -->
+          <CronBuilder v-model="jobForm.cron_spec" />
         </el-form-item>
         <el-form-item label="归属标签">
           <el-input v-model="jobForm.dept" placeholder="dept（可选）" />
