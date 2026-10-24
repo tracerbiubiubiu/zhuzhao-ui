@@ -67,6 +67,22 @@ export interface TaskJobRow {
   updated_at: string
 }
 
+/** 动作元数据行（S4 B4-1——GET /jobs/actions 最小读面；params_schema null=未声明降级 JSON 模式） */
+export interface JobActionRow {
+  action_id: string
+  name: string
+  description?: string
+  kind?: string
+  owner_service?: string
+  params_schema?: Record<string, unknown> | null
+}
+
+/** 动作清单（提交选单数据源——operator 持 task:read 可读） */
+export async function listJobActionsApi(): Promise<JobActionRow[]> {
+  const data = await request.get('/api/v1/jobs/actions')
+  return ((data as unknown as { list?: JobActionRow[] })?.list ?? [])
+}
+
 // ─── 提交/查询（task:submit / task:read）───
 
 /** 提交一次性任务（受理≠执行成功——结果经查询获取；action 白名单属服务端 action 注册表） */

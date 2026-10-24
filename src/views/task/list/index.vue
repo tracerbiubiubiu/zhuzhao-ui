@@ -2,7 +2,8 @@
 /**
  * 任务中心（P4-W5；2026-10-13 交互批——三 Tab：运行记录/任务定义/死信，提交=运行记录
  *  页首主按钮+对话框。一期改造：运行序号列与筛选/定义下拉带默认参数/无参任务隐藏参数区
- *  （admin 视角；operator 的动作读端点与选单依赖 P5-S4 动作注册表读端点，暂保持 action 输入））
+ *  （admin 视角；S4 B4-1 起 operator 的 action 输入改**动作下拉**——数据源
+ *   GET /jobs/actions 最小读面，加载失败回退手填））
  *
  * - runs/jobs：offset 分页有 total（ProTable）；死信：{list,page,page_size} 无 total——
  *   按页号上一页/下一页（十三批「无 total 形态」）
@@ -24,9 +25,9 @@ import {
 import ProTable from '@/components/ProTable/index.vue'
 import type { ProTableColumn } from '@/components/ProTable/types'
 import {
-  cancelTaskApi, createJobApi, getTaskApi, listDeadLettersApi, listJobsApi, listRunsApi,
+  cancelTaskApi, createJobApi, getTaskApi, listDeadLettersApi, listJobActionsApi, listJobsApi, listRunsApi,
   retryTaskApi, submitTaskApi, triggerJobApi, updateJobApi,
-  RUN_STATUS, type DeadLetterRow, type TaskDetail, type TaskJobRow, type TaskRunRow,
+  RUN_STATUS, type DeadLetterRow, type JobActionRow, type TaskDetail, type TaskJobRow, type TaskRunRow,
 } from '@/api/task'
 
 // keep-alive 契约：name=动态路由名（菜单 code task_center，组件路径 task/list/index）
@@ -309,6 +310,19 @@ async function submitJob() {
 // 无 /jobs 读权限——B13 数据面权限边界）暂保持 action 输入，选单依赖 P5-S4 动作注册表读端点
 const submitVisible = ref(false)
 const submitForm = reactive({ action: '', dept: '', timeout_secs: 0, paramsText: '' })
+// S4 B4-1：动作下拉数据（operator 分支；加载失败回退手填输入——降级不阻塞提交路径）
+const actionOptions = ref<JobActionRow[]>([])
+const actionOptionsFailed = ref(false)
+const actionLabel = (a: JobActionRow) => (a.name ? `${a.name}（${a.action_id}）` : a.action_id)
+
+async function loadActionOptions() {
+  if (actionOptions.value.length || actionOptionsFailed.value) return
+  try {
+    actionOptions.value = await listJobActionsApi()
+  } catch {
+    actionOptionsFailed.value = true // 回退手填（端点不可达不阻塞提交）
+  }
+}
 const submitBusy = ref(false)
 const submitError = ref('')
 const submittedId = ref('')
@@ -335,6 +349,7 @@ async function openSubmit() {
   submitError.value = ''
   submittedId.value = ''
   Object.assign(submitForm, { action: '', dept: '', timeout_secs: 0, paramsText: '' })
+  void loadActionOptions()
   selectedJobId.value = ''
   jobOptions.value = []
   if (canManageJobs.value) {
@@ -368,7 +383,7 @@ async function onSubmitTask() {
   // 真实边界在后端 task:submit，此处权限码不作任何业务许可判断
   const action = canManageJobs.value ? (selectedJob.value?.action_id ?? '') : submitForm.action
   if (!action.trim()) {
-    submitError.value = canManageJobs.value ? '请选择任务定义' : '请输入 action（须在服务端动作注册表内）'
+    submitError.value = canManageJobs.value ? '请选择任务定义' : '请选择动作'
     return
   }
   if (submitForm.paramsText.length > 64 * 1024) {
@@ -602,8 +617,17 @@ useTableFit(deadTable, () => deadList.value)
             <el-option v-for="j in jobOptions" :key="j.job_id" :label="jobLabel(j)" :value="j.job_id" />
           </el-select>
         </el-form-item>
-        <el-form-item v-else label="action" required>
-          <el-input v-model="submitForm.action" placeholder="服务端动作注册表内的 action_id" />
+        <el-form-item v-else label="动作" required>
+          <el-select
+            v-if="!actionOptionsFailed"
+            v-model="submitForm.action" filterable placeholder="选择动作（可搜索）" class="!w-[320px]" data-testid="action-select"
+          >
+            <el-option v-for="a in actionOptions" :key="a.action_id" :label="actionLabel(a)" :value="a.action_id">
+              <span>{{ actionLabel(a) }}</span>
+              <span v-if="a.description" class="text-xs text-gray-400 ml-2">{{ a.description }}</span>
+            </el-option>
+          </el-select>
+          <el-input v-else v-model="submitForm.action" placeholder="服务端动作注册表内的 action_id（清单加载失败——手填回退）" />
         </el-form-item>
         <el-form-item label="归属标签">
           <el-input v-model="submitForm.dept" placeholder="dept（可选）" />
