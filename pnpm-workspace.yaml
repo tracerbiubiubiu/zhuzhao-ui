@@ -13,3 +13,6 @@ allowBuilds:
 # pnpm 段，overrides 唯一入口在此。
 overrides:
   source-map-js: ^1.2.2
+  # uuid moderate 漏洞（GHSA-w5hq-g745-h8pq——LogicFlow 传递依赖 <11.1.1
+  # 缺 buffer 边界检查）；钉 >=11.1.1（CI audit --prod 守卫）
+  uuid: ^11.1.1
