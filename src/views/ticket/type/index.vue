@@ -6,28 +6,35 @@
  *   GET、7 写端点挂 ticket_type_write_btn 同码 ticket:type:manage，000031 词表重排）
  * - 字段编辑=**全量替换语义**（POST /ticket-types/fields/replace）——保存前危险确认弹窗
  *   （S12/S23 硬要求）；field_options 归一为字符串数组（后端 optionValues 双形态兼容）
- * - states/transitions=JSON 源码模式（02 §5 深水区策略兜底形态；form-create 设计器决策
- *   顺延）；⚠ 编辑框注记：状态图可配但用户实际可点动作仅 分派/取消/关闭/更新/删除——
+ * - states/transitions=**画布模式（S2 B2-2，默认）+ JSON 源码模式（专家兜底）共存**——同一
+ *   typeForm.statesText/transitionsText 为单一数据源，切模式时双向同步；保存前镜像后端
+ *   validateTypeGraph 预检（A.3 双保险）+ **改图在途单告警（B2-3）**：被删/失去全部出边的
+ *   状态上若有工单则弹确认（纯体验层，绕过亦被 AssertTransition 兜底）；
+ *   ⚠ 编辑框注记：状态图可配但用户实际可点动作仅 分派/取消/关闭/更新/删除——
  *   三态经 API 不可达（03 S11），防管理员以为画了就能点
  * - 乐观锁：类型/模板 version 回传 CAS（可省略——管理页应带上），10006 → 关框刷新范式
  */
-import { computed, reactive, ref } from 'vue'
+import { computed, nextTick, reactive, ref } from 'vue'
 import { useTableFit } from '@vea/hooks'
 import {
   ElAlert, ElButton, ElCard, ElDialog, ElForm, ElFormItem, ElInput, ElInputNumber,
-  ElMessage, ElMessageBox, ElOption, ElSelect, ElSwitch, ElTable, ElTableColumn, ElTabPane, ElTabs, ElTag,
+  ElMessage, ElMessageBox, ElOption, ElRadioButton, ElRadioGroup, ElSelect, ElSwitch, ElTable, ElTableColumn, ElTabPane, ElTabs, ElTag,
 } from 'element-plus'
 import type { FormInstance } from 'element-plus'
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
 import {
   createTicketTemplateApi, createTicketTypeApi, deleteTicketTemplateApi, deleteTicketTypeApi,
-  getTicketTypeFieldsApi, listTicketTemplatesApi, listTicketTypesApi,
-  replaceTicketTypeFieldsApi, updateTicketTemplateApi, updateTicketTypeApi,
+  getTicketTypeFieldsApi, listTicketsApi, listTicketTemplatesApi, listTicketTypesApi,
+  replaceTicketTypeFieldsApi, STATUS_LABEL, updateTicketTemplateApi, updateTicketTypeApi,
   type TicketTypeFieldDef, type TicketTypeFieldInput, type TicketTypeFullRow,
   type TicketTemplateRow,
 } from '@/api/ticket'
 import { getOrgTreeApi, type OrgTreeNode } from '@/api/system/org'
 import FormDesigner from '@/components/FormDesigner/index.vue'
+import FlowGraphDesigner from '@/components/FlowGraphDesigner/index.vue'
+import { validateTypeGraph } from '@/components/FlowGraphDesigner/mapper'
+import { stuckStates } from '@/components/FlowGraphDesigner/lint'
+import { DEFAULT_STATES, DEFAULT_TRANSITIONS, type Adjacency } from '@/components/FlowGraphDesigner/types'
 
 // keep-alive 契约：name=动态路由名（菜单 code ticket_type_manage）
 defineOptions({ name: 'ticket_type_manage' })
@@ -87,6 +94,10 @@ function openTypeEdit(row: TicketTypeFullRow) {
     transitionsText: row.transitions ? JSON.stringify(row.transitions, null, 0) : '',
     version: row.version,
   })
+  // B2-3 在途告警基线：服务端当前 states（不是文本框里可能被改过的）
+  originalStates.value = Array.isArray(row.states) ? (row.states as unknown[]).filter((s): s is string => typeof s === 'string') : []
+  graphMode.value = 'canvas'
+  void nextTick().then(loadCanvasFromText)
 }
 
 /** JSON 源码模式校验（空=不传，后端缺省 6 态默认图） */
@@ -99,14 +110,104 @@ function parseJsonText(text: string): { ok: true; value?: unknown } | { ok: fals
   }
 }
 
-async function submitType() {
-  const valid = await typeFormRef.value?.validate().catch(() => false)
-  if (!valid) return
+// ─── 状态图：画布 / JSON 源码双模式（S2 B2-2——同一 typeForm 文本为单一数据源）───
+const graphMode = ref<'canvas' | 'json'>('canvas')
+const flowRef = ref<InstanceType<typeof FlowGraphDesigner>>()
+const originalStates = ref<string[]>([])
+
+/** 文本框 → 结构化图（空文本=后端默认六态图镜像）；返回 null 时已把错误写入 typeDialog.error */
+function graphFromText(): { states: string[]; transitions: Adjacency } | null {
   const states = parseJsonText(typeForm.statesText)
   const transitions = parseJsonText(typeForm.transitionsText)
   if (!states.ok || !transitions.ok) {
     typeDialog.error = 'states/transitions 须为合法 JSON'
+    return null
+  }
+  const s = states.value === undefined ? [...DEFAULT_STATES] : states.value
+  const t = transitions.value === undefined ? structuredClone(DEFAULT_TRANSITIONS) : transitions.value
+  const errs = validateTypeGraph(s, t)
+  if (errs.length) {
+    typeDialog.error = errs.join('；')
+    return null
+  }
+  return { states: s as string[], transitions: t as Adjacency }
+}
+
+async function loadCanvasFromText() {
+  const g = graphFromText()
+  if (!g) {
+    // 文本非法无法成图——退回源码模式让用户修（错误已写入 typeDialog.error）
+    graphMode.value = 'json'
     return
+  }
+  typeDialog.error = ''
+  await flowRef.value?.load(g.states, g.transitions)
+}
+
+/** 画布 → 文本框；失败返回 false（错误已写入 typeDialog.error） */
+function syncCanvasToText(): boolean {
+  const r = flowRef.value?.serialize()
+  if (!r) return true
+  if (!r.ok) {
+    typeDialog.error = r.errors.map((e) => e.message).join('；')
+    return false
+  }
+  typeForm.statesText = JSON.stringify(r.states)
+  typeForm.transitionsText = JSON.stringify(r.transitions)
+  typeDialog.error = ''
+  return true
+}
+
+async function onGraphModeChange(mode: string | number | boolean | undefined) {
+  if (mode === 'json') {
+    if (!syncCanvasToText()) graphMode.value = 'canvas'
+    return
+  }
+  await loadCanvasFromText()
+}
+
+/**
+ * B2-3 改图在途单告警（02 号附录 A.4）：被删 / 失去全部出边的非终态上若有工单 → 弹确认。
+ * 逐状态 `GET /tickets?type_code&status` 取 total（零后端改动）；查询失败按"数量未知"仍提示。
+ * 返回 false = 用户取消。
+ */
+async function confirmInflightImpact(code: string, states: string[], transitions: Adjacency): Promise<boolean> {
+  const candidates = stuckStates(originalStates.value, states, transitions)
+  if (!candidates.length) return true
+  const counts = await Promise.all(candidates.map(async (s) => {
+    try {
+      const { total } = await listTicketsApi({ page: 1, page_size: 1, type_code: code, status: s })
+      return [s, total] as const
+    } catch {
+      return [s, -1] as const
+    }
+  }))
+  const hit = counts.filter(([, n]) => n !== 0)
+  if (!hit.length) return true
+  const label = (s: string) => (STATUS_LABEL[s] ? `${s}·${STATUS_LABEL[s]}` : s)
+  const lines = hit.map(([s, n]) => `${label(s)}（${n < 0 ? '数量未知' : `${n} 单`}）`).join('、')
+  try {
+    await ElMessageBox.confirm(
+      `以下状态上的工单将因本次改图无法再流转（状态被删除或失去全部出边）：${lines}。确认仍要保存？`,
+      '改图影响在途工单',
+      { type: 'warning', confirmButtonText: '仍要保存', confirmButtonClass: 'el-button--danger', cancelButtonText: '取消' },
+    )
+    return true
+  } catch {
+    return false
+  }
+}
+
+async function submitType() {
+  const valid = await typeFormRef.value?.validate().catch(() => false)
+  if (!valid) return
+  let graph: { states: string[]; transitions: Adjacency } | null = null
+  if (!typeDialog.isCreate) {
+    // 画布模式先回写文本（画布有错则拦）；两模式最终都经 graphFromText 镜像预检
+    if (graphMode.value === 'canvas' && !syncCanvasToText()) return
+    graph = graphFromText()
+    if (!graph) return
+    if (!(await confirmInflightImpact(typeForm.code, graph.states, graph.transitions))) return
   }
   typeDialog.loading = true
   typeDialog.error = ''
@@ -122,7 +223,7 @@ async function submitType() {
       await updateTicketTypeApi({
         code: typeForm.code, name: typeForm.name,
         description: typeForm.description || undefined,
-        states: states.value, transitions: transitions.value,
+        states: graph!.states, transitions: graph!.transitions,
         is_active: typeForm.is_active, version: typeForm.version, // 乐观锁回传
       })
       ElMessage.success('类型已更新')
@@ -459,8 +560,8 @@ useTableFit(tplTable, () => templatesQuery.data.value)
       </el-tabs>
     </el-card>
 
-    <!-- 类型新建/编辑（states/transitions=JSON 源码模式——设计器批前的兜底形态） -->
-    <el-dialog v-model="typeDialog.visible" :title="typeDialog.isCreate ? '新建类型' : '编辑类型'" width="600px">
+    <!-- 类型新建/编辑（states/transitions=画布模式默认 + JSON 源码模式专家兜底——S2 B2-2） -->
+    <el-dialog v-model="typeDialog.visible" :title="typeDialog.isCreate ? '新建类型' : '编辑类型'" :width="typeDialog.isCreate ? '600px' : '980px'">
       <el-form ref="typeFormRef" :model="typeForm" label-width="110px">
         <el-form-item label="编码" required>
           <el-input v-model="typeForm.code" :disabled="!typeDialog.isCreate" placeholder="如 incident" maxlength="50" />
@@ -476,12 +577,24 @@ useTableFit(tplTable, () => templatesQuery.data.value)
           <span class="text-xs text-gray-400 ml-2">停用后新工单不可选该类型（存量不受影响）</span>
         </el-form-item>
         <template v-if="!typeDialog.isCreate">
-          <el-form-item label="states(JSON)">
-            <el-input v-model="typeForm.statesText" type="textarea" :rows="3" placeholder='["open","assigned",...]' />
+          <el-form-item label="状态图">
+            <el-radio-group v-model="graphMode" size="small" data-testid="graph-mode" @change="onGraphModeChange">
+              <el-radio-button value="canvas">画布</el-radio-button>
+              <el-radio-button value="json">JSON 源码</el-radio-button>
+            </el-radio-group>
+            <span class="text-xs text-gray-400 ml-2">画布与源码为同一份数据，切换即同步；节点坐标只存本机不入库</span>
           </el-form-item>
-          <el-form-item label="transitions(JSON)">
-            <el-input v-model="typeForm.transitionsText" type="textarea" :rows="4" placeholder='{"open":["assigned","closed"],...}' />
-          </el-form-item>
+          <div v-show="graphMode === 'canvas'" class="mb-3">
+            <FlowGraphDesigner ref="flowRef" :type-code="typeForm.code" />
+          </div>
+          <template v-if="graphMode === 'json'">
+            <el-form-item label="states(JSON)">
+              <el-input v-model="typeForm.statesText" type="textarea" :rows="3" placeholder='["open","assigned",...]' />
+            </el-form-item>
+            <el-form-item label="transitions(JSON)">
+              <el-input v-model="typeForm.transitionsText" type="textarea" :rows="4" placeholder='{"open":["assigned","closed"],...}' />
+            </el-form-item>
+          </template>
           <el-alert
             type="warning" :closable="false" class="mb-2"
             title="状态图可配（含 in_progress/pending_verify 等），但用户实际可点的动作仅 分派/取消/关闭/更新/删除——in_progress、pending_verify、rejected 三态经 API 不可达（审批随翻案批），画了也不可点。"
