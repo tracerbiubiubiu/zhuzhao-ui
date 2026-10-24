@@ -15,13 +15,14 @@ import {
   ElButton, ElCard, ElCheckbox, ElDatePicker, ElForm, ElFormItem, ElInput, ElLink,
   ElOption, ElSelect, ElTag,
 } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
 import { useQuery } from '@tanstack/vue-query'
 import { useAutoFilterRun } from '@vea/hooks'
 import ProTable from '@/components/ProTable/index.vue'
 import UserNameText from '@/components/UserNameText/index.vue'
 import type { ProTableColumn } from '@/components/ProTable/types'
-import { listTicketTypesApi, listTicketsApi, STATUS_LABEL, TICKET_STATUSES } from '@/api/ticket'
+import { exportTicketsApi, listTicketTypesApi, listTicketsApi, STATUS_LABEL, TICKET_STATUSES } from '@/api/ticket'
 import { usePermission } from '@/common/auth'
 
 // keep-alive 契约：name=动态路由名（菜单 code ticket_list，组件路径 ticket/list/index）
@@ -64,6 +65,36 @@ useAutoFilterRun(
   () => ({ ...search, range: dateRange.value }),
   () => tableRef.value?.refresh({ resetPage: true }),
 )
+
+const exporting = ref(false)
+
+/** 导出当前筛选（S10 B10-5——与列表同筛选/同可见性；xlsx 下载） */
+async function onExport() {
+  exporting.value = true
+  try {
+    const blob = await exportTicketsApi({
+      ...(search.keyword.trim() ? { keyword: search.keyword.trim() } : {}),
+      ...(search.type_code ? { type_code: search.type_code } : {}),
+      ...(search.status ? { status: search.status } : {}),
+      ...(search.priority !== '' ? { priority: search.priority } : {}),
+      ...(search.mineHandle ? { assignee: 'me' as const } : {}),
+      ...(search.mineCreated ? { created_by: 'me' as const } : {}),
+      ...(search.tag.trim() ? { tag: search.tag.trim() } : {}),
+      ...(dateRange.value ? { created_from: dateRange.value[0], created_to: dateRange.value[1] } : {}),
+    })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `tickets_${new Date().toISOString().slice(0, 10)}.xlsx`
+    a.click()
+    URL.revokeObjectURL(url)
+  } catch (err: unknown) {
+    const resp = (err as { response?: { data?: { message?: string } } })?.response?.data
+    ElMessage.error(resp?.message ?? '导出失败（超 5 万行请收窄筛选）')
+  } finally {
+    exporting.value = false
+  }
+}
 
 function onReset() {
   search.keyword = ''
@@ -167,6 +198,7 @@ function typeLabel(code: string): string {
             </el-form-item>
             <el-form-item class="ml-auto !mr-0">
               <el-button @click="onReset">重置</el-button>
+              <el-button :loading="exporting" data-testid="btn-export" @click="onExport">导出</el-button>
             </el-form-item>
           </el-form>
         </template>

@@ -334,6 +334,16 @@ export async function removeTicketTagApi(input: { ticket_id: string; tag: string
   await request.post('/api/v1/tickets/tags/remove', input, { _silentError: true })
 }
 
+/** 工单导出（S10 B10-5——与列表同筛选参数/同可见性；xlsx blob 下载；>5 万行后端 400） */
+export async function exportTicketsApi(params: TicketListQuery): Promise<Blob> {
+  const clean: Record<string, string | number> = {}
+  for (const [k, v] of Object.entries(params)) {
+    if (v !== undefined && v !== '' && v !== null) clean[k] = v as string | number
+  }
+  const data = await request.get('/api/v1/tickets/export', { params: clean, responseType: 'blob', _silentError: true })
+  return data as unknown as Blob
+}
+
 /** 待办角标聚合（S10 B10-3——sections 开放 map；未知 section 前端忽略） */
 export async function getBadgesApi(): Promise<Record<string, number>> {
   const data = await request.get('/api/v1/badges')
