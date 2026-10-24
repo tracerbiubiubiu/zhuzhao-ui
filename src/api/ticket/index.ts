@@ -29,6 +29,10 @@ export interface TicketRow {
   org_path: string
   custom_data?: unknown
   sla_due_at?: string
+  /** 进入当前状态时刻（S10 B10-4——超时扫描数据源） */
+  status_changed_at?: string
+  /** 催办上级·人工指定（S10 B10-4——dd §31 基线档；展示富化走 escalation_supervisor_name） */
+  escalation_supervisor_id?: string
   created_at: string
   updated_at: string
 }
@@ -78,12 +82,23 @@ export async function listTicketTypesApi(): Promise<TicketTypeRow[]> {
 }
 
 /** 类型管理行（S12 三件套——= model.TicketType 全量投影；states/transitions 为
- * JSONB 原文（配置即代码，管理页 JSON 源码模式），version 供 CAS 回传） */
+ * JSONB 原文（配置即代码，管理页 JSON 源码模式），version 供 CAS 回传；
+ * transition_meta=节点超时/催办策略（S10 B10-4——表单化编辑面数据源） */
 export interface TicketTypeFullRow extends TicketTypeRow {
   states?: unknown
   transitions?: unknown
+  transition_meta?: unknown
   is_active: boolean
   version: number
+}
+
+/** transition_meta 单节点段（S10 B10-4——表单化编辑面行模型） */
+export interface TransitionMetaRow {
+  state: string
+  timeout_minutes?: number
+  notify?: string[]
+  reminder_interval_minutes?: number
+  max_reminders?: number
 }
 
 /** 字段定义输入（ReplaceTypeFields——field_options 归一为字符串数组，后端
@@ -109,14 +124,15 @@ export async function createTicketTypeApi(input: {
   await request.post('/api/v1/ticket-types', input, { _silentError: true })
 }
 
-/** 更新类型（patch；code 不可改入 body；states/transitions 传 JSONB 原文；
- * version 可选 CAS——nil 保持旧 patch 行为，管理页应带上收 10006 内联） */
+/** 更新类型（patch；code 不可改入 body；states/transitions/transition_meta 传
+ * JSONB 原文；version 可选 CAS——nil 保持旧 patch 行为，管理页应带上收 10006 内联） */
 export async function updateTicketTypeApi(input: {
   code: string
   name?: string
   description?: string
   states?: unknown
   transitions?: unknown
+  transition_meta?: unknown
   is_active?: boolean
   version?: number
 }): Promise<void> {
@@ -219,6 +235,8 @@ export interface CreateTicketInput {
   description?: string
   template_code?: string
   custom_data?: Record<string, unknown>
+  /** 催办上级·人工指定（S10 B10-4——dd §31 基线档；数字——[]int64 不可 string 化） */
+  escalation_supervisor_id?: number
 }
 
 /** 创建成功返回完整 Ticket 对象（含 id/status/org_path 等——非 {id} 窄形，调用方按需解构） */
@@ -377,8 +395,13 @@ export async function closeTicketApi(id: string, comment?: string): Promise<void
 
 /** 分派/取消分派（assignedTo=null 取消分派；open→assigned/assigned→open 自动推状态；
  * assigned_to 用户存在性校验属后端随手项池——传错 ID 500 兜底，前端仅格式预检） */
-export async function assignTicketApi(id: string, assignedTo: string | null): Promise<void> {
-  await request.post('/api/v1/tickets/assign', { id, ...(assignedTo ? { assigned_to: assignedTo } : { assigned_to: null }) }, { _silentError: true })
+export async function assignTicketApi(id: string, assignedTo: string | null, escalationSupervisorId?: string): Promise<void> {
+  await request.post('/api/v1/tickets/assign', {
+    id,
+    ...(assignedTo ? { assigned_to: assignedTo } : { assigned_to: null }),
+    // 催办上级·人工指定（S10 B10-4——dd §31 基线档；nil=保持不动；数字出站）
+    ...(escalationSupervisorId ? { escalation_supervisor_id: Number(escalationSupervisorId) } : {}),
+  }, { _silentError: true })
 }
 
 /** 删除工单（软删） */

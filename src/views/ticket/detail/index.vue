@@ -304,10 +304,11 @@ async function submitEdit() {
 const assignVisible = ref(false)
 const assignLoading = ref(false)
 const assignError = ref('')
-const assignForm = reactive({ userId: '' })
+const assignForm = reactive({ userId: '', escalationSupervisor: '' })
 
 function openAssign() {
   assignForm.userId = ''
+  assignForm.escalationSupervisor = ''
   assignError.value = ''
   assignVisible.value = true
 }
@@ -321,7 +322,7 @@ async function submitAssign() {
   assignLoading.value = true
   assignError.value = ''
   try {
-    await assignTicketApi(ticketId.value, uid)
+    await assignTicketApi(ticketId.value, uid, assignForm.escalationSupervisor.trim() || undefined)
     ElMessage.success('已分派')
     assignVisible.value = false
     await refreshAll()
@@ -673,6 +674,10 @@ async function submitRelation() {
       <el-form label-width="80px" @submit.prevent>
         <el-form-item label="处理人">
           <UserPicker v-model="assignForm.userId" />
+        </el-form-item>
+        <!-- S10 B10-4：催办上级人工指定（可选——随分派事务落库；不填保持不动） -->
+        <el-form-item label="催办上级">
+          <UserPicker v-model="assignForm.escalationSupervisor" />
         </el-form-item>
       </el-form>
       <div class="text-xs text-gray-400 mb-2">分派后工单进入「已分派」（B1-2 起选人补全替代手输 ID——姓名（工号）搜索）。</div>

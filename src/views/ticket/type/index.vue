@@ -17,7 +17,7 @@
 import { computed, nextTick, reactive, ref } from 'vue'
 import { useTableFit } from '@vea/hooks'
 import {
-  ElAlert, ElButton, ElCard, ElDialog, ElForm, ElFormItem, ElInput, ElInputNumber,
+  ElAlert, ElButton, ElCard, ElCheckbox, ElDialog, ElForm, ElFormItem, ElInput, ElInputNumber,
   ElMessage, ElMessageBox, ElOption, ElRadioButton, ElRadioGroup, ElSelect, ElSwitch, ElTable, ElTableColumn, ElTabPane, ElTabs, ElTag,
 } from 'element-plus'
 import type { FormInstance } from 'element-plus'
@@ -96,6 +96,7 @@ function openTypeEdit(row: TicketTypeFullRow) {
   })
   // B2-3 在途告警基线：服务端当前 states（不是文本框里可能被改过的）
   originalStates.value = Array.isArray(row.states) ? (row.states as unknown[]).filter((s): s is string => typeof s === 'string') : []
+  loadMetaFromRow(row.transition_meta)
   graphMode.value = 'canvas'
   void nextTick().then(loadCanvasFromText)
 }
@@ -166,6 +167,92 @@ async function onGraphModeChange(mode: string | number | boolean | undefined) {
   await loadCanvasFromText()
 }
 
+// ─── S10 B10-4 节点超时与催办（transition_meta 表单化编辑面——拍板升必做件）───
+interface MetaDraft {
+  state: string
+  timeout: number | undefined
+  notifyAssignee: boolean
+  notifySupervisor: boolean
+  interval: number | undefined
+  max: number | undefined
+}
+const metaRows = ref<MetaDraft[]>([])
+
+/** 当前 states 选项（画布/JSON 两模式共用文本框为单一数据源） */
+const metaStateOptions = computed<string[]>(() => {
+  try {
+    const v = JSON.parse(typeForm.statesText || '[]')
+    return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []
+  } catch {
+    return []
+  }
+})
+
+function loadMetaFromRow(raw: unknown) {
+  metaRows.value = []
+  if (typeof raw !== 'object' || raw === null) return
+  for (const [state, seg] of Object.entries(raw as Record<string, unknown>)) {
+    if (typeof seg !== 'object' || seg === null) continue
+    const m = seg as { timeout_minutes?: number; escalation?: { notify?: string[]; reminder_interval_minutes?: number; max_reminders?: number } }
+    metaRows.value.push({
+      state,
+      timeout: m.timeout_minutes,
+      notifyAssignee: !m.escalation?.notify || m.escalation.notify.includes('assignee'),
+      notifySupervisor: m.escalation?.notify?.includes('supervisor') ?? false,
+      interval: m.escalation?.reminder_interval_minutes,
+      max: m.escalation?.max_reminders,
+    })
+  }
+}
+
+function addMetaRow() {
+  metaRows.value.push({ state: '', timeout: undefined, notifyAssignee: true, notifySupervisor: false, interval: undefined, max: undefined })
+}
+function removeMetaRow(idx: number) {
+  metaRows.value.splice(idx, 1)
+}
+
+/** 序列化 transition_meta（只含填了超时的行；escalation 段有任一配置才出）。
+ * 返回 null=有错（已写入 typeDialog.error）。 */
+function serializeMeta(states: string[]): Record<string, unknown> | null {
+  const out: Record<string, unknown> = {}
+  const stateSet = new Set(states)
+  let dropped = 0
+  for (const r of metaRows.value) {
+    if (!r.state) {
+      typeDialog.error = '节点超时配置存在未选状态的行'
+      return null
+    }
+    if (!stateSet.has(r.state)) {
+      dropped++ // 引用已删状态——后端会 400，前端静默丢弃并提示
+      continue
+    }
+    if (r.timeout === undefined || r.timeout < 1) {
+      typeDialog.error = `节点「${r.state}」超时分钟须 ≥1`
+      return null
+    }
+    if (r.interval !== undefined && r.interval < 5) {
+      typeDialog.error = `节点「${r.state}」催办间隔须 ≥5 分钟（小于通知节流窗会被吞）`
+      return null
+    }
+    const seg: Record<string, unknown> = { timeout_minutes: r.timeout }
+    const hasEsc = r.notifySupervisor || (r.interval !== undefined) || (r.max !== undefined)
+    if (hasEsc) {
+      const notify: string[] = []
+      if (r.notifyAssignee) notify.push('assignee')
+      if (r.notifySupervisor) notify.push('supervisor')
+      seg.escalation = {
+        notify: notify.length ? notify : ['assignee'],
+        ...(r.interval !== undefined ? { reminder_interval_minutes: r.interval } : {}),
+        ...(r.max !== undefined ? { max_reminders: r.max } : {}),
+      }
+    }
+    out[r.state] = seg
+  }
+  if (dropped > 0) ElMessage.warning(`${dropped} 行引用了图中不存在的状态，保存时已忽略`)
+  return out
+}
+
 /**
  * B2-3 改图在途单告警（02 号附录 A.4）：被删 / 失去全部出边的非终态上若有工单 → 弹确认。
  * 逐状态 `GET /tickets?type_code&status` 取 total（零后端改动）；查询失败按"数量未知"仍提示。
@@ -202,11 +289,14 @@ async function submitType() {
   const valid = await typeFormRef.value?.validate().catch(() => false)
   if (!valid) return
   let graph: { states: string[]; transitions: Adjacency } | null = null
+  let transitionMeta: Record<string, unknown> | null = null
   if (!typeDialog.isCreate) {
     // 画布模式先回写文本（画布有错则拦）；两模式最终都经 graphFromText 镜像预检
     if (graphMode.value === 'canvas' && !syncCanvasToText()) return
     graph = graphFromText()
     if (!graph) return
+    transitionMeta = serializeMeta(graph.states)
+    if (transitionMeta === null) return
     if (!(await confirmInflightImpact(typeForm.code, graph.states, graph.transitions))) return
   }
   typeDialog.loading = true
@@ -224,6 +314,7 @@ async function submitType() {
         code: typeForm.code, name: typeForm.name,
         description: typeForm.description || undefined,
         states: graph!.states, transitions: graph!.transitions,
+        transition_meta: transitionMeta ?? {},
         is_active: typeForm.is_active, version: typeForm.version, // 乐观锁回传
       })
       ElMessage.success('类型已更新')
@@ -595,6 +686,50 @@ useTableFit(tplTable, () => templatesQuery.data.value)
               <el-input v-model="typeForm.transitionsText" type="textarea" :rows="4" placeholder='{"open":["assigned","closed"],...}' />
             </el-form-item>
           </template>
+          <!-- S10 B10-4 节点超时与催办（transition_meta 表单化编辑面——超时扫描器消费） -->
+          <el-form-item label="超时与催办">
+            <div class="w-full" data-testid="timeout-meta">
+              <el-table :data="metaRows" size="small" border>
+                <el-table-column label="状态" width="150">
+                  <template #default="{ row }">
+                    <el-select v-model="row.state" size="small" placeholder="选状态" class="!w-[130px]">
+                      <el-option v-for="st in metaStateOptions" :key="st" :label="st" :value="st" />
+                    </el-select>
+                  </template>
+                </el-table-column>
+                <el-table-column label="超时(分钟)" width="110" align="center">
+                  <template #default="{ row }">
+                    <el-input-number v-model="row.timeout" size="small" :min="1" :max="525600" controls-position="right" style="width: 88px" />
+                  </template>
+                </el-table-column>
+                <el-table-column label="催办对象" width="150">
+                  <template #default="{ row }">
+                    <el-checkbox v-model="row.notifyAssignee" size="small">处理人</el-checkbox>
+                    <el-checkbox v-model="row.notifySupervisor" size="small">上级</el-checkbox>
+                  </template>
+                </el-table-column>
+                <el-table-column label="间隔(分钟)" width="110" align="center">
+                  <template #default="{ row }">
+                    <el-input-number v-model="row.interval" size="small" :min="5" :max="525600" controls-position="right" style="width: 88px" placeholder="缺省 240" />
+                  </template>
+                </el-table-column>
+                <el-table-column label="次数上限" width="100" align="center">
+                  <template #default="{ row }">
+                    <el-input-number v-model="row.max" size="small" :min="0" :max="99" controls-position="right" style="width: 78px" placeholder="缺省 3" />
+                  </template>
+                </el-table-column>
+                <el-table-column label="操作" width="60" align="center">
+                  <template #default="{ $index }">
+                    <el-button link type="danger" size="small" @click="removeMetaRow($index)">删</el-button>
+                  </template>
+                </el-table-column>
+              </el-table>
+              <div class="mt-1 flex items-center gap-2">
+                <el-button size="small" :disabled="!metaStateOptions.length" data-testid="add-timeout-row" @click="addMetaRow">添加节点超时</el-button>
+                <span class="text-xs text-gray-400">超时→催办通知（间隔/上限缺省 240 分钟/3 次）；「上级」=发起/分派时人工指定的催办上级</span>
+              </div>
+            </div>
+          </el-form-item>
           <el-alert
             type="warning" :closable="false" class="mb-2"
             title="状态图可配（含 in_progress/pending_verify 等），但用户实际可点的动作仅 分派/取消/关闭/更新/删除——in_progress、pending_verify、rejected 三态经 API 不可达（审批随翻案批），画了也不可点。"

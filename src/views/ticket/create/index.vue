@@ -29,6 +29,7 @@ import { uploadAndConfirm } from '@/api/storage'
 import { getMyOrgsApi } from '@/api/org/selfService'
 import { getOrgTreeApi, type OrgTreeNode } from '@/api/system/org'
 import { getDictItemsByCodeApi } from '@/api/system/dict'
+import UserPicker from '@/components/UserPicker/index.vue'
 import RichtextField from '@/components/RichtextField.vue'
 
 defineOptions({ name: 'TicketCreate' })
@@ -45,6 +46,7 @@ const form = reactive({
   priority: 3,
   org_id: '',
   custom: {} as Record<string, unknown>,
+  escalationSupervisor: '', // 催办上级·人工指定（S10 B10-4——dd §31 基线档，可选）
 })
 
 const rules: FormRules = {
@@ -251,6 +253,7 @@ async function handleSubmit() {
       priority: form.priority,
       description: form.description || undefined,
       custom_data: Object.keys(form.custom).length ? form.custom : undefined,
+      ...(form.escalationSupervisor ? { escalation_supervisor_id: Number(form.escalationSupervisor) } : {}),
     })
     ElMessage.success('工单已提交')
     router.push(`/tickets/${id}`)
@@ -403,6 +406,11 @@ async function handleSubmit() {
 
         <el-form-item label="描述">
           <el-input v-model="form.description" type="textarea" :rows="4" placeholder="补充细节（可选）" />
+        </el-form-item>
+        <!-- S10 B10-4：催办上级人工指定（可选——超时催办的上级收件档；可后续分派时改） -->
+        <el-form-item label="催办上级">
+          <UserPicker v-model="form.escalationSupervisor" class="!w-[240px]" />
+          <span class="text-xs text-gray-400 ml-2">可选：工单超时催办时通知的上级（不填则只催处理人）</span>
         </el-form-item>
         <el-form-item>
           <el-button type="primary" :loading="loading" @click="handleSubmit">提交工单</el-button>
