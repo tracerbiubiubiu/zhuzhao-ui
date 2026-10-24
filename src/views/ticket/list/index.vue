@@ -40,6 +40,7 @@ const search = reactive({
   priority: '' as '' | number,
   mineHandle: false, // assignee=me（仅字面量 me，后端解析为当前用户）
   mineCreated: false, // created_by=me
+  tag: '', // 标签（S10 B10-2——精确匹配）
 })
 
 // URL 参数预填（首页统计卡/外部入口跳转——FE4 配套基础设施）：白名单键，非法值忽略。
@@ -51,6 +52,7 @@ const search = reactive({
   if (q.created_by === 'me') search.mineCreated = true
   if (typeof q.keyword === 'string' && q.keyword) search.keyword = q.keyword
   if (typeof q.type_code === 'string' && q.type_code) search.type_code = q.type_code
+  if (typeof q.tag === 'string' && q.tag) search.tag = q.tag
 }
 
 /** 创建日期范围 [from, to]（YYYY-MM-DD，value-format 对齐端点 UTC 切日口径） */
@@ -70,6 +72,7 @@ function onReset() {
   search.priority = ''
   search.mineHandle = false
   search.mineCreated = false
+  search.tag = ''
   dateRange.value = null
   tableRef.value?.refresh({ resetPage: true })
 }
@@ -84,6 +87,7 @@ function fetcher(params: { page: number; page_size: number }) {
     ...(search.priority !== '' ? { priority: search.priority } : {}),
     ...(search.mineHandle ? { assignee: 'me' as const } : {}),
     ...(search.mineCreated ? { created_by: 'me' as const } : {}),
+    ...(search.tag.trim() ? { tag: search.tag.trim() } : {}),
     ...(dateRange.value ? { created_from: dateRange.value[0], created_to: dateRange.value[1] } : {}),
   })
 }
@@ -142,6 +146,9 @@ function typeLabel(code: string): string {
               <el-select v-model="search.status" placeholder="全部" clearable class="!w-[110px]">
                 <el-option v-for="s in TICKET_STATUSES" :key="s.value" :label="s.label" :value="s.value" />
               </el-select>
+            </el-form-item>
+            <el-form-item label="标签">
+              <el-input v-model="search.tag" placeholder="标签精确匹配" clearable maxlength="50" class="!w-[130px]" />
             </el-form-item>
             <el-form-item label="优先级">
               <el-select v-model="search.priority" placeholder="全部" clearable class="!w-[100px]">

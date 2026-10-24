@@ -4,6 +4,7 @@
   import Collapse from '@/components/Collapse/index.vue'
   import LocaleDropdown from '@/components/LocaleDropdown/index.vue'
   import UserInfo from '@/components/UserInfo/index.vue'
+  import NavbarBadge from '@/components/NavbarBadge.vue'
   import Breadcrumb from '@/components/Breadcrumb/index.vue'
   import { appConfig } from '@/config/app'
   import { useAppStore } from '@/store/modules/app'
@@ -62,6 +63,7 @@
                 color="var(--top-header-text-color)"
               ></LocaleDropdown>
             ) : undefined}
+            <NavbarBadge></NavbarBadge>
             <UserInfo></UserInfo>
           </div>
         </div>

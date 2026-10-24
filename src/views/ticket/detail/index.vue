@@ -22,8 +22,9 @@ import { useQuery, useQueryClient } from '@tanstack/vue-query'
 import {
   addTicketCCApi, assignTicketApi, closeTicketApi, createTicketCommentApi, createTicketNoteApi,
   createTicketRelationApi, deleteTicketApi, getTicketApi, getTicketCommentsApi,
-  getTicketRelationsApi, listTicketCCApi, listTicketTypesApi, removeTicketCCApi,
-  STATUS_LABEL, updateTicketApi, type TicketCCRow,
+  getTicketRelationsApi, listTicketCCApi, listTicketTagsApi, listTicketTypesApi,
+  addTicketTagsApi, removeTicketCCApi, removeTicketTagApi,
+  STATUS_LABEL, updateTicketApi, type TagRow, type TicketCCRow,
 } from '@/api/ticket'
 import { useUserStoreWithOut } from '@/store/modules/user'
 import UserNameText from '@/components/UserNameText/index.vue'
@@ -60,6 +61,11 @@ const relationsQuery = useQuery({
 const ccQuery = useQuery({
   queryKey: computed(() => ['ticket', 'cc', ticketId.value]),
   queryFn: () => listTicketCCApi(ticketId.value),
+  enabled: computed(() => ticketId.value !== ''),
+})
+const tagsQuery = useQuery({
+  queryKey: computed(() => ['ticket', 'tags', ticketId.value]),
+  queryFn: () => listTicketTagsApi(ticketId.value),
   enabled: computed(() => ticketId.value !== ''),
 })
 const typesQuery = useQuery({ queryKey: ['ticket', 'types'], queryFn: listTicketTypesApi })
@@ -105,6 +111,41 @@ const formatCustomValue = (f: TicketTypeFieldDef): string => {
   if (f.field_type === 'tips') return f.field_label
   if (typeof v === 'boolean') return v ? '是' : '否'
   return String(v)
+}
+
+// ─── S10 B10-2 标签（默认共享；挂/自摘=读可见，摘他人挂的=update 权由后端兜底）───
+const tagRows = computed(() => (tagsQuery.data.value ?? []) as TagRow[])
+const tagInput = ref('')
+const tagSaving = ref(false)
+
+async function refreshTags() {
+  await queryClient.invalidateQueries({ queryKey: ['ticket', 'tags'] })
+}
+
+async function addTag() {
+  const v = tagInput.value.trim()
+  if (!v) return
+  tagSaving.value = true
+  try {
+    await addTicketTagsApi({ ticket_id: ticketId.value, tags: [v] })
+    tagInput.value = ''
+    await refreshTags()
+  } catch (err: unknown) {
+    const resp = (err as { response?: { data?: { message?: string } } })?.response?.data
+    ElMessage.error(resp?.message ?? '添加标签失败')
+  } finally {
+    tagSaving.value = false
+  }
+}
+
+async function removeTag(row: TagRow) {
+  try {
+    await removeTicketTagApi({ ticket_id: ticketId.value, tag: row.tag })
+    await refreshTags()
+  } catch (err: unknown) {
+    const resp = (err as { response?: { data?: { message?: string } } })?.response?.data
+    ElMessage.error(resp?.message ?? '移除失败（摘他人挂的需编辑权限）')
+  }
 }
 
 // ─── S10 B10-1 抄送（L2 特例通道：抄送即可见；自加/自摘=读可见，加/摘他人=update 权）───
@@ -510,6 +551,32 @@ async function submitRelation() {
         >{{ ccLabel(cc) }}</el-tag>
       </div>
       <span v-else class="text-xs text-gray-400">暂无抄送人</span>
+    </el-card>
+
+    <!-- S10 B10-2 标签（默认共享——挂载人留痕；摘他人挂的由后端 update 权兜底） -->
+    <el-card shadow="hover" class="mb-4" data-testid="ticket-tags-card">
+      <template #header>
+        <div class="flex items-center justify-between flex-wrap gap-2">
+          <span class="font-semibold">标签</span>
+          <div class="flex items-center gap-2">
+            <el-input
+              v-model="tagInput" placeholder="输入标签回车添加" maxlength="50" class="!w-[200px]"
+              data-testid="tag-input" @keyup.enter="addTag"
+            />
+            <el-button size="small" type="primary" plain :disabled="!tagInput.trim()" :loading="tagSaving" @click="addTag">添加</el-button>
+          </div>
+        </div>
+      </template>
+      <div v-if="tagRows.length" class="flex flex-wrap gap-2">
+        <el-tag
+          v-for="row in tagRows"
+          :key="row.tag"
+          closable
+          :data-testid="`tag-${row.tag}`"
+          @close="removeTag(row)"
+        >{{ row.tag }}</el-tag>
+      </div>
+      <span v-else class="text-xs text-gray-400">暂无标签</span>
     </el-card>
 
     <!-- 评论/备注（S10 分层：is_internal 标内部备注；可见性由服务端过滤） -->

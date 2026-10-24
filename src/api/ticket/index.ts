@@ -42,6 +42,8 @@ export interface TicketListQuery {
   assignee?: 'me'
   created_by?: 'me'
   keyword?: string
+  /** 标签筛选（S10 B10-2——精确匹配；可见性由后端 GetFilter 管线约束） */
+  tag?: string
   created_from?: string
   created_to?: string
 }
@@ -286,6 +288,38 @@ export async function listTicketCCApi(id: string): Promise<TicketCCRow[]> {
 export async function addTicketCCApi(input: { ticket_id: string; user_ids: number[] }): Promise<TicketCCRow[]> {
   const data = await request.post('/api/v1/tickets/cc', input, { _silentError: true })
   return ((data as unknown as { cc?: TicketCCRow[] })?.cc ?? [])
+}
+
+/** 标签行（S10 B10-2——默认共享+挂载人留痕富化） */
+export interface TagRow {
+  tag: string
+  created_by: string
+  created_by_name?: string
+  created_by_no?: string
+  created_at: string
+}
+
+/** 工单标签列表（GET /tickets/:id/tags——读可见面） */
+export async function listTicketTagsApi(id: string): Promise<TagRow[]> {
+  const data = await request.get(`/api/v1/tickets/${id}/tags`)
+  return ((data as unknown as { tags?: TagRow[] })?.tags ?? [])
+}
+
+/** 添加标签（POST /tickets/tags——读可见面协作动作；单次 ≤20 个/单个 ≤50 字符；幂等） */
+export async function addTicketTagsApi(input: { ticket_id: string; tags: string[] }): Promise<TagRow[]> {
+  const data = await request.post('/api/v1/tickets/tags', input, { _silentError: true })
+  return ((data as unknown as { tags?: TagRow[] })?.tags ?? [])
+}
+
+/** 移除标签（POST /tickets/tags/remove——自摘=读可见；摘他人挂的=update 权） */
+export async function removeTicketTagApi(input: { ticket_id: string; tag: string }): Promise<void> {
+  await request.post('/api/v1/tickets/tags/remove', input, { _silentError: true })
+}
+
+/** 待办角标聚合（S10 B10-3——sections 开放 map；未知 section 前端忽略） */
+export async function getBadgesApi(): Promise<Record<string, number>> {
+  const data = await request.get('/api/v1/badges')
+  return ((data as unknown as { sections?: Record<string, number> })?.sections ?? {})
 }
 
 /** 移除抄送（POST /tickets/cc/remove——自摘=读可见；摘他人=update 权；幂等） */
