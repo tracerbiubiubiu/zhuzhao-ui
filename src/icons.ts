@@ -2,6 +2,7 @@ import accountGroup from '@iconify-icons/mdi/account-group'
 import accountOutline from '@iconify-icons/mdi/account-outline'
 import lockOutline from '@iconify-icons/mdi/lock-outline'
 import bellOutline from '@iconify-icons/mdi/bell-outline'
+import clipboardCheckOutline from '@iconify-icons/mdi/clipboard-check-outline'
 import bookAlphabet from '@iconify-icons/mdi/book-alphabet'
 import account from '@iconify-icons/mdi/account'
 import accountMultiple from '@iconify-icons/mdi/account-multiple'
@@ -47,6 +48,7 @@ export const icons = {
   'mdi:account-outline': accountOutline,
   'mdi:lock-outline': lockOutline,
   'mdi:bell-outline': bellOutline,
+  'mdi:clipboard-check-outline': clipboardCheckOutline,
   'mdi:book-alphabet': bookAlphabet,
   'mdi:account': account,
   'mdi:account-multiple': accountMultiple,

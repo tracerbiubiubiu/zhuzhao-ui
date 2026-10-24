@@ -12,12 +12,14 @@ import { getBadgesApi } from '@/api/ticket'
 
 const router = useRouter()
 const todo = ref(0)
+const unread = ref(0)
 let timer: number | undefined
 
 async function refresh() {
   try {
     const sections = await getBadgesApi()
     if (typeof sections.todo === 'number') todo.value = sections.todo
+    if (typeof sections.unread === 'number') unread.value = sections.unread
   } catch {
     // 提示面——静默（下轮重试）
   }
@@ -34,17 +36,31 @@ onUnmounted(() => {
 function goTodo() {
   void router.push({ path: '/tickets', query: { assignee: 'me' } })
 }
+
+function goInbox() {
+  void router.push({ path: '/messages' })
+}
 </script>
 
 <template>
   <button
     class="navbar-badge header-action"
     data-testid="navbar-badge"
+    title="站内消息（未读）"
+    @click="goInbox"
+  >
+    <el-badge :value="unread" :hidden="unread === 0" :max="99" type="danger" data-testid="badge-unread">
+      <Icon icon="mdi:bell-outline" color="var(--top-header-text-color)" :height="18" />
+    </el-badge>
+  </button>
+  <button
+    class="navbar-badge header-action"
+    data-testid="navbar-todo"
     title="待办工单"
     @click="goTodo"
   >
-    <el-badge :value="todo" :hidden="todo === 0" :max="99" type="danger">
-      <Icon icon="mdi:bell-outline" color="var(--top-header-text-color)" :height="18" />
+    <el-badge :value="todo" :hidden="todo === 0" :max="99" type="warning">
+      <Icon icon="mdi:clipboard-check-outline" color="var(--top-header-text-color)" :height="18" />
     </el-badge>
   </button>
 </template>
