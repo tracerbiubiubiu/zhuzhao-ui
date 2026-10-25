@@ -90,6 +90,8 @@ import request from '@vea/request'
 import { useUserStoreWithOut } from '@/store/modules/user'
 import { useTableFit } from '@vea/hooks'
 
+defineOptions({ name: 'system_setting' })
+
 interface SettingRow {
   key: string
   value: unknown

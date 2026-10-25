@@ -62,7 +62,8 @@ import { useTableFit } from '@vea/hooks'
 import { ElCard, ElPagination, ElTabPane, ElTable, ElTableColumn, ElTabs, ElTag } from 'element-plus'
 import request from '@/common/request'
 
-defineOptions({ name: 'SystemNotification' })
+// 顶层菜单页路由名=`${code}_page`（permissionRoutes）；原 'SystemNotification' 与路由名不符致 keep-alive 恒不命中
+defineOptions({ name: 'system_notification_page' })
 
 const activeTab = ref('templates')
 const templates = ref<Record<string, unknown>[]>([])

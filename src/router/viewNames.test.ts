@@ -17,6 +17,10 @@
  *  - component 串按大小写归一解析视图文件（种子 'home' → views/Home/index.vue，
  *    与 resolveViewComponent 同口径）
  * 另：常量路由实名（Profile/MyOrg/TicketCreate/TicketDetail）无种子可派生，保留静态段。
+ *
+ * 反向守卫（2026-10-25 补）：原检查单向「种子页面 → 视图文件存在」，视图文件**无种子也无常量路由**
+ * 时静默放行——S3a 分派规则页（ui 45a72256）落成后无菜单行，成孤岛页三日无人察觉（E2E 补齐核出）；
+ * 此前 richtext 编辑器组件孤岛同型。现补「每个 views/**\/index.vue 必须可达」：∈ 种子派生页 ∪ routes.ts 常量路由。
  */
 import { test, expect } from 'vitest'
 import { readFileSync, readdirSync, statSync } from 'node:fs'
@@ -125,8 +129,10 @@ function deriveMenuRows(): MenuRow[] {
   for (const file of files) {
     const sql = readFileSync(join(MIGRATIONS_DIR, file), 'utf-8')
     // 000037 型纯改挂迁移无 INSERT——含任一 menus 写语句的文件都进重放
-    // （每个解析出的动作——INSERT 行 / UPDATE 改挂目标——计入 perFileActions）
-    if (!/INSERT INTO menus|UPDATE menus SET parent_id/.test(sql)) continue
+    // （每个解析出的动作——INSERT 行 / UPDATE 改挂·改可见目标——计入 perFileActions）
+    if (!/INSERT INTO menus|UPDATE menus SET (?:parent_id|visible)/.test(sql)) continue
+    // 先登记 0：盲区守卫只有在「进重放却零动作」时才有意义——原先未登记，零动作文件根本不进 map，守卫形同虚设
+    perFileActions.set(file, 0)
 
     type Ev = { at: number; run: () => void }
     const events: Ev[] = []
@@ -160,7 +166,8 @@ function deriveMenuRows(): MenuRow[] {
     }
 
     // 形态 B（按钮块）：INSERT INTO menus (...) SELECT ... FROM (VALUES (...)) AS v(...)
-    const formB = /INSERT INTO menus\s*\([^)]*\)\s*SELECT[\s\S]*?FROM \(VALUES([\s\S]*?)\)\s*AS v/g
+    // [^;]*? 把匹配钉在单条语句内——懒匹配 [\s\S]*? 会从前一条 SELECT 型 INSERT 一路跨到后文的 FROM (VALUES
+    const formB = /INSERT INTO menus\s*\([^)]*\)\s*SELECT[^;]*?FROM \(VALUES([\s\S]*?)\)\s*AS v/g
     for (const m of sql.matchAll(formB)) {
       const count = tuplesOf(m[1]).length
       events.push({
@@ -173,13 +180,45 @@ function deriveMenuRows(): MenuRow[] {
       })
     }
 
-    // 形态 C（按钮单行）：INSERT INTO menus (...) SELECT ... FROM menus p WHERE p.code = 'x'
-    const formC = /INSERT INTO menus\s*\([^)]*\)\s*SELECT[\s\S]*?FROM menus p WHERE p\.code = '([^']+)'[\s\S]*?;/g
+    // 形态 C（单行 INSERT…SELECT，parent 由 FROM menus <alias> WHERE <alias>.code = 'x' 给出）：
+    // 按列名映射 SELECT 列表——页面行与按钮行两用（000048 system_setting 是 menu_type=2 页面且别名 m，
+    // 原实现只认别名 p 且一律记为按钮，该页三段未进期望名单）
+    const formC = /INSERT INTO menus\s*\(([^)]+)\)\s*SELECT\s+([^;]*?)\s+FROM menus (\w+) WHERE \3\.code = '([^']+)'[^;]*;/g
     for (const m of sql.matchAll(formC)) {
-      const parent = m[1]
+      const cols = m[1].split(',').map((c) => c.trim())
+      const cells = splitTopLevel(m[2])
+      const cell = (name: string) => cells[cols.indexOf(name)] ?? ''
+      const row: MenuRow = {
+        code: unquote(cell('code')),
+        parent: m[4],
+        menuType: parseInt(cell('menu_type'), 10),
+        component: unquote(cell('component')),
+        visible: cell('visible') ? !/^false$/i.test(cell('visible')) : true,
+        from: file,
+      }
       events.push({
         at: m.index ?? 0,
-        run: () => addTo({ code: `(btn@${file}→${parent})`, parent, menuType: 3, component: '', visible: true, from: file }),
+        run: () => {
+          addTo(row)
+          if (!byCode.has(row.code)) byCode.set(row.code, row)
+        },
+      })
+    }
+
+    // 改可见：UPDATE menus SET visible = true|false WHERE code = 'x' / IN (...)（000059 把 000033 占位行翻为可见）
+    const updVis = /UPDATE menus SET visible = (true|false)\s*WHERE code (?:= '([^']+)'|IN \(([^)]+)\))/gi
+    for (const m of sql.matchAll(updVis)) {
+      const visible = /^true$/i.test(m[1])
+      const targets = m[2] ? [m[2]] : (m[3] ?? '').split(',').map((c) => c.trim().replace(/^'|'$/g, '')).filter(Boolean)
+      events.push({
+        at: m.index ?? 0,
+        run: () => {
+          for (const code of targets) {
+            perFileActions.set(file, (perFileActions.get(file) ?? 0) + 1)
+            const row = byCode.get(code)
+            if (row) row.visible = visible
+          }
+        },
       })
     }
 
@@ -269,3 +308,19 @@ test.each([...DERIVED, ...STATIC_ROUTES])(
     expect(source).toMatch(new RegExp(`^\\s*defineOptions\\(\\{\\s*name:\\s*'${expected}'`, 'm'))
   },
 )
+
+/** routes.ts 常量路由引用的视图（`import('@/views/…')`）——前端自有可达面 */
+function constantRouteViews(): Set<string> {
+  const src = readFileSync(join(REPO_ROOT, 'src/router/routes.ts'), 'utf-8')
+  return new Set([...src.matchAll(/import\(\s*'@\/views\/([^']+)'\s*\)/g)].map((m) => `src/views/${m[1]}`))
+}
+
+test('每个 views/**/index.vue 必须可达（种子页面行 ∪ routes.ts 常量路由）——防孤岛页', () => {
+  const reachable = new Set([...DERIVED.map(([f]) => f), ...constantRouteViews()])
+  const pages = [...IDX.values()].filter((p) => p.endsWith('/index.vue')).map((p) => p.slice(REPO_ROOT.length + 1))
+  const orphans = pages.filter((f) => !reachable.has(f))
+  expect(
+    orphans,
+    `以下页面无菜单种子也无常量路由，用户无法到达（补主仓 menus 种子或 routes.ts）：\n${orphans.join('\n')}`,
+  ).toEqual([])
+})

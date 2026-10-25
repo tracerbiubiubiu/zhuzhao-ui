@@ -28,9 +28,23 @@ jobs:
       - uses: actions/checkout@v4
       # viewNames.test 期望名单从主仓迁移种子派生（P1-1/P3-8）——CI 须同级拉主仓
       # （ZHUZHAO_REPO 口径同 codegen.sh；两仓 public，默认 GITHUB_TOKEN 可读）
+      # 2026-10-25：主仓取**同名分支**（不存在才回落 main）——两仓按同名分支（phase5/phase5）并行演进，
+      # 原固定拉默认分支致特性分支上的种子新页（000067/000072/000073）在 CI 里不进期望名单，
+      # 反向守卫（页面须可达）也会把它们误报为孤岛页
+      - name: Resolve sibling zhuzhao ref (same-named branch, else main)
+        id: sibling
+        run: |
+          BR="${{ github.head_ref || github.ref_name }}"
+          if git ls-remote --exit-code --heads https://github.com/tracerbiubiubiu/zhuzhao.git "$BR" >/dev/null 2>&1; then
+            echo "ref=$BR" >> "$GITHUB_OUTPUT"
+          else
+            echo "ref=main" >> "$GITHUB_OUTPUT"
+          fi
+          echo "sibling zhuzhao ref → $(tail -n1 "$GITHUB_OUTPUT")"
       - uses: actions/checkout@v4
         with:
           repository: tracerbiubiubiu/zhuzhao
+          ref: ${{ steps.sibling.outputs.ref }}
           path: zhuzhao
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
