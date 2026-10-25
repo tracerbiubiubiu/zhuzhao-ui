@@ -63,36 +63,36 @@ export async function presignUpload(data: {
   size_bytes: string
   ticket_id?: string
 }): Promise<PresignResponse> {
-  const res = await request.post('/storage/presign/upload', data)
+  const res = await request.post('/api/v1/storage/presign/upload', data)
   return res as unknown as PresignResponse
 }
 
 /** 确认上传（POST /tickets/attachments/confirm——HEAD 实测+翻 confirmed+ticket 态落绑） */
 export async function confirmUpload(data: { object_key: string; ticket_id?: string }): Promise<ConfirmResponse> {
-  const res = await request.post('/tickets/attachments/confirm', data)
+  const res = await request.post('/api/v1/tickets/attachments/confirm', data)
   return res as unknown as ConfirmResponse
 }
 
 /** 头像回写（POST /storage/avatar/bind——本人 confirmed avatar 对象→users.avatar） */
 export async function bindAvatar(data: { object_key: string }): Promise<ConfirmResponse> {
-  const res = await request.post('/storage/avatar/bind', data)
+  const res = await request.post('/api/v1/storage/avatar/bind', data)
   return res as unknown as ConfirmResponse
 }
 
 /** 工单附件列表（GET /tickets/:id/attachments——L2 read 面） */
 export async function listAttachments(ticketId: string): Promise<AttachmentView[]> {
-  const res = await request.get(`/tickets/${ticketId}/attachments`)
+  const res = await request.get(`/api/v1/tickets/${ticketId}/attachments`)
   return res as unknown as AttachmentView[]
 }
 
 /** 删除附件（POST /tickets/attachments/delete——L2 update 面，删关联+GC） */
 export async function deleteAttachment(data: { ticket_id: string; object_key: string }): Promise<void> {
-  await request.post('/tickets/attachments/delete', data)
+  await request.post('/api/v1/tickets/attachments/delete', data)
 }
 
 /** 服务端 MD 渲染（POST /tickets/richtext/render——白名单 HTML 出站） */
 export async function renderRichtext(data: { content: string }): Promise<{ html: string }> {
-  const res = await request.post('/tickets/richtext/render', data)
+  const res = await request.post('/api/v1/tickets/richtext/render', data)
   return res as unknown as { html: string }
 }
 

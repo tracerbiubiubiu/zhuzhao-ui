@@ -8,8 +8,8 @@
  *   对其 404）——本用例把 viewer 绑进根组织（幂等 upsert）成为「透明读旁观者」
  *   （BK-1：可见工单、内部备注仍被服务端过滤），与 S10 断言语义精确对齐
  * - 关联（S10）：UI 建关联成功；重复提交 → 后端 409 内联 el-alert 呈现
- * - 流转（S11）：分派（填用户 ID）→ 已分派；取消分派 → 待处理；关闭（带说明）→
- *   已关闭且编辑/分派/关闭动作隐藏（后端 409+90004 兜底，前端按钮级防呆）
+ * - 流转（S11）：分派（UserPicker 按工号选人——B1-2 起替代手输 ID）→ 已分派；取消分派 → 待处理；
+ *   关闭（带说明）→ 已关闭且编辑/分派/关闭动作隐藏（后端 409+90004 兜底，前端按钮级防呆）
  * - 用户切换后必须 page.reload()：hash 导航不重载 SPA，vue-query 缓存会带着
  *   上一个会话的数据串台（评论断言曾因此误绿）
  * - 清理：两单 API 软删（工单无级联约束，删类型不可行——用 incident 内置类型）
@@ -24,11 +24,9 @@ test('S10/S11：详情评论/备注分层+关联判重+分派/关闭流+viewer �
   const state = loadState()
   const suffix = Date.now().toString(36)
 
-  // ── API setup：admin 建两单（root 组织）；取 admin 用户 ID（分派用）──
+  // ── API setup：admin 建两单（root 组织）──
   const admin = await apiLogin(state.admin.employeeNo, state.admin.password, 's10-setup')
   const h = { token: admin.env!.data.access_token } as const
-  const uid = (await api('/api/v1/user/profile', { token: h.token })).env!.data as { id: string }
-  const adminUid = uid.id
   const orgId = ((await api('/api/v1/orgs', { token: h.token })).env!.data as Array<{ id: string }>)[0].id
   const mk = async (title: string) => {
     const r = await api('/api/v1/tickets', { ...h, method: 'POST', body: { type_code: 'incident', title, org_id: orgId } })
@@ -99,7 +97,11 @@ test('S10/S11：详情评论/备注分层+关联判重+分派/关闭流+viewer �
 
     await page.getByRole('button', { name: '分派', exact: true }).click()
     const assignDialog = page.locator('.el-dialog').filter({ hasText: '分派工单' })
-    await assignDialog.getByPlaceholder('用户 ID（数字）').fill(adminUid)
+    // UserPicker（remote el-select）：键入工号 → 下拉出「姓名（工号）」→ 点选；下拉 teleport 到 body
+    const assigneeBox = assignDialog.getByRole('combobox', { name: '处理人' })
+    await assigneeBox.click()
+    await assigneeBox.fill(state.admin.employeeNo)
+    await page.getByRole('option', { name: new RegExp(state.admin.employeeNo) }).click({ timeout: 10_000 })
     await assignDialog.getByRole('button', { name: '分派', exact: true }).click()
     await expect(statusTag).toHaveText('已分派', { timeout: 10_000 })
 
@@ -117,7 +119,8 @@ test('S10/S11：详情评论/备注分层+关联判重+分派/关闭流+viewer �
     await expect(page.getByRole('button', { name: '编辑' })).toHaveCount(0)
     await expect(page.getByRole('button', { name: '分派', exact: true })).toHaveCount(0)
     await expect(page.getByRole('button', { name: '关闭', exact: true })).toHaveCount(0)
-    await expect(page.getByRole('button', { name: '删除' })).toBeVisible()
+    // 限定头卡：附件/抄送/标签等列表行也带「删除」，页面级匹配会撞 strict mode
+    await expect(page.locator('.el-card').first().getByRole('button', { name: '删除' })).toBeVisible()
   } finally {
     // 清理：两单软删（不污染列表）
     await api('/api/v1/tickets/delete', { ...h, method: 'POST', body: { id: t1 } }).catch(() => {})

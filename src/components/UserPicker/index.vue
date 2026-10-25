@@ -25,9 +25,8 @@
  * UserPicker 人员补全件（B1-2——01 号 §3.2"指派/抄送/参与人选人走既有用户搜索端点"）。
  *
  * 替换 detail 页分派对话框的手输数字 ID；remote 搜索走 GET /users
- * （username/employee_no 过滤分流：纯数字按工号、否则按用户名前缀——
- * 后端无通用 keyword 参数，双字段各查合并去重）。M-HR 对接后本地人员
- * 数据补全零额外对接（01 号 §3.2 既定）。
+ * （employee_no 精确 + username 包含两路并查合并去重——后端无通用 keyword 参数）。
+ * M-HR 对接后本地人员数据补全零额外对接（01 号 §3.2 既定）。
  */
 import { ref } from 'vue'
 import { ElOption, ElSelect } from 'element-plus'
@@ -47,10 +46,8 @@ async function search(q: string) {
   }
   loading.value = true
   try {
-    // 纯数字 → 工号；否则用户名（两次查询合并去重，各取首页）
-    const queries: Array<{ username?: string; employee_no?: string }> = /^\d+$/.test(term)
-      ? [{ employee_no: term }]
-      : [{ username: term }]
+    // 工号精确 + 用户名包含两路各查合并去重——工号带字母前缀（E000001），不能按「纯数字」分流
+    const queries: Array<{ username?: string; employee_no?: string }> = [{ employee_no: term }, { username: term }]
     const merged = new Map<string, { id: string; display: string }>()
     for (const params of queries) {
       const r = await listUsersApi({ page: 1, page_size: 20, ...params }).catch(() => null)

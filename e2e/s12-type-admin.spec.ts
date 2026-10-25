@@ -33,9 +33,11 @@ test('S12：类型/字段/模板三件套全流程 + admin 专属边界', async 
   await expect(typeRow).toBeVisible({ timeout: 10_000 })
 
   // ── 字段编辑器：添加一行 → 全量替换（危险确认）→ 回显持久化 ──
+  // S1 起字段配置默认落「设计模式」（B1 设计器），表格编辑器在「专家模式」Tab——本用例走表格路径
   await typeRow.getByRole('button', { name: '字段配置' }).click()
   const fieldsDialog = page.locator('.el-dialog').filter({ hasText: '字段配置' })
   await expect(fieldsDialog).toBeVisible()
+  await fieldsDialog.getByRole('tab', { name: '专家模式（表格）' }).click()
   await fieldsDialog.getByRole('button', { name: '添加字段' }).click()
   const row = fieldsDialog.locator('.el-table__row').first()
   await row.getByPlaceholder('英文键').fill('contact')
@@ -48,6 +50,7 @@ test('S12：类型/字段/模板三件套全流程 + admin 专属边界', async 
   await expect(fieldsDialog).not.toBeVisible({ timeout: 10_000 }) // 成功关闭（行为断言）
 
   await typeRow.getByRole('button', { name: '字段配置' }).click()
+  await fieldsDialog.getByRole('tab', { name: '专家模式（表格）' }).click()
   await expect(fieldsDialog.getByPlaceholder('英文键')).toHaveValue('contact', { timeout: 10_000 }) // 替换已落库
   await fieldsDialog.getByRole('button', { name: '取消' }).click()
 
