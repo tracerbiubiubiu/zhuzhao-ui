@@ -21,6 +21,8 @@
     "lint:fix": "eslint . --fix",
     "test": "vitest run",
     "test:e2e": "playwright test",
+    "audit:prod": "pnpm audit --prod --registry=https://registry.npmjs.org",
+    "gate": "pnpm run lint && pnpm run typecheck && pnpm run test && pnpm run audit:prod && pnpm run build && pnpm run test:e2e",
     "codegen": "bash scripts/codegen.sh",
     "clean": "rimraf dist dist-pro dist-dev dist-test node_modules/.cache"
   },

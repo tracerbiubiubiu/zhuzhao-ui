@@ -288,12 +288,14 @@ const DERIVED: Array<[string, string]> = menuRows
     ] as [string, string]
   })
 
-/** 常量路由实名（§3.2④ 静态补充路由——前端自有，无种子可派生） */
+/** 常量路由实名（§3.2④ 静态补充路由——前端自有，无种子可派生）
+ *  message_center：000076 把菜单行 visible=false 惰性化（派生器按不可见跳过），页面改走常量路由——名仍取顶层页口径 `${code}_page` */
 const STATIC_ROUTES: Array<[string, string]> = [
   ['src/views/Profile/index.vue', 'Profile'],
   ['src/views/MyOrg/index.vue', 'MyOrg'],
   ['src/views/ticket/create/index.vue', 'TicketCreate'],
   ['src/views/ticket/detail/index.vue', 'TicketDetail'],
+  ['src/views/message/center/index.vue', 'message_center_page'],
 ]
 
 test('种子派生 sanity：页面行 ≥12（少于=派生器漏形态，检查 contribute 守卫）', () => {

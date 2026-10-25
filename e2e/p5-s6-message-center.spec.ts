@@ -1,8 +1,9 @@
 /**
  * P5-S6 二期 站内消息中心（B6-7）+ 铃铛未读（B10-3 badges unread 并入）：
  * API 建单并分派给 admin → ticket.assigned 事件（to_assignee）→ inbox 落行 → 铃铛红点
- * → 点铃铛进 /messages（000074 回补 role_menus 前此处 404）→ 通知 tab 有未读行 → 全部已读 → 未读点清零
- * → 待办 tab 含本单（状态派生：assignee=me 非终态）→ 刷新后铃铛红点消失（badges 重取）。
+ * → 点铃铛进 /messages（000076 起为常量路由——此前菜单驱动，非绑定角色 404）→ 通知 tab 有未读行 → 全部已读 → 未读点清零
+ * → 待办 tab 含本单（状态派生：assignee=me 非终态）→ 刷新后铃铛红点消失（badges 重取）
+ * → viewer 点铃铛同样可达（G-23：/messages 常量路由 + inbox selfService）。
  * 注：全部已读会清掉 admin 既有未读（E2E 专属账号的测试数据，可接受）。
  */
 import { test, expect } from '@playwright/test'
@@ -36,7 +37,7 @@ test('P5-S6：分派事件入站 → 铃铛未读 → 消息中心全部已读 �
     await expect(bell).toBeVisible({ timeout: 15_000 })
     await expect(page.getByTestId('badge-unread').locator('.el-badge__content')).toBeVisible({ timeout: 15_000 })
 
-    // 点铃铛 → 消息中心（菜单页可达——000074 前对 superadmin 亦 404）
+    // 点铃铛 → 消息中心（常量路由；菜单行已惰性化）
     await bell.click()
     await page.waitForURL(/#\/messages/, { timeout: 15_000 })
     const rows = page.locator('[data-testid^="msg-"]')
@@ -57,6 +58,18 @@ test('P5-S6：分派事件入站 → 铃铛未读 → 消息中心全部已读 �
     await page.reload()
     await expect(page.getByTestId('navbar-badge')).toBeVisible({ timeout: 20_000 })
     await expect(page.getByTestId('badge-unread').locator('.el-badge__content')).toBeHidden({ timeout: 15_000 })
+
+    // ── viewer：铃铛同样可达消息中心（G-23 实施 000076：/messages 常量路由 + inbox selfService——
+    //    修前非 admin 角色点铃铛即 404 兜底页，inbox 请求 403）──
+    await page.evaluate(() => localStorage.clear())
+    await uiLogin(page, state.viewer.employeeNo, state.viewer.password)
+    await page.waitForURL(/#\/home/, { timeout: 30_000 })
+    await page.getByTestId('navbar-badge').click()
+    await page.waitForURL(/#\/messages/, { timeout: 15_000 })
+    await expect(page.getByRole('tab', { name: /通知/ })).toBeVisible({ timeout: 15_000 })
+    await expect(page.getByText('抱歉，您访问的页面不存在')).toHaveCount(0)
+    const viewer = await mustData(apiLogin(state.viewer.employeeNo, state.viewer.password, 'p5-s6-v'), 'viewer API 登录')
+    expect((await api('/api/v1/notifications/inbox?page=1&page_size=1', { token: viewer.access_token })).status, 'viewer inbox 须 200（selfService）').toBe(200)
   } finally {
     await api('/api/v1/tickets/delete', { ...h, method: 'POST', body: { id: tid } }).catch(() => {})
   }
