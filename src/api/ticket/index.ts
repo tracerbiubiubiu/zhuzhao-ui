@@ -334,6 +334,60 @@ export async function removeTicketTagApi(input: { ticket_id: string; tag: string
   await request.post('/api/v1/tickets/tags/remove', input, { _silentError: true })
 }
 
+/** 统一转换执行（S3a B3-1——POST /tickets/transition；condition/validator 服务端判） */
+export async function transitionTicketApi(input: { id: string; to: string; comment?: string }): Promise<TicketRow> {
+  const data = await request.post('/api/v1/tickets/transition', input, { _silentError: true })
+  return data as unknown as TicketRow
+}
+
+/** 当前用户可执行的转换列表（S3a B3-1——Jira condition 语义按用户过滤；前端按钮渲染依据） */
+export async function listAvailableTransitionsApi(id: string): Promise<string[]> {
+  const data = await request.get(`/api/v1/tickets/${id}/transitions/available`)
+  return ((data as unknown as { transitions?: string[] })?.transitions ?? [])
+}
+
+/** 分派规则行（S3a B3-2——自动分派管理面） */
+export interface AssignmentRuleRow {
+  id: string
+  type_code: string
+  priority: number
+  keyword?: string
+  target_org: string
+  target_user?: string
+  enabled: boolean
+  created_by: string
+  created_at: string
+}
+
+/** 分派规则列表（S3a B3-2——GET /assignment-rules） */
+export async function listAssignmentRulesApi(): Promise<AssignmentRuleRow[]> {
+  const data = await request.get('/api/v1/assignment-rules')
+  return ((data as unknown as { rules?: AssignmentRuleRow[] })?.rules ?? [])
+}
+
+/** 建分派规则（S3a B3-2——POST /assignment-rules；target_user 须属 target_org） */
+export async function createAssignmentRuleApi(input: {
+  type_code: string
+  priority?: number
+  keyword?: string
+  target_org: string
+  target_user?: string
+  enabled?: boolean
+}): Promise<AssignmentRuleRow> {
+  const data = await request.post('/api/v1/assignment-rules', input, { _silentError: true })
+  return data as unknown as AssignmentRuleRow
+}
+
+/** 删分派规则（S3a B3-2——POST /assignment-rules/delete） */
+export async function deleteAssignmentRuleApi(id: string): Promise<void> {
+  await request.post('/api/v1/assignment-rules/delete', { id }, { _silentError: true })
+}
+
+/** 启停分派规则（S3a B3-2——POST /assignment-rules/enabled） */
+export async function updateAssignmentRuleEnabledApi(id: string, enabled: boolean): Promise<void> {
+  await request.post('/api/v1/assignment-rules/enabled', { id, enabled }, { _silentError: true })
+}
+
 /** 工单导出（S10 B10-5——与列表同筛选参数/同可见性；xlsx blob 下载；>5 万行后端 400） */
 export async function exportTicketsApi(params: TicketListQuery): Promise<Blob> {
   const clean: Record<string, string | number> = {}

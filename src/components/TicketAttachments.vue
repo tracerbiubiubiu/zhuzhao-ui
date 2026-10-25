@@ -69,7 +69,7 @@ async function refresh() {
   try {
     attachments.value = await listAttachments(props.ticketId)
   } catch {
-    // 静默——附件区非关键路径
+    // 附件区非关键路径——静默降级（列表空+无报错弹窗；后端异常时用户可通过重开详情页重试）
   } finally {
     loading.value = false
   }

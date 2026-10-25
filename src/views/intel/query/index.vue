@@ -5,7 +5,7 @@
  */
 import { ref } from 'vue'
 import { ElButton, ElCard, ElEmpty, ElInput, ElMessage, ElOption, ElSelect, ElTag } from 'element-plus'
-import request from '@vea/request'
+import { queryIntelApi } from '@/api/intel'
 
 // keep-alive 契约：name=动态路由名（菜单 code intel_query）
 defineOptions({ name: 'intel_query_page' })
@@ -24,9 +24,7 @@ async function query() {
   }
   loading.value = true
   try {
-    const data = await request.get('/api/v1/intel/query', {
-      params: { type: intelType.value, value: value.value.trim() },
-    })
+    const data = await queryIntelApi(intelType.value, value.value.trim())
     const d = data as unknown as { result: unknown; stale: boolean; fetched_at: string }
     result.value = d.result
     stale.value = d.stale

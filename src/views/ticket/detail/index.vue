@@ -22,9 +22,9 @@ import { useQuery, useQueryClient } from '@tanstack/vue-query'
 import {
   addTicketCCApi, assignTicketApi, closeTicketApi, createTicketCommentApi, createTicketNoteApi,
   createTicketRelationApi, deleteTicketApi, getTicketApi, getTicketCommentsApi,
-  getTicketRelationsApi, listTicketCCApi, listTicketTagsApi, listTicketTypesApi,
-  addTicketTagsApi, removeTicketCCApi, removeTicketTagApi,
-  STATUS_LABEL, updateTicketApi, type TagRow, type TicketCCRow,
+  getTicketRelationsApi, listAvailableTransitionsApi, listTicketCCApi, listTicketTagsApi,
+  listTicketTypesApi, addTicketTagsApi, removeTicketCCApi, removeTicketTagApi,
+  transitionTicketApi, STATUS_LABEL, updateTicketApi, type TagRow, type TicketCCRow,
 } from '@/api/ticket'
 import { useUserStoreWithOut } from '@/store/modules/user'
 import UserNameText from '@/components/UserNameText/index.vue'
@@ -111,6 +111,36 @@ const formatCustomValue = (f: TicketTypeFieldDef): string => {
   if (f.field_type === 'tips') return f.field_label
   if (typeof v === 'boolean') return v ? '是' : '否'
   return String(v)
+}
+
+// ─── S3a B3-1 统一转换（available 按用户过滤——condition 语义；叠加 Close/Assign 既有按钮）───
+const availableTransitions = ref<string[]>([])
+const transitionLoading = ref(false)
+
+async function loadAvailableTransitions() {
+  if (!ticketId.value || isClosed.value) return
+  try {
+    availableTransitions.value = await listAvailableTransitionsApi(ticketId.value)
+  } catch {
+    availableTransitions.value = []
+  }
+}
+
+watch(() => [ticketId.value, ticketQuery.data.value?.status], () => void loadAvailableTransitions(), { immediate: true })
+
+async function doTransition(to: string) {
+  transitionLoading.value = true
+  try {
+    await transitionTicketApi({ id: ticketId.value, to })
+    ElMessage.success(`已转换到 ${STATUS_LABEL[to] ?? to}`)
+    await queryClient.invalidateQueries({ queryKey: ['ticket'] })
+    await loadAvailableTransitions()
+  } catch (err: unknown) {
+    const resp = (err as { response?: { data?: { message?: string } } })?.response?.data
+    ElMessage.error(resp?.message ?? '转换失败（可能不满足前置条件）')
+  } finally {
+    transitionLoading.value = false
+  }
 }
 
 // ─── S10 B10-2 标签（默认共享；挂/自摘=读可见，摘他人挂的=update 权由后端兜底）───
@@ -486,6 +516,19 @@ async function submitRelation() {
       <!-- 处理动作（S11：仅分派/取消/关闭/更新/删除——三态经 API 不可达不做流转；
            closed 后编辑/分派/关闭隐藏，后端 409 兜底） -->
       <div class="mt-4 flex gap-2 flex-wrap">
+        <!-- S3a B3-1：condition 过滤后的可执行转换（后端语义+前端按钮一一对应） -->
+        <template v-if="!isClosed && availableTransitions.length">
+        <el-button
+          v-for="to in availableTransitions"
+          :key="to"
+          type="primary"
+          plain
+          size="small"
+          :loading="transitionLoading"
+          :data-testid="`btn-transition-${to}`"
+          @click="doTransition(to)"
+        >→ {{ STATUS_LABEL[to] ?? to }}</el-button>
+        </template>
         <el-button v-permission="'ticket:update'" v-if="!isClosed" @click="openEdit">编辑</el-button>
         <el-button v-permission="'ticket:assign'" v-if="!isClosed" type="primary" @click="openAssign">分派</el-button>
         <el-button v-permission="'ticket:assign'" v-if="!isClosed && ticket?.assigned_to" @click="unassign">取消分派</el-button>
