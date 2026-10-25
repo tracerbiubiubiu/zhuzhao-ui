@@ -34,10 +34,10 @@ Vue 3 + TypeScript strict + Vite 8 ｜ Element Plus 2.14 ｜ Pinia 4（客户端
 ```bash
 pnpm lint        # ESLint（纯检查；修复用 pnpm lint:fix）
 pnpm typecheck   # vue-tsc --noEmit（codegen 类型**部分接线** 4/14——漂移仅接线面报错，与 AGENTS 同口径）
-pnpm test        # Vitest（动态路由/请求层/keep-alive 防漂移——15 文件 / 118 用例）
+pnpm test        # Vitest（动态路由/请求层/keep-alive 防漂移等——21 文件 / 182 用例）
 pnpm build       # 生产构建
 pnpm audit --prod # npm 供应链
-pnpm test:e2e    # Playwright（S1–S8/S10/S12/S16/FE3·FE4/W4·W5/P4 穿插池——20 spec / 24 用例，运行前提见下）
+pnpm test:e2e    # Playwright（S1–S8/S10/S12/S16/FE3·FE4/W4·W5/P4/P5 穿插池——26 spec / 33 用例，运行前提见下）
 ```
 
 ### E2E 运行前提（打标准三栈，不用 stub）

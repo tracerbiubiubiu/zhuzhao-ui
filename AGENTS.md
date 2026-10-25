@@ -19,17 +19,17 @@
 ```bash
 pnpm lint          # ESLint（纯检查；自动修复用 pnpm lint:fix，修复后重跑 lint）
 pnpm typecheck     # vue-tsc --noEmit（codegen 类型**部分接线**：入参仅 4/14 api 文件引 __generated__（user/role/profile/selfService）、出参全手写——漂移仅接线面编译期报错，勿视为全量守卫；改 API 形状后先 pnpm codegen，补接线随域渐进）
-pnpm test          # Vitest（动态路由解析/请求层单飞刷新/keep-alive 防漂移断言——15 文件 / 118 用例，运行时口径含 test.each 数据驱动展开）
+pnpm test          # Vitest（动态路由解析/请求层单飞刷新/keep-alive 防漂移断言等——21 文件 / 182 用例，含 apiPaths 路径前缀门禁/viewNames 双向守卫）
 pnpm audit --prod  # npm 供应链（对称 Go 侧 govulncheck；镜像源无 audit 端点时加 --registry=https://registry.npmjs.org）
 pnpm build         # 产物构建
-pnpm test:e2e      # Playwright（S1–S8/S10/S12/S16/FE3·FE4/W4·W5/P4 穿插池——20 spec / 24 用例；打真实栈不用 stub——W5 需 activelist/taskrunner 上游，前提见下）
+pnpm test:e2e      # Playwright（S1–S8/S10/S12/S16/FE3·FE4/W4·W5/P4/P5 穿插池——26 spec / 33 用例；打真实栈不用 stub——W5 需 activelist/taskrunner 上游，前提见下）
 ```
 
 **E2E 运行前提**：主仓 `bash scripts/dev-stack.sh up`（dev PG/Redis）+ `INTERNAL_JOBS_SK=xxx make dev`（app @33333）；W5 场景另需两上游：activelist（compose.dev PG@15432 + `ACTIVELIST_CALLER_ZHUZHAO_SK=dev-gateway-sk go run ./cmd/apiserver`@8080 + 主仓 gateway target 暂改 127.0.0.1:8080 勿提交）+ taskrunner（@8081：TASKRUNNER_REDIS_PASSWORD=zhuzhao_dev + CALLER_ZHUZHAO_SK/SELF_SK + CALLBACK_TARGET_URL=http://127.0.0.1:33333/internal/jobs/callback，app 侧带 TASKRUNNER_BASE_URL/TASKRUNNER_SK）；vite dev server 由 Playwright webServer 自动拉起。globalSetup 幂等建号（admin 凭据闭环/operator·viewer 预设/S1 重置），可无限重放。浏览器下载被墙时：`PLAYWRIGHT_DOWNLOAD_HOST=https://cdn.npmmirror.com/binaries/playwright pnpm exec playwright install chromium`。
 
 **纪律**：门禁不全绿不得标记完成；E2E 打真后端（菜单可见性/权限码必须打真实数据）；CI（`.github/workflows/ci.yml`）跑 lint/typecheck/build/audit/test——E2E 与 Go 仓 acceptance 同口径走本地人工验收；**推送后核实 CI run 转绿才算交付闭环**（`gh run list`/`gh run watch`——本地绿≠CI 绿：CI 单仓 checkout/全新安装等环境差曾致挂（2026-10-02 三连挂教训），README badge 仅为被动入口，跨仓依赖的测试改动合入前先过一遍「CI 无同级仓」假设）。
 
-**i18n 口径（2026-10-02 拍板，主仓 02 §5.4 检查点结论文）**：英文面**显式暂不启用**——触发器=外部协作者/英文用户出现（未命中）。`src/locales/` 骨架与 en 词包为**预留基建勿删**（含 `login.*Placeholder` 闲置键）；新页面文案直接中文，勿新增半成品键。翻案时方案见 02 §5.4（key 映射层），需连带迁移 `e2e/ui.ts` 登录锚点（20 spec 依赖）。
+**i18n 口径（2026-10-02 拍板，主仓 02 §5.4 检查点结论文）**：英文面**显式暂不启用**——触发器=外部协作者/英文用户出现（未命中）。`src/locales/` 骨架与 en 词包为**预留基建勿删**（含 `login.*Placeholder` 闲置键）；新页面文案直接中文，勿新增半成品键。翻案时方案见 02 §5.4（key 映射层），需连带迁移 `e2e/ui.ts` 登录锚点（26 spec 依赖）。
 
 ## 类型生成（codegen，随契约批）
 
@@ -54,7 +54,7 @@ pnpm test:e2e      # Playwright（S1–S8/S10/S12/S16/FE3·FE4/W4·W5/P4 穿插�
 - **语言**：中文（代码标识符/命令/路径除外）；子模块 README 同口径
 - **日期**：一律 `YYYY-MM-DD`
 - **标题**：H1 = `# <文档名> — <一句话定位>`，章节用 H2、不编号
-- **计数口径**（随实际增长同步，禁止两处不同值）：E2E「20 spec / 24 用例」、单测「15 文件 / 118 用例」、E2E 范围串「S1–S8/S10/S12/S16/FE3·FE4/W4·W5/P4 穿插池」、门禁统称「六件门禁」（lint/typecheck/test/audit/build/test:e2e）
+- **计数口径**（随实际增长同步，禁止两处不同值）：E2E「26 spec / 33 用例」（P5 五件=CC 标签/S2 画布/S6 消息中心/S3a 转换+规则，2026-10-25 补齐——phase5 曾全程未落浏览器，见主仓 11 号同日批次行）、单测「21 文件 / 182 用例」、E2E 范围串「S1–S8/S10/S12/S16/FE3·FE4/W4·W5/P4/P5 穿插池」、门禁统称「六件门禁」（lint/typecheck/test/audit/build/test:e2e）
 - **存放**：Phase 设计文档住主仓 `zhuzhao/docs/`（SSOT）；本仓放操作文档（README/AGENTS/子模块说明）；时点报告住 `deliverables/`，命名 `<topic-kebab>-<YYYY-MM-DD>.md`（对齐主仓 deliverables/ 惯例）
 - **计数/状态声明须与实测一致**：改 E2E/单测数量或修复状态时，同批更新 README 与 AGENTS 两处；「全部修复」类表述须有逐项证据（deliverables/ 报告为凭）
 

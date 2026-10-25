@@ -4,7 +4,7 @@
  * 规则=type_code+keyword LIKE → 按 priority 升序首个命中 → 自动 Assign。
  * 决议③：target_user 须属 target_org（后端写侧校验，前端表单提示）。
  */
-import { reactive, ref } from 'vue'
+import { computed, reactive, ref } from 'vue'
 import {
   ElAlert, ElButton, ElCard, ElDialog, ElForm, ElFormItem, ElInput, ElInputNumber,
   ElOption, ElSelect,
@@ -29,7 +29,9 @@ const rulesQuery = useQuery({ queryKey: ['ticket', 'assignment-rules'], queryFn:
 const typesQuery = useQuery({ queryKey: ['ticket', 'types'], queryFn: listTicketTypesApi })
 const orgTreeQuery = useQuery({ queryKey: ['system', 'orgs'], queryFn: () => getOrgTreeApi() })
 
-const orgOptions = (() => {
+// computed 而非 IIFE：冷加载时 orgTreeQuery 在途、data 为 undefined——快照一次即永久空选项，
+// 「目标组织」必填无可选项=UI 建不了规则（仅其他页先预热 ['system','orgs'] 缓存时才"偶然可用"）
+const orgOptions = computed(() => {
   const flat: Array<{ value: string; label: string }> = []
   const walk = (nodes: OrgTreeNode[] | undefined) => {
     for (const n of nodes ?? []) {
@@ -39,7 +41,7 @@ const orgOptions = (() => {
   }
   walk(orgTreeQuery.data.value as OrgTreeNode[] | undefined)
   return flat
-})()
+})
 
 const dialog = reactive({ visible: false, loading: false, error: '' })
 const form = reactive({ type_code: '', keyword: '', priority: 100, target_org: '', target_user: '', enabled: true })
@@ -132,7 +134,7 @@ async function onToggle(row: AssignmentRuleRow) {
         </el-table-column>
         <el-table-column label="启用" width="80" align="center">
           <template #default="{ row }">
-            <el-switch :model-value="row.enabled" @change="onToggle(row as AssignmentRuleRow)" />
+            <el-switch v-permission="'ticket:type:manage'" :model-value="row.enabled" @change="onToggle(row as AssignmentRuleRow)" />
           </template>
         </el-table-column>
         <el-table-column label="操作" width="80" fixed="right">
