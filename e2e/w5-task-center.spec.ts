@@ -1,6 +1,7 @@
 /**
  * W5 冒烟：任务中心打真实五栈——zhuzhao 网关（JWT/Casbin 代理 E-④）→ taskrunner
- * （验签+Asynq 队列+SQLite）。幂等：action/job 带时间戳后缀，提交产生的 run 行留作列表数据。
+ * （验签+Asynq 队列+SQLite）。幂等：说明列带时间戳后缀；action 用注册表在册的
+ * audit_archive（S4 fail-fast 预校验落地后，未注册动作提交即 400）。
  *
  * 2026-10-13 交互批适配：三 Tab（运行记录/任务定义/死信）+ 提交=运行记录页首主按钮+对话框
  * （admin=任务定义下拉自动补全，action 由定义带出；无参定义隐藏参数区）。
@@ -19,23 +20,23 @@ test.setTimeout(120_000)
 test('W5 冒烟：任务中心三 Tab（提交对话框/runs 过滤/死信/jobs）', async ({ page }) => {
   const state = loadState()
   const suffix = Date.now().toString(36)
-  const action = `e2e_w5_task_${suffix}`
+  const action = 'audit_archive' // 注册表在册动作（GET /jobs/actions）
+  const desc = `e2e_task_${suffix}` // 唯一性走说明列
 
   await uiLogin(page, state.admin.employeeNo, state.admin.password)
-  // 动态菜单路由：等父级菜单项出现即就绪（task_center）
   await expect(page.getByRole('menuitem', { name: '任务中心' })).toBeVisible({ timeout: 15_000 })
   await page.goto('/#/tasks')
 
-  // ── 任务定义：先建 manual job（提交对话框的数据源；无描述→下拉项文本=action_id）──
+  // ── 任务定义：先建 manual job（提交对话框的数据源）──
   await page.getByRole('tab', { name: '任务定义' }).click()
   await page.getByRole('button', { name: '新建任务' }).click()
   await page.locator('.el-dialog').getByPlaceholder('服务端动作注册表内').fill(action)
+  await page.locator('.el-dialog .el-form-item').filter({ hasText: '说明' }).locator('input').fill(desc)
   await page.locator('.el-dialog .el-select').first().click()
   await page.getByRole('option', { name: '手动' }).click()
   await page.locator('.el-dialog').getByRole('button', { name: '创建' }).click()
   await expect(page.locator('.el-dialog')).not.toBeVisible({ timeout: 10_000 })
-  // jobs 与 runs 同页多 Tab 表格并存（隐藏 pane DOM 仍在）——:visible 限定激活 Tab
-  const jobRow = page.locator('.el-table__row:visible').filter({ hasText: action })
+  const jobRow = page.locator('.el-table__row:visible').filter({ hasText: desc })
   await expect(jobRow).toBeVisible({ timeout: 15_000 })
   await expect(jobRow).toContainText('手动')
 
@@ -46,17 +47,18 @@ test('W5 冒烟：任务中心三 Tab（提交对话框/runs 过滤/死信/jobs�
   await expect(dlg).toBeVisible()
   // 无参定义 → 参数区隐藏（本批新增断言）
   await expect(dlg.locator('.el-form-item').filter({ hasText: 'params' })).toHaveCount(0)
-  // 下拉自动补全（filterable）：展开后按文本点选（选项全量渲染，定位过滤即模拟补全选择）
+  // 下拉自动补全（filterable）：展开后按说明文本点选
   await dlg.locator('.el-select').click()
-  await page.locator('.el-select-dropdown:visible .el-select-dropdown__item').filter({ hasText: action }).first().click()
+  await page.locator('.el-select-dropdown:visible .el-select-dropdown__item').filter({ hasText: desc }).first().click()
   // 受理：对话框关闭 + 自动回运行记录
   await dlg.getByRole('button', { name: '提交任务' }).click()
   await expect(dlg).not.toBeVisible({ timeout: 15_000 })
 
   // ── 运行记录：受理行出现 + submitted_by=me 过滤（zhuzhao 代理换 actor 透传）──
   await page.locator('.el-form-item').filter({ hasText: '动作' }).locator('input').fill(action)
-  const runRow = page.locator('.el-table__row:visible').filter({ hasText: action })
-  await expect(runRow).toHaveCount(1, { timeout: 15_000 })
+  // runs 行不含说明列——唯一性锚 action 文本（audit_archive 全仓仅本 spec 提交），新行置顶取 first
+  const runRow = page.locator('.el-table__row:visible').filter({ hasText: 'audit_archive' }).first()
+  await expect(runRow).toBeVisible({ timeout: 15_000 })
   // submitted_by=zhuzhao username（actorOf——admin 账号即 'admin'，非工号）
   await expect(runRow).toContainText('admin')
 
@@ -65,8 +67,8 @@ test('W5 冒烟：任务中心三 Tab（提交对话框/runs 过滤/死信/jobs�
   const opH = { token: opSetup.env!.data.access_token } as const
   await api('/api/v1/tasks', { ...opH, method: 'POST', body: { action: `${action}_other` } })
   await page.locator('.el-form-item').filter({ hasText: '只看我提交的' }).locator('.el-switch').click()
-  await expect(page.locator('.el-table__row:visible').filter({ hasText: action })).toHaveCount(1, { timeout: 15_000 })
-  await expect(page.locator('.el-table__row:visible').filter({ hasText: `${action}_other` })).toHaveCount(0, { timeout: 5_000 })
+  await expect(page.locator('.el-table__row:visible').filter({ hasText: 'audit_archive' }).first()).toBeVisible({ timeout: 15_000 })
+  await expect(page.locator('.el-table__row:visible').filter({ hasText: 'audit_archive_other' })).toHaveCount(0, { timeout: 5_000 })
 
   // ── 死信（四轮审计：真请求断言）──
   const deadResp = page.waitForResponse((r) => r.url().includes('/api/v1/dead-letters'), { timeout: 10_000 })
