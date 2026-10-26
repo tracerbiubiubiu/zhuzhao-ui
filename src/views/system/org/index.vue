@@ -6,8 +6,12 @@
  * - update 带 version 乐观锁；10006 冲突 → 关框刷新提示重试（三页同范式）
  * - 按钮权限码（000002）：org:create/update/delete/move（org:member 成员管理随「我的组织」批）
  * - 虚拟组：创建时可选（须 vg_ 前缀+挂实体下——后端校验，表单提示）
+ * - 树视图（2026-10-26 长树滚动丢上下文批）：默认收起（弃 default-expand-all）+
+ *   展开状态受控（expandedKeys 经 default-expanded-keys 双路生效——watcher 展开存量节点、
+ *   节点重建构造按 keys 展开，CRUD 刷新后不丢）；卡头钉「当前层级」面包屑，
+ *   随滚动取视口内首行节点的祖先链（a / b / c）
  */
-import { computed, reactive, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import {
   ElButton, ElCard, ElDialog, ElForm, ElFormItem, ElInput, ElInputNumber, ElMessage,
   ElMessageBox, ElOption, ElSelect, ElSwitch, ElTag, ElTree, ElTreeSelect,
@@ -29,6 +33,107 @@ const treeQuery = useQuery({ queryKey: ['system', 'orgs'], queryFn: () => getOrg
 const orgTree = computed(() => treeQuery.data.value ?? [])
 
 const refresh = () => queryClient.invalidateQueries({ queryKey: ['system', 'orgs'] })
+
+// ─── 展开状态受控（默认收起） ───
+// 用户展开/收起、加子级/移动后的目标父级，都记入 expandedKeys；default-expanded-keys
+// 的 watcher 对存量节点逐 key expand，整树数据替换后新节点构造时也按 keys 展开——两路兜住刷新
+const expandedKeys = ref<string[]>([])
+const treeViewKey = ref(0) // 收起全部用：default-keys 只增不收，清空后重挂树才真收起
+
+function onNodeExpand(data: OrgTreeNode) {
+  if (!expandedKeys.value.includes(data.id)) expandedKeys.value = [...expandedKeys.value, data.id]
+}
+
+function onNodeCollapse(data: OrgTreeNode) {
+  expandedKeys.value = expandedKeys.value.filter((id) => id !== data.id)
+}
+
+/** 展开指定节点（加子级/移动后让结果立即可见） */
+function expandKey(id: string) {
+  if (id && !expandedKeys.value.includes(id)) expandedKeys.value = [...expandedKeys.value, id]
+}
+
+function collectIds(nodes: OrgTreeNode[], out: string[] = []): string[] {
+  for (const n of nodes) {
+    out.push(n.id)
+    if (n.children?.length) collectIds(n.children, out)
+  }
+  return out
+}
+
+function expandAll() {
+  expandedKeys.value = collectIds(orgTree.value)
+}
+
+function collapseAll() {
+  expandedKeys.value = []
+  treeViewKey.value++
+}
+
+// ─── 滚动联动面包屑（卡头钉住，取视口内首行节点的祖先链） ───
+const scrollWrap = ref<HTMLElement>()
+const crumbPath = ref<string[]>([])
+
+/** id → 节点索引（祖先链回溯用；树数据变化时重算） */
+const nodeIndex = computed(() => {
+  const m = new Map<string, OrgTreeNode>()
+  const walk = (nodes: OrgTreeNode[]) => {
+    for (const n of nodes) {
+      m.set(n.id, n)
+      if (n.children?.length) walk(n.children)
+    }
+  }
+  walk(orgTree.value)
+  return m
+})
+
+function updateCrumb() {
+  const wrap = scrollWrap.value
+  if (!wrap) return
+  const top = wrap.getBoundingClientRect().top
+  // Array.from：NodeListOf 在当前 lib 配置下不可直接 for-of
+  const rows = Array.from(wrap.querySelectorAll<HTMLElement>('.el-tree-node__content'))
+  for (const row of rows) {
+    // 已滚出视口的行（含收起后 display:none 的零尺寸行）跳过，取第一可见行
+    if (row.getBoundingClientRect().bottom <= top + 1) continue
+    const id = row.querySelector<HTMLElement>('[data-org-id]')?.dataset.orgId
+    const path: string[] = []
+    let cur = id ? nodeIndex.value.get(id) : undefined
+    while (cur) {
+      path.unshift(cur.name)
+      cur = cur.parent_id ? nodeIndex.value.get(cur.parent_id) : undefined
+    }
+    crumbPath.value = path
+    return
+  }
+  crumbPath.value = []
+}
+
+let crumbRaf = 0
+function onScroll() {
+  if (crumbRaf) return
+  crumbRaf = requestAnimationFrame(() => {
+    crumbRaf = 0
+    updateCrumb()
+  })
+}
+
+onMounted(() => {
+  scrollWrap.value?.addEventListener('scroll', onScroll, { passive: true })
+  nextTick(updateCrumb)
+})
+
+onBeforeUnmount(() => {
+  scrollWrap.value?.removeEventListener('scroll', onScroll)
+  if (crumbRaf) cancelAnimationFrame(crumbRaf)
+})
+
+// 数据变化：等 DOM 更新后重算面包屑；顺带把 expandedKeys 换引用，
+// 触发 default-expanded-keys watcher 重放展开（整树数据替换的兜底）
+watch(orgTree, () => {
+  expandedKeys.value = [...expandedKeys.value]
+  nextTick(updateCrumb)
+})
 
 // ─── 创建/编辑 ───
 const editVisible = ref(false)
@@ -97,6 +202,8 @@ async function submitEdit() {
         is_virtual: editForm.is_virtual,
         sort_order: editForm.sort_order,
       })
+      // 父级展开，新子级立即可见（默认收起下不展开会「创建成功却看不见」）
+      if (editForm.parent_id) expandKey(editForm.parent_id)
       ElMessage.success('组织已创建')
     } else {
       await updateOrgApi({
@@ -149,6 +256,8 @@ async function submitMove() {
       id: moveForm.id,
       ...(moveForm.newParentId ? { new_parent_id: moveForm.newParentId } : {}),
     })
+    // 新父级展开，移动结果立即可见
+    if (moveForm.newParentId) expandKey(moveForm.newParentId)
     ElMessage.success(`已移动「${moveForm.name}」`)
     moveVisible.value = false
     await refresh()
@@ -177,40 +286,58 @@ async function onDelete(node: OrgTreeNode) {
 </script>
 
 <template>
-  <div class="fill-page p-4">
-    <div class="min-h-0 flex-1 overflow-y-auto">
-    <el-card shadow="never">
+  <div class="fill-page">
+    <el-card shadow="never" class="org-card">
       <template #header>
         <div class="flex items-center justify-between">
-          <span class="font-semibold">组织管理</span>
+          <div class="flex items-center gap-3">
+            <span class="font-semibold">组织管理</span>
+            <el-button link type="primary" size="small" @click="expandAll">展开全部</el-button>
+            <el-button link type="primary" size="small" @click="collapseAll">收起全部</el-button>
+          </div>
           <el-button v-permission="'org:create'" type="primary" @click="openCreate()">新建组织</el-button>
         </div>
+        <!-- 当前层级：滚动联动面包屑（视口内首行节点的祖先链），钉在卡头不随树滚 -->
+        <div class="mt-2 flex items-center gap-2 text-xs min-h-[18px]">
+          <span class="text-gray-400 shrink-0">当前层级</span>
+          <template v-if="crumbPath.length">
+            <template v-for="(n, i) in crumbPath" :key="i">
+              <span v-if="i > 0" class="text-gray-300">/</span>
+              <span :class="i === crumbPath.length - 1 ? 'text-gray-600 font-medium' : 'text-gray-400'">{{ n }}</span>
+            </template>
+          </template>
+          <span v-else class="text-gray-300">—</span>
+        </div>
       </template>
-      <el-tree
-        v-loading="treeQuery.isLoading.value"
-        :data="orgTree"
-        node-key="id"
-        :props="{ label: 'name', children: 'children' }"
-        default-expand-all
-        :expand-on-click-node="false"
-      >
-        <template #default="{ data }">
-          <span class="flex items-center gap-2 flex-1 min-w-0">
-            <span>{{ data.name }}</span>
-            <el-tag v-if="data.is_virtual" size="small" type="warning">虚拟组</el-tag>
-            <el-tag v-if="data.status !== 1" size="small" type="danger">禁用</el-tag>
-            <span class="text-xs text-gray-300 truncate">{{ data.code }}</span>
-            <span class="ml-auto flex items-center gap-1">
-              <el-button v-permission="'org:create'" link type="primary" size="small" @click.stop="openCreate(data)">加子级</el-button>
-              <el-button v-permission="'org:update'" link type="primary" size="small" @click.stop="openEdit(data)">编辑</el-button>
-              <el-button v-permission="'org:move'" link type="primary" size="small" @click.stop="openMove(data)">移动</el-button>
-              <el-button v-permission="'org:delete'" link type="danger" size="small" @click.stop="onDelete(data)">删除</el-button>
+      <div ref="scrollWrap" class="h-full overflow-y-auto">
+        <el-tree
+          v-loading="treeQuery.isLoading.value"
+          :key="treeViewKey"
+          :data="orgTree"
+          node-key="id"
+          :props="{ label: 'name', children: 'children' }"
+          :default-expanded-keys="expandedKeys"
+          :expand-on-click-node="false"
+          @node-expand="onNodeExpand"
+          @node-collapse="onNodeCollapse"
+        >
+          <template #default="{ data }">
+            <span :data-org-id="data.id" class="flex items-center gap-2 flex-1 min-w-0">
+              <span>{{ data.name }}</span>
+              <el-tag v-if="data.is_virtual" size="small" type="warning">虚拟组</el-tag>
+              <el-tag v-if="data.status !== 1" size="small" type="danger">禁用</el-tag>
+              <span class="text-xs text-gray-300 truncate">{{ data.code }}</span>
+              <span class="ml-auto flex items-center gap-1">
+                <el-button v-permission="'org:create'" link type="primary" size="small" @click.stop="openCreate(data)">加子级</el-button>
+                <el-button v-permission="'org:update'" link type="primary" size="small" @click.stop="openEdit(data)">编辑</el-button>
+                <el-button v-permission="'org:move'" link type="primary" size="small" @click.stop="openMove(data)">移动</el-button>
+                <el-button v-permission="'org:delete'" link type="danger" size="small" @click.stop="onDelete(data)">删除</el-button>
+              </span>
             </span>
-          </span>
-        </template>
-      </el-tree>
+          </template>
+        </el-tree>
+      </div>
     </el-card>
-    </div>
 
     <!-- 新建/编辑 -->
     <el-dialog v-model="editVisible" :title="editIsCreate ? '新建组织' : '编辑组织'" width="520px">
@@ -274,3 +401,17 @@ async function onDelete(node: OrgTreeNode) {
     </el-dialog>
   </div>
 </template>
+
+<style scoped>
+/* 卡体=滚动容器、卡头钉住（铁律：页面不动，滚动在内部元素）；.fill-page>.el-card 全局已给 flex:1 */
+.org-card {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.org-card :deep(.el-card__body) {
+  flex: 1;
+  min-height: 0;
+}
+</style>
