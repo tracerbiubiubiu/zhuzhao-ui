@@ -35,6 +35,7 @@ import FlowGraphDesigner from '@/components/FlowGraphDesigner/index.vue'
 import { validateTypeGraph } from '@/components/FlowGraphDesigner/mapper'
 import { stuckStates } from '@/components/FlowGraphDesigner/lint'
 import { DEFAULT_STATES, DEFAULT_TRANSITIONS, type Adjacency } from '@/components/FlowGraphDesigner/types'
+import { buildTransitionMeta, splitTransitionMeta, type MetaDraft } from './transitionMeta'
 
 // keep-alive 契约：name=动态路由名（菜单 code ticket_type_manage）
 defineOptions({ name: 'ticket_type_manage' })
@@ -84,6 +85,8 @@ const typeForm = reactive({
 function openTypeCreate() {
   Object.assign(typeDialog, { visible: true, isCreate: true, loading: false, error: '' })
   Object.assign(typeForm, { code: '', name: '', description: '', is_active: true, statesText: '', transitionsText: '', version: 0 })
+  metaRows.value = []
+  preservedMeta.value = {}
 }
 
 function openTypeEdit(row: TicketTypeFullRow) {
@@ -168,15 +171,10 @@ async function onGraphModeChange(mode: string | number | boolean | undefined) {
 }
 
 // ─── S10 B10-4 节点超时与催办（transition_meta 表单化编辑面——拍板升必做件）───
-interface MetaDraft {
-  state: string
-  timeout: number | undefined
-  notifyAssignee: boolean
-  notifySupervisor: boolean
-  interval: number | undefined
-  max: number | undefined
-}
+// 转换级键（"from>to"——condition/validator/post_actions）无编辑面，load/serialize
+// 经 preservedMeta 原样透传（A-6：此前双侧不识别，一次 UI 保存即清掉 API 侧配置）
 const metaRows = ref<MetaDraft[]>([])
+const preservedMeta = ref<Record<string, unknown>>({})
 
 /** 当前 states 选项（画布/JSON 两模式共用文本框为单一数据源） */
 const metaStateOptions = computed<string[]>(() => {
@@ -189,20 +187,9 @@ const metaStateOptions = computed<string[]>(() => {
 })
 
 function loadMetaFromRow(raw: unknown) {
-  metaRows.value = []
-  if (typeof raw !== 'object' || raw === null) return
-  for (const [state, seg] of Object.entries(raw as Record<string, unknown>)) {
-    if (typeof seg !== 'object' || seg === null) continue
-    const m = seg as { timeout_minutes?: number; escalation?: { notify?: string[]; reminder_interval_minutes?: number; max_reminders?: number } }
-    metaRows.value.push({
-      state,
-      timeout: m.timeout_minutes,
-      notifyAssignee: !m.escalation?.notify || m.escalation.notify.includes('assignee'),
-      notifySupervisor: m.escalation?.notify?.includes('supervisor') ?? false,
-      interval: m.escalation?.reminder_interval_minutes,
-      max: m.escalation?.max_reminders,
-    })
-  }
+  const { stateRows, preserved } = splitTransitionMeta(raw)
+  metaRows.value = stateRows
+  preservedMeta.value = preserved
 }
 
 function addMetaRow() {
@@ -212,45 +199,19 @@ function removeMetaRow(idx: number) {
   metaRows.value.splice(idx, 1)
 }
 
-/** 序列化 transition_meta（只含填了超时的行；escalation 段有任一配置才出）。
+/** 序列化 transition_meta（超时行 + 转换级键透传；escalation 段有任一配置才出）。
  * 返回 null=有错（已写入 typeDialog.error）。 */
 function serializeMeta(states: string[]): Record<string, unknown> | null {
-  const out: Record<string, unknown> = {}
-  const stateSet = new Set(states)
-  let dropped = 0
-  for (const r of metaRows.value) {
-    if (!r.state) {
-      typeDialog.error = '节点超时配置存在未选状态的行'
-      return null
-    }
-    if (!stateSet.has(r.state)) {
-      dropped++ // 引用已删状态——后端会 400，前端静默丢弃并提示
-      continue
-    }
-    if (r.timeout === undefined || r.timeout < 1) {
-      typeDialog.error = `节点「${r.state}」超时分钟须 ≥1`
-      return null
-    }
-    if (r.interval !== undefined && r.interval < 5) {
-      typeDialog.error = `节点「${r.state}」催办间隔须 ≥5 分钟（小于通知节流窗会被吞）`
-      return null
-    }
-    const seg: Record<string, unknown> = { timeout_minutes: r.timeout }
-    const hasEsc = r.notifySupervisor || (r.interval !== undefined) || (r.max !== undefined)
-    if (hasEsc) {
-      const notify: string[] = []
-      if (r.notifyAssignee) notify.push('assignee')
-      if (r.notifySupervisor) notify.push('supervisor')
-      seg.escalation = {
-        notify: notify.length ? notify : ['assignee'],
-        ...(r.interval !== undefined ? { reminder_interval_minutes: r.interval } : {}),
-        ...(r.max !== undefined ? { max_reminders: r.max } : {}),
-      }
-    }
-    out[r.state] = seg
+  const r = buildTransitionMeta(metaRows.value, states, preservedMeta.value)
+  if (!r.ok) {
+    typeDialog.error = r.error
+    return null
   }
-  if (dropped > 0) ElMessage.warning(`${dropped} 行引用了图中不存在的状态，保存时已忽略`)
-  return out
+  const notices: string[] = []
+  if (r.droppedRows > 0) notices.push(`${r.droppedRows} 行超时配置引用了图中不存在的状态`)
+  if (r.droppedTransitions.length > 0) notices.push(`${r.droppedTransitions.length} 条转换级配置端点状态已不存在（${r.droppedTransitions.join('、')}）`)
+  if (notices.length) ElMessage.warning(`${notices.join('；')}，保存时已忽略`)
+  return r.meta
 }
 
 /**
