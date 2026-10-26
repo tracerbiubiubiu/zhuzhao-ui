@@ -22,8 +22,8 @@
             </el-table-column>
             <el-table-column label="操作" width="130" fixed="right">
               <template #default="{ row }">
-                <el-button v-permission="'notification:manage'" link type="primary" size="small" :disabled="row.is_system" @click="openTplEdit(row)">编辑</el-button>
-                <el-button v-permission="'notification:manage'" link type="danger" size="small" :disabled="row.is_system" @click="onTplDelete(row)">删除</el-button>
+                <el-button v-permission="'notification:manage'" link type="primary" size="small" :disabled="row.is_system" @click="openTplEdit(row as TemplateRow)">编辑</el-button>
+                <el-button v-permission="'notification:manage'" link type="danger" size="small" :disabled="row.is_system" @click="onTplDelete(row as TemplateRow)">删除</el-button>
               </template>
             </el-table-column>
           </el-table>
@@ -46,8 +46,8 @@
             </el-table-column>
             <el-table-column label="操作" width="130" fixed="right">
               <template #default="{ row }">
-                <el-button v-permission="'notification:manage'" link type="primary" size="small" @click="openRuleEdit(row)">编辑</el-button>
-                <el-button v-permission="'notification:manage'" link type="danger" size="small" @click="onRuleDelete(row)">删除</el-button>
+                <el-button v-permission="'notification:manage'" link type="primary" size="small" @click="openRuleEdit(row as RuleRow)">编辑</el-button>
+                <el-button v-permission="'notification:manage'" link type="danger" size="small" @click="onRuleDelete(row as RuleRow)">删除</el-button>
               </template>
             </el-table-column>
           </el-table>
