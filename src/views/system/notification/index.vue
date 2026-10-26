@@ -209,6 +209,7 @@ const EVENT_OPTIONS: Array<{ value: string; label: string }> = [
   { value: 'ticket.dispatch_missed', label: '自动分派未命中' },
   { value: 'ticket.action_notify', label: 'notify 动作（流程提醒）' },
   { value: 'ops.cron_failed', label: '定时任务失败（ops）' },
+  { value: 'ops.action_failed', label: '流程动作失败（ops）' },
 ]
 
 const activeTab = ref('templates')
