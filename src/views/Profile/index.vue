@@ -53,7 +53,16 @@ async function handleSubmit() {
   loading.value = true
   errorMsg.value = ''
   try {
-    await updateProfileApi({ ...form })
+    // 空 email/phone 不发送(patch 语义=保持不变):后端 UpdateProfileRequest 的
+    // *string + omitempty,email 对「非 nil 空串指针」不跳过校验,显式空串会 400
+    // (空邮箱用户无法保存任何资料——2026-10-15 头像保存实测)。后端语义修复(B2-3
+    // 空串显式清空)落地前,先在前端省略空字段。
+    await updateProfileApi({
+      real_name: form.real_name,
+      avatar: form.avatar,
+      ...(form.email.trim() ? { email: form.email.trim() } : {}),
+      ...(form.phone.trim() ? { phone: form.phone.trim() } : {}),
+    })
     // 重拉资料刷新 store（头像等全局消费点同步）
     userStore.profile = await fetchProfileApi()
     ElMessage.success('资料已更新')
@@ -229,22 +238,22 @@ function formatTime(iso?: string | null): string {
         type="info" show-icon :closable="false" class="mb-3"
       />
       <el-table ref="patsTable" :data="pats" v-loading="patLoading" row-key="id">
-        <el-table-column prop="name" label="名称" min-width="140" />
-        <el-table-column label="状态" width="90" align="center">
+        <el-table-column prop="name" label="名称" min-width="90" show-overflow-tooltip />
+        <el-table-column label="状态" width="80" align="center">
           <template #default="{ row }">
             <el-tag :type="patStatus(row as PatRow).type" size="small">{{ patStatus(row as PatRow).label }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="过期时间" width="170">
+        <el-table-column label="过期时间" width="140">
           <template #default="{ row }">{{ (row as PatRow).expires_at ? formatTime((row as PatRow).expires_at) : '永不过期' }}</template>
         </el-table-column>
-        <el-table-column label="最近使用" width="170">
+        <el-table-column label="最近使用" width="140">
           <template #default="{ row }">{{ formatTime((row as PatRow).last_used_at) }}</template>
         </el-table-column>
-        <el-table-column label="创建时间" width="170">
+        <el-table-column label="创建时间" width="140">
           <template #default="{ row }">{{ formatTime((row as PatRow).created_at) }}</template>
         </el-table-column>
-        <el-table-column label="操作" width="90" fixed="right">
+        <el-table-column label="操作" width="80" fixed="right">
           <template #default="{ row }">
             <el-button
               link type="danger" size="small" :disabled="!!(row as PatRow).revoked_at"
