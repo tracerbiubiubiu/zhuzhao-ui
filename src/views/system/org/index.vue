@@ -10,10 +10,15 @@
  *   展开状态受控（expandedKeys 经 default-expanded-keys 双路生效——watcher 展开存量节点、
  *   节点重建构造按 keys 展开，CRUD 刷新后不丢）；卡头钉「当前层级」面包屑，
  *   随滚动取视口内首行节点的祖先链（a / b / c）
+ * - 同日二批（层级显示对齐业界）：面包屑祖先段可点=平滑滚回该层级（纯滚动无状态）；
+ *   层级参考线（VS Code 同款——缩进从行内 padding 移到 children 容器、gutter 画竖线，
+ *   EP 无内置 showLine）；「展开至 ▾」按级别展开（BI 矩阵同款，替换原展开全部按钮）；
+ *   节点名悬停 title 显全路径（廉价兜底）
  */
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import {
-  ElButton, ElCard, ElDialog, ElForm, ElFormItem, ElInput, ElInputNumber, ElMessage,
+  ElButton, ElCard, ElDialog, ElDropdown, ElDropdownItem, ElDropdownMenu, ElForm,
+  ElFormItem, ElInput, ElInputNumber, ElMessage,
   ElMessageBox, ElOption, ElSelect, ElSwitch, ElTag, ElTree, ElTreeSelect,
   ElAlert,
 } from 'element-plus'
@@ -70,9 +75,37 @@ function collapseAll() {
   treeViewKey.value++
 }
 
+/** 树深（「展开至」菜单档位数） */
+const treeDepth = computed(() => {
+  const depth = (nodes: OrgTreeNode[]): number =>
+    nodes.reduce((m, n) => Math.max(m, n.children?.length ? 1 + depth(n.children) : 1), 0)
+  return depth(orgTree.value)
+})
+
+/** 展开到第 N 级（1-based）：目标集之外的已展开节点需重挂树收掉（default-keys 只增不收） */
+function expandToLevel(level: number) {
+  const ids: string[] = []
+  const walk = (nodes: OrgTreeNode[], l: number) => {
+    for (const n of nodes) {
+      if (l < level && n.children?.length) {
+        ids.push(n.id)
+        walk(n.children, l + 1)
+      }
+    }
+  }
+  walk(orgTree.value, 1)
+  if (expandedKeys.value.some((id) => !ids.includes(id))) treeViewKey.value++
+  expandedKeys.value = ids
+}
+
+function onExpandCommand(cmd: number | 'all') {
+  if (cmd === 'all') expandAll()
+  else expandToLevel(cmd)
+}
+
 // ─── 滚动联动面包屑（卡头钉住，取视口内首行节点的祖先链） ───
 const scrollWrap = ref<HTMLElement>()
-const crumbPath = ref<string[]>([])
+const crumbPath = ref<Array<{ id: string; name: string }>>([])
 
 /** id → 节点索引（祖先链回溯用；树数据变化时重算） */
 const nodeIndex = computed(() => {
@@ -97,16 +130,38 @@ function updateCrumb() {
     // 已滚出视口的行（含收起后 display:none 的零尺寸行）跳过，取第一可见行
     if (row.getBoundingClientRect().bottom <= top + 1) continue
     const id = row.querySelector<HTMLElement>('[data-org-id]')?.dataset.orgId
-    const path: string[] = []
+    const path: Array<{ id: string; name: string }> = []
     let cur = id ? nodeIndex.value.get(id) : undefined
     while (cur) {
-      path.unshift(cur.name)
+      path.unshift({ id: cur.id, name: cur.name })
       cur = cur.parent_id ? nodeIndex.value.get(cur.parent_id) : undefined
     }
     crumbPath.value = path
     return
   }
   crumbPath.value = []
+}
+
+/** 面包屑回跳：目标祖先行平滑滚到树视口顶部（纯滚动，无状态副作用；滚动中 rAF 联动自然刷新面包屑） */
+function scrollToNode(id: string) {
+  const wrap = scrollWrap.value
+  if (!wrap) return
+  const mark = wrap.querySelector<HTMLElement>(`[data-org-id="${id}"]`)
+  const row = mark?.closest('.el-tree-node__content')
+  if (!row) return
+  const top = row.getBoundingClientRect().top - wrap.getBoundingClientRect().top + wrap.scrollTop
+  wrap.scrollTo({ top, behavior: 'smooth' })
+}
+
+/** 节点全路径（悬停 title 兜底显示） */
+function fullPathOf(node: OrgTreeNode): string {
+  const segs: string[] = []
+  let cur: OrgTreeNode | undefined = node
+  while (cur) {
+    segs.unshift(cur.name)
+    cur = cur.parent_id ? nodeIndex.value.get(cur.parent_id) : undefined
+  }
+  return segs.join(' / ')
 }
 
 let crumbRaf = 0
@@ -292,18 +347,33 @@ async function onDelete(node: OrgTreeNode) {
         <div class="flex items-center justify-between">
           <div class="flex items-center gap-3">
             <span class="font-semibold">组织管理</span>
-            <el-button link type="primary" size="small" @click="expandAll">展开全部</el-button>
+            <el-dropdown @command="onExpandCommand">
+              <el-button link type="primary" size="small">展开至 ▾</el-button>
+              <template #dropdown>
+                <el-dropdown-menu>
+                  <el-dropdown-item v-for="l in treeDepth" :key="l" :command="l">第 {{ l }} 级</el-dropdown-item>
+                  <el-dropdown-item divided command="all">全部展开</el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
             <el-button link type="primary" size="small" @click="collapseAll">收起全部</el-button>
           </div>
           <el-button v-permission="'org:create'" type="primary" @click="openCreate()">新建组织</el-button>
         </div>
-        <!-- 当前层级：滚动联动面包屑（视口内首行节点的祖先链），钉在卡头不随树滚 -->
+        <!-- 当前层级：滚动联动面包屑（视口内首行节点的祖先链），钉在卡头不随树滚；
+             祖先段可点=平滑滚回该层级（末段=当前首行，点了没意义保持纯文本） -->
         <div class="mt-2 flex items-center gap-2 text-xs min-h-[18px]">
           <span class="text-gray-400 shrink-0">当前层级</span>
           <template v-if="crumbPath.length">
-            <template v-for="(n, i) in crumbPath" :key="i">
+            <template v-for="(seg, i) in crumbPath" :key="seg.id">
               <span v-if="i > 0" class="text-gray-300">/</span>
-              <span :class="i === crumbPath.length - 1 ? 'text-gray-600 font-medium' : 'text-gray-400'">{{ n }}</span>
+              <span
+                v-if="i < crumbPath.length - 1"
+                class="cursor-pointer text-gray-400 hover:text-[var(--el-color-primary)] hover:underline"
+                title="点击回到该层级"
+                @click="scrollToNode(seg.id)"
+              >{{ seg.name }}</span>
+              <span v-else class="text-gray-600 font-medium">{{ seg.name }}</span>
             </template>
           </template>
           <span v-else class="text-gray-300">—</span>
@@ -316,6 +386,7 @@ async function onDelete(node: OrgTreeNode) {
           :data="orgTree"
           node-key="id"
           :props="{ label: 'name', children: 'children' }"
+          :indent="16"
           :default-expanded-keys="expandedKeys"
           :expand-on-click-node="false"
           @node-expand="onNodeExpand"
@@ -323,7 +394,7 @@ async function onDelete(node: OrgTreeNode) {
         >
           <template #default="{ data }">
             <span :data-org-id="data.id" class="flex items-center gap-2 flex-1 min-w-0">
-              <span>{{ data.name }}</span>
+              <span :title="fullPathOf(data)">{{ data.name }}</span>
               <el-tag v-if="data.is_virtual" size="small" type="warning">虚拟组</el-tag>
               <el-tag v-if="data.status !== 1" size="small" type="danger">禁用</el-tag>
               <span class="text-xs text-gray-300 truncate">{{ data.code }}</span>
@@ -413,5 +484,25 @@ async function onDelete(node: OrgTreeNode) {
 .org-card :deep(.el-card__body) {
   flex: 1;
   min-height: 0;
+}
+
+/* 层级参考线（VS Code 同款；EP 无内置 showLine）：压掉行内缩进（!important 胜行内样式）、
+   缩进移到 children 容器上，gutter 里画竖线——guide 恰落在父行展开箭头下方 */
+.org-card :deep(.el-tree-node__content) {
+  padding-left: 0 !important;
+}
+
+.org-card :deep(.el-tree-node__children) {
+  position: relative;
+  padding-left: 16px;
+}
+
+.org-card :deep(.el-tree-node__children)::before {
+  content: '';
+  position: absolute;
+  left: 7px;
+  top: 0;
+  bottom: 0;
+  border-left: 1px solid var(--el-border-color-light);
 }
 </style>
