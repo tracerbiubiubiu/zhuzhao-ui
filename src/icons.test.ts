@@ -44,15 +44,16 @@ describe('视图内直写图标名', () => {
   })
 })
 
-/** 主仓菜单种子 icon 裸名全集（000002/000010/000018/000022/000024/000025/000034/000067/000072/000073——新迁移加菜单须同步；
- *  2026-10-25 补 intel/message：000067/000072 建行时两处漏登记，侧栏图标静默空白两段无人察觉——本清单与 MENU_ICON_MAP 均手工维护，派生化挂账） */
+/** 主仓菜单种子 icon 裸名全集（000002/000010/000018/000022/000024/000025/000034/000067/000073——新迁移加菜单须同步；
+ *  2026-10-25 补 intel：000067/000072 建行时两处漏登记，侧栏图标静默空白两段无人察觉；000072 的 message 随 000078 删行退役——
+ *  本清单与 MENU_ICON_MAP 均手工维护，派生化挂账 G-24） */
 const SEED_ICON_NAMES = [
   'home', 'settings', 'user', 'role', 'menu', 'org',
   'ticket', 'ticket-list', 'setting',
   'task', 'task-list',
   'al', 'al-data', 'al-types',
   'audit-log', 'dict', 'notification',
-  'intel', 'message',
+  'intel',
 ]
 
 describe('菜单图标映射表', () => {

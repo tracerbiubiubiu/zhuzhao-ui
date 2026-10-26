@@ -120,9 +120,9 @@ export const MENU_ICON_MAP: Readonly<Record<string, string>> = {
   'al-types': 'mdi:tag-outline',
   // 000025 audit 域
   'audit-log': 'mdi:file-document-outline',
-  // phase5：000067 情报查询 / 000072 消息中心（建行时漏登记——侧栏曾静默空白）；000073 分派规则复用 setting
+  // phase5：000067 情报查询（建行时漏登记——侧栏曾静默空白）；000073 分派规则复用 setting；
+  // 000072 消息中心 icon 'message' 随 000078 删行退役（消息中心改常量路由+铃铛入口，不再有菜单行）
   intel: 'mdi:shield-account',
-  message: 'mdi:message-text',
 }
 
 const warnedMenuIcons = new Set<string>()

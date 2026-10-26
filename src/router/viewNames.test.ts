@@ -36,7 +36,7 @@ function dirnameOf(u: string): string {
   return join(fileURLToPath(u), '..')
 }
 
-/** ─── SQL 解析（只认种子里实际用到的三种语句形态）─── */
+/** ─── SQL 解析（只认种子里实际用到的语句形态：INSERT 三形态 / UPDATE parent_id·visible / DELETE）─── */
 
 interface MenuRow {
   code: string
@@ -130,7 +130,7 @@ function deriveMenuRows(): MenuRow[] {
     const sql = readFileSync(join(MIGRATIONS_DIR, file), 'utf-8')
     // 000037 型纯改挂迁移无 INSERT——含任一 menus 写语句的文件都进重放
     // （每个解析出的动作——INSERT 行 / UPDATE 改挂·改可见目标——计入 perFileActions）
-    if (!/INSERT INTO menus|UPDATE menus SET (?:parent_id|visible)/.test(sql)) continue
+    if (!/INSERT INTO menus|UPDATE menus SET (?:parent_id|visible)|DELETE FROM menus/.test(sql)) continue
     // 先登记 0：盲区守卫只有在「进重放却零动作」时才有意义——原先未登记，零动作文件根本不进 map，守卫形同虚设
     perFileActions.set(file, 0)
 
@@ -217,6 +217,22 @@ function deriveMenuRows(): MenuRow[] {
             perFileActions.set(file, (perFileActions.get(file) ?? 0) + 1)
             const row = byCode.get(code)
             if (row) row.visible = visible
+          }
+        },
+      })
+    }
+
+    // 删行：DELETE FROM menus WHERE code = 'x' / IN (...)（000031 删三按钮行；000078 删 message_center 幽灵行——
+    // 此前未解析则 byCode 残留幻影行：按钮行被 menuType 过滤无感，页面行若日后再 INSERT 同 code 会被「首写胜」吞掉）
+    const del = /DELETE FROM menus\s+WHERE code (?:= '([^']+)'|IN \(([^)]+)\))/gi
+    for (const m of sql.matchAll(del)) {
+      const targets = m[1] ? [m[1]] : (m[2] ?? '').split(',').map((c) => c.trim().replace(/^'|'$/g, '')).filter(Boolean)
+      events.push({
+        at: m.index ?? 0,
+        run: () => {
+          for (const code of targets) {
+            perFileActions.set(file, (perFileActions.get(file) ?? 0) + 1)
+            byCode.delete(code)
           }
         },
       })
