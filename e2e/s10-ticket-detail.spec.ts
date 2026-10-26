@@ -12,10 +12,11 @@
  *   关闭（带说明）→ 已关闭且编辑/分派/关闭动作隐藏（后端 409+90004 兜底，前端按钮级防呆）
  * - 用户切换后必须 page.reload()：hash 导航不重载 SPA，vue-query 缓存会带着
  *   上一个会话的数据串台（评论断言曾因此误绿）
- * - 清理：两单 API 软删（工单无级联约束，删类型不可行——用 incident 内置类型）
+ * - 清理：两单 API 软删 + 临时类型删除（软删不阻类型删除守卫）。类型用临时专属——dev 栈走查数据可能含
+ *   incident 全量命中的自动分派规则，新单秒变 assigned 会击穿「待处理」起点断言（2026-10-26 实证）
  */
 import { test, expect } from '@playwright/test'
-import { api, apiLogin, loadState } from './helpers'
+import { api, apiLogin, loadState, tempTicketType } from './helpers'
 import { uiLogin } from './ui'
 
 test.setTimeout(180_000)
@@ -28,8 +29,9 @@ test('S10/S11：详情评论/备注分层+关联判重+分派/关闭流+viewer �
   const admin = await apiLogin(state.admin.employeeNo, state.admin.password, 's10-setup')
   const h = { token: admin.env!.data.access_token } as const
   const orgId = ((await api('/api/v1/orgs', { token: h.token })).env!.data as Array<{ id: string }>)[0].id
+  const tt = await tempTicketType(h, 'e2e_s10')
   const mk = async (title: string) => {
-    const r = await api('/api/v1/tickets', { ...h, method: 'POST', body: { type_code: 'incident', title, org_id: orgId } })
+    const r = await api('/api/v1/tickets', { ...h, method: 'POST', body: { type_code: tt.code, title, org_id: orgId } })
     expect(r.env!.code).toBe(0)
     return (r.env!.data as { id: string }).id
   }
@@ -125,5 +127,6 @@ test('S10/S11：详情评论/备注分层+关联判重+分派/关闭流+viewer �
     // 清理：两单软删（不污染列表）
     await api('/api/v1/tickets/delete', { ...h, method: 'POST', body: { id: t1 } }).catch(() => {})
     await api('/api/v1/tickets/delete', { ...h, method: 'POST', body: { id: t2 } }).catch(() => {})
+    await tt.cleanup()
   }
 })

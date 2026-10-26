@@ -84,6 +84,29 @@ export async function mustData<T>(call: Promise<{ status: number; env: Envelope<
   return r.env.data
 }
 
+/** 临时工单类型（后端默认六状态图，open→assigned/closed 与 incident 同）——给依赖「新单初始态=open」的
+ *  用例隔离自动分派规则：dev 栈是共享走查环境，可能存在 incident 全量命中规则（任何 incident 新单即刻
+ *  assigned——2026-10-26 实证致 s2-home/s10/p5-s3a-transition 三 spec 假红）。
+ *  transitionMeta 可选：create 端点不带 meta，须建后经 /ticket-types/update 全量替换（version 省略=不做 CAS）；
+ *  cleanup 须在工单软删之后调用（类型删除守卫只拒有存活工单的类型，软删不阻）。 */
+export async function tempTicketType(
+  h: { token: string },
+  prefix: string,
+  transitionMeta?: Record<string, unknown>,
+): Promise<{ code: string; cleanup: () => Promise<void> }> {
+  const code = `${prefix}_${Date.now().toString(36)}`
+  await mustData(api('/api/v1/ticket-types', { ...h, method: 'POST', body: { code, name: `E2E 临时类型 ${code}` } }), `POST /ticket-types(${code})`)
+  if (transitionMeta) {
+    await mustData(api('/api/v1/ticket-types/update', { ...h, method: 'POST', body: { code, transition_meta: transitionMeta } }), `POST /ticket-types/update(${code} meta)`)
+  }
+  return {
+    code,
+    cleanup: async () => {
+      await api('/api/v1/ticket-types/delete', { ...h, method: 'POST', body: { code } }).catch(() => {})
+    },
+  }
+}
+
 // ─── 直写 DB（panic 预造等无 API 触发面的场景——复核①：容器名/凭据 env 可覆盖）───
 
 /** PG 容器名（env 覆盖：换容器名/远程 DB 时设 E2E_PG_CONTAINER） */

@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { api, apiLogin, loadState } from './helpers'
+import { api, apiLogin, loadState, tempTicketType } from './helpers'
 import { uiLogin } from './ui'
 
 /**
@@ -12,13 +12,14 @@ test('S2 工作台冒烟：admin 登录 → 菜单渲染 → 状态卡与最近�
   const { admin } = loadState()
   const suffix = Date.now().toString(36)
 
-  // ── API setup：造一张 open 工单（数据锚点）──
+  // ── API setup：造一张 open 工单（数据锚点）——用临时类型隔离自动分派规则（incident 全量命中规则会把新单秒变 assigned）──
   const login = await apiLogin(admin.employeeNo, admin.password, 's2-setup')
   const h = { token: login.env!.data.access_token } as const
   const orgId = ((await api('/api/v1/orgs', { token: h.token })).env!.data as Array<{ id: string }>)[0].id
+  const tt = await tempTicketType(h, 'e2e_s2')
   const created = await api('/api/v1/tickets', {
     ...h, method: 'POST',
-    body: { type_code: 'incident', title: `S2 冒烟单据_${suffix}`, org_id: orgId },
+    body: { type_code: tt.code, title: `S2 冒烟单据_${suffix}`, org_id: orgId },
   })
   expect(created.env!.code).toBe(0)
   const ticketId = (created.env!.data as { id: string }).id
@@ -49,5 +50,6 @@ test('S2 工作台冒烟：admin 登录 → 菜单渲染 → 状态卡与最近�
     expect(ticketId).toBeTruthy()
   } finally {
     await api('/api/v1/tickets/delete', { ...h, method: 'POST', body: { id: ticketId } }).catch(() => {})
+    await tt.cleanup()
   }
 })

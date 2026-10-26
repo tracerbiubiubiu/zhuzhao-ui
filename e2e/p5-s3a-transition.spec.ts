@@ -1,11 +1,11 @@
 /**
  * P5-S3a 统一转换端点（B3-1）：详情页按 GET /tickets/:id/transitions/available 渲染转换按钮，
  * 点击走 POST /tickets/transition → 状态标签变更 → 按钮集随新状态刷新；available **按人过滤**
- * （无处理人时 in_progress 不渲染——仅处理人可推进）。走 incident 默认图 open→assigned→in_progress；
+ * （无处理人时 in_progress 不渲染——仅处理人可推进）。走默认六状态图 open→assigned→in_progress；
  * 末尾以 API 复核落库状态（非前端乐观更新）。
  */
 import { test, expect } from '@playwright/test'
-import { api, apiLogin, loadState, mustData } from './helpers'
+import { api, apiLogin, loadState, mustData, tempTicketType } from './helpers'
 import { uiLogin } from './ui'
 
 test('P5-S3a：转换按钮按 available 渲染并驱动 open→assigned→in_progress', async ({ page }) => {
@@ -17,8 +17,11 @@ test('P5-S3a：转换按钮按 available 渲染并驱动 open→assigned→in_pr
   const h = { token: admin.env!.data.access_token } as const
   const me = await mustData(api<{ id: string }>('/api/v1/user/profile', h), 'GET /user/profile')
   const orgId = (await mustData(api<Array<{ id: string }>>('/api/v1/orgs', h), 'GET /orgs'))[0].id
+  // 临时类型隔离自动分派规则（默认六状态图与 incident 同）——起点必须 open；
+  // meta 复刻 incident 的「assigned>in_progress 仅 assignee 可触发」：按人过滤断言的本源（默认图无此约束）
+  const tt = await tempTicketType(h, 'e2e_s3at', { 'assigned>in_progress': { roles: ['assignee'] } })
   const created = await api<{ id: string }>('/api/v1/tickets', {
-    ...h, method: 'POST', body: { type_code: 'incident', title: `P5-S3a 转换_${suffix}`, org_id: orgId },
+    ...h, method: 'POST', body: { type_code: tt.code, title: `P5-S3a 转换_${suffix}`, org_id: orgId },
   })
   expect(created.env?.code, '建单须成功').toBe(0)
   const tid = created.env!.data.id
@@ -31,7 +34,7 @@ test('P5-S3a：转换按钮按 available 渲染并驱动 open→assigned→in_pr
     const statusTag = page.locator('.el-card').first().locator('.el-tag').first()
     await expect(statusTag).toHaveText('待处理', { timeout: 20_000 })
 
-    // open → [assigned, closed]（incident 默认图）；in_progress 不可直达
+    // open → [assigned, closed]（默认六状态图）；in_progress 不可直达
     await expect(page.getByTestId('btn-transition-assigned')).toBeVisible({ timeout: 10_000 })
     await expect(page.getByTestId('btn-transition-closed')).toBeVisible()
     await expect(page.getByTestId('btn-transition-in_progress')).toHaveCount(0)
@@ -57,5 +60,6 @@ test('P5-S3a：转换按钮按 available 渲染并驱动 open→assigned→in_pr
     expect(got.env?.data.status, '状态须落库').toBe('in_progress')
   } finally {
     await api('/api/v1/tickets/delete', { ...h, method: 'POST', body: { id: tid } }).catch(() => {})
+    await tt.cleanup()
   }
 })
