@@ -267,6 +267,7 @@ const jobForm = reactive({
 function openCreateJob() {
   jobError.value = ''
   Object.assign(jobForm, { action_id: '', trigger_type: 'cron', cron_spec: '', dept: '', timeout_secs: 0, description: '', paramsText: '{}' })
+  void loadActionOptions() // 定义表单动作下拉与提交对话框共数据源（懒加载/失败回退同款）
   jobVisible.value = true
 }
 
@@ -311,7 +312,7 @@ async function submitJob() {
 // 无 /jobs 读权限——B13 数据面权限边界）暂保持 action 输入，选单依赖 P5-S4 动作注册表读端点
 const submitVisible = ref(false)
 const submitForm = reactive({ action: '', dept: '', timeout_secs: 0, paramsText: '' })
-// S4 B4-1：动作下拉数据（operator 分支；加载失败回退手填输入——降级不阻塞提交路径）
+// S4 B4-1：动作下拉数据（提交对话框 operator 分支 + 新建定义表弹窗共用；加载失败回退手填输入——降级不阻塞）
 const actionOptions = ref<JobActionRow[]>([])
 const actionOptionsFailed = ref(false)
 const actionLabel = (a: JobActionRow) => (a.name ? `${a.name}（${a.action_id}）` : a.action_id)
@@ -654,8 +655,18 @@ useTableFit(deadTable, () => deadList.value)
     <el-dialog v-model="jobVisible" title="新建任务定义" width="560px">
       <el-alert v-if="jobError" :title="jobError" type="error" show-icon class="mb-4" :closable="false" />
       <el-form label-width="100px">
-        <el-form-item label="action_id" required>
-          <el-input v-model="jobForm.action_id" placeholder="服务端动作注册表内" />
+        <el-form-item label="动作" required>
+          <!-- 手填 action_id 改动作下拉（与提交对话框同款：注册表清单可搜索、描述随行、加载失败回退手填） -->
+          <el-select
+            v-if="!actionOptionsFailed"
+            v-model="jobForm.action_id" filterable placeholder="选择动作（可搜索）" class="!w-[320px]" data-testid="job-action-select"
+          >
+            <el-option v-for="a in actionOptions" :key="a.action_id" :label="actionLabel(a)" :value="a.action_id">
+              <span>{{ actionLabel(a) }}</span>
+              <span v-if="a.description" class="text-xs text-gray-400 ml-2">{{ a.description }}</span>
+            </el-option>
+          </el-select>
+          <el-input v-else v-model="jobForm.action_id" placeholder="服务端动作注册表内的 action_id（清单加载失败——手填回退）" />
         </el-form-item>
         <el-form-item label="触发类型">
           <el-select v-model="jobForm.trigger_type" class="!w-40">
