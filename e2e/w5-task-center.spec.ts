@@ -30,9 +30,12 @@ test('W5 冒烟：任务中心三 Tab（提交对话框/runs 过滤/死信/jobs�
   // ── 任务定义：先建 manual job（提交对话框的数据源）──
   await page.getByRole('tab', { name: '任务定义' }).click()
   await page.getByRole('button', { name: '新建任务' }).click()
-  await page.locator('.el-dialog').getByPlaceholder('服务端动作注册表内').fill(action)
+  // 2026-10-27 适配 feat(task) 批：动作手填改注册表下拉（原输入框仅清单加载失败时 v-else 回退）
+  await page.locator('.el-dialog').getByTestId('job-action-select').click()
+  await page.getByRole('option', { name: action }).click()
   await page.locator('.el-dialog .el-form-item').filter({ hasText: '说明' }).locator('input').fill(desc)
-  await page.locator('.el-dialog .el-select').first().click()
+  // 触发类型按表单项作用域定位（动作下拉居首后 .el-select first() 不再是它）
+  await page.locator('.el-dialog .el-form-item').filter({ hasText: '触发类型' }).locator('.el-select').click()
   await page.getByRole('option', { name: '手动' }).click()
   await page.locator('.el-dialog').getByRole('button', { name: '创建' }).click()
   await expect(page.locator('.el-dialog')).not.toBeVisible({ timeout: 10_000 })
@@ -55,7 +58,8 @@ test('W5 冒烟：任务中心三 Tab（提交对话框/runs 过滤/死信/jobs�
   await expect(dlg).not.toBeVisible({ timeout: 15_000 })
 
   // ── 运行记录：受理行出现 + submitted_by=me 过滤（zhuzhao 代理换 actor 透传）──
-  await page.locator('.el-form-item').filter({ hasText: '动作' }).locator('input').fill(action)
+  // 动作筛选按 placeholder 精确锚定（隐藏的「新建任务定义」对话框 DOM 驻留，动作字样撞 strict）
+  await page.getByPlaceholder('action', { exact: true }).fill(action)
   // runs 行不含说明列——唯一性锚 action 文本（audit_archive 全仓仅本 spec 提交），新行置顶取 first
   const runRow = page.locator('.el-table__row:visible').filter({ hasText: 'audit_archive' }).first()
   await expect(runRow).toBeVisible({ timeout: 15_000 })
