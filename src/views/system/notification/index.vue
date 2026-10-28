@@ -65,6 +65,18 @@
 
         <!-- 发送记录 -->
         <el-tab-pane label="发送记录" name="logs">
+          <!-- 排障筛选：模板/状态/业务 ID（2026-10-28 发送记录筛选批——主仓同批端点参数） -->
+          <div class="mb-2 flex flex-wrap items-center gap-4">
+            <el-select v-model="logFilter.template_code" placeholder="全部模板" clearable size="small" class="!w-[180px]" data-testid="log-filter-tpl" @change="onLogFilterChange">
+              <el-option v-for="t in templates" :key="t.code" :label="t.name || t.code" :value="t.code" />
+            </el-select>
+            <el-select v-model="logFilter.status" placeholder="全部状态" clearable size="small" class="!w-[110px]" data-testid="log-filter-status" @change="onLogFilterChange">
+              <el-option label="已发送" value="sent" />
+              <el-option label="失败" value="failed" />
+            </el-select>
+            <el-input v-model="logFilter.biz_id" placeholder="业务 ID（如工单号）" clearable size="small" class="!w-[160px]" data-testid="log-filter-bizid" @input="onLogFilterChange" />
+            <el-button size="small" class="ml-auto !mr-0" @click="resetLogFilter">重置</el-button>
+          </div>
           <el-table ref="logTable" :data="logs" v-loading="logLoading" size="small" border>
             <el-table-column prop="template_code" label="模板" width="200" />
             <el-table-column prop="biz_id" label="业务 ID" width="80" />
@@ -234,6 +246,21 @@ const logLoading = ref(false)
 const logPage = ref(1)
 const logPageSize = 20
 const logTotal = ref(0)
+// 发送记录筛选（2026-10-28 批）：排障三件——模板/状态/业务 ID；变更即查 300ms 防抖+回首页
+const logFilter = reactive({ template_code: '', status: '', biz_id: '' })
+let logFiltTimer: ReturnType<typeof setTimeout> | undefined
+function onLogFilterChange() {
+  clearTimeout(logFiltTimer)
+  logFiltTimer = setTimeout(() => { logPage.value = 1; fetchLogs() }, 300)
+}
+function resetLogFilter() {
+  clearTimeout(logFiltTimer)
+  logFilter.template_code = ''
+  logFilter.status = ''
+  logFilter.biz_id = ''
+  logPage.value = 1
+  fetchLogs()
+}
 
 const tplTable = ref()
 const ruleTable = ref()
@@ -261,7 +288,14 @@ async function fetchRules() {
 async function fetchLogs() {
   logLoading.value = true
   try {
-    const data = await request.get('/api/v1/message-logs', { params: { page: logPage.value, page_size: logPageSize } })
+    const data = await request.get('/api/v1/message-logs', {
+      params: {
+        page: logPage.value, page_size: logPageSize,
+        ...(logFilter.template_code ? { template_code: logFilter.template_code } : {}),
+        ...(logFilter.status ? { status: logFilter.status } : {}),
+        ...(logFilter.biz_id.trim() ? { biz_id: logFilter.biz_id.trim() } : {}),
+      },
+    })
     const resp = data as unknown as { list?: Record<string, unknown>[]; total?: number }
     logs.value = resp?.list ?? []
     logTotal.value = resp?.total ?? 0
