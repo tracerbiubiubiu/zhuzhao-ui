@@ -91,7 +91,7 @@ const timeText = (t: string) => formatDateTime(t)
           <div class="mt-2 flex justify-end">
             <el-pagination
               v-model:current-page="page.current" v-model:page-size="page.size"
-              :total="inboxQuery.data.value?.total ?? 0" layout="prev, pager, next"
+              :total="inboxQuery.data.value?.total ?? 0" layout="total, prev, pager, next"
               @current-change="() => inboxQuery.refetch()"
             />
           </div>

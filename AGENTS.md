@@ -34,7 +34,7 @@ pnpm gate          # 六件门禁一键串行（lint → typecheck → test → 
 
 ## 类型生成（codegen，随契约批）
 
-后端改 API 形状时：主仓 `make swag` → 本仓 `pnpm codegen`（swagger2openapi 2.0→3.0 + openapi-typescript 7.13 → `src/api/__generated__/`）。**生成物不手改、随仓提交**；主仓路径非 `../zhuzhao` 时设 `ZHUZHAO_REPO`。
+后端改 API 形状时：主仓 `make swag` → 本仓 `pnpm codegen`（swagger2openapi 2.0→3.0 + openapi-typescript 7.13 → `src/api/__generated__/`）。**生成物不手改、随仓提交**；主仓路径非 `../zhuzhao` 时设 `ZHUZHAO_REPO`。**契约批合入后同批 `pnpm codegen`**（2026-10-28 验证批实证：曾落后 39 端点无人发现）；此后**新写 api 文件的出入参一律引 `__generated__` 类型，存量随域渐进补接线**——接线面之外 typecheck 不报漂移。
 
 ## 提交规范
 

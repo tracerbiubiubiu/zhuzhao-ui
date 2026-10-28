@@ -4,6 +4,149 @@
  */
 
 export interface paths {
+    "/api/v1/assignment-rules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 自动分派规则列表 */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["response.Response"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** 建自动分派规则（target_user 须属 target_org——决议③写侧校验） */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            /** @description 规则 */
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["github_com_tracerbiubiubiu_zhuzhao_internal_model.CreateAssignmentRuleRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["response.Response"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/assignment-rules/delete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 删自动分派规则 */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            /** @description 规则 ID */
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["github_com_tracerbiubiubiu_zhuzhao_internal_model.AssignmentRuleIDRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["response.Response"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/assignment-rules/enabled": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 启停自动分派规则 */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            /** @description 启停 */
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["github_com_tracerbiubiubiu_zhuzhao_internal_model.UpdateAssignmentRuleEnabledRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["response.Response"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/audit/logs": {
         parameters: {
             query?: never;
@@ -257,6 +400,42 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/badges": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 待办角标聚合（sections 开放 map——前端 60s 轮询；未知 section 前端忽略） */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["response.Response"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/dead-letters": {
         parameters: {
             query?: never;
@@ -276,6 +455,117 @@ export interface paths {
             responses: {
                 /** @description OK */
                 200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["response.Response"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/files/{key}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 文件代理下载（稳定 URL——头像等对象经应用投递）
+         * @description 定位元数据→状态/purpose 面校验→If-None-Match 命中快照 304→条件读流（etag 作 If-Match，被重放替换即 404）。avatar 免审计+Cache-Control private（A.4 #5 收窄）；ticket 态 L2 与审计行随 B5-3
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description 对象键（{domain}/{yyyy}/{mm}/{uuid}.{ext}） */
+                    key: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description 对象流（ETag/nosniff/private/分型 disposition） */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/octet-stream": string;
+                    };
+                };
+                /** @description 命中 If-None-Match（零传输零审计行） */
+                304: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description 91003（含 pending/非支持面/替换嫌疑同形） */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/octet-stream": components["schemas"]["response.Response"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/intel/query": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 威胁情报查询（先缓存后回源；stale=过期缓存降级标记）
+         * @description 外部限流 API 的缓存代理（ACL 防腐——result 上游原样透传）；配额耗尽降级返回过期缓存带 stale 标记
+         */
+        get: {
+            parameters: {
+                query: {
+                    /** @description 情报类型（ip/domain/hash/url） */
+                    type: string;
+                    /** @description 查询值 */
+                    value: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["response.Response"];
+                    };
+                };
+                /** @description Bad Request */
+                400: {
                     headers: {
                         [name: string]: unknown;
                     };
@@ -358,6 +648,45 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/jobs/actions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 任务动作清单（提交选单数据源——最小读面）
+         * @description 注册动作的 id/名称/描述/参数 schema（null=未声明降级 JSON 模式）；不含运行数据
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["response.Response"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/jobs/trigger": {
         parameters: {
             query?: never;
@@ -424,6 +753,71 @@ export interface paths {
             responses: {
                 /** @description OK */
                 200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["response.Response"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/notification-optouts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 当前用户通知退订列表（B6-4 偏好自服务） */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["response.Response"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** 设置当前用户通知退订（按 biz_type+event_action；"*" 通配同域全退） */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["response.Response"];
+                    };
+                };
+                /** @description Bad Request */
+                400: {
                     headers: {
                         [name: string]: unknown;
                     };
@@ -514,6 +908,182 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/message-logs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 发送记录列表 */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: never;
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/message-rules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 订阅规则列表 */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: never;
+        };
+        put?: never;
+        /** 创建/更新订阅规则 */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: never;
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/message-rules/delete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 删除订阅规则 */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: never;
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/message-templates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 消息模板列表 */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: never;
+        };
+        put?: never;
+        /** 创建消息模板 */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: never;
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/message-templates/delete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 删除消息模板 */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: never;
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/message-templates/update": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 更新消息模板 */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: never;
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/notifications": {
         parameters: {
             query?: never;
@@ -596,6 +1166,126 @@ export interface paths {
         get?: never;
         put?: never;
         /** 删除通知配置（body 携带 code——zhuzhao 风格） */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["response.Response"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/notifications/inbox": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 站内收件箱分页（倒序；unread=true 仅未读） */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description 页码 */
+                    page?: number;
+                    /** @description 每页 */
+                    page_size?: number;
+                    /** @description 仅未读 */
+                    unread?: boolean;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["response.Response"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/notifications/read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 单条已读（幂等；非本人 404 同形） */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            /** @description 通知 ID */
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["internal_handler.notificationIDReq"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["response.Response"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/notifications/read-all": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 全部已读（批量——返回置读条数） */
         post: {
             parameters: {
                 query?: never;
@@ -1248,6 +1938,244 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/storage/avatar/bind": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 头像回写（确认对象绑定为当前用户头像）
+         * @description 校验对象（confirmed+本人+avatar 面，非皆同形 404）→ users.avatar 落对象键 → 旧头像弃旧（对象 best-effort 删除+标 deleted）；同键重复幂等。前端渲染 src=/api/v1/files/{avatar}
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: components["requestBodies"]["github_com_tracerbiubiubiu_zhuzhao_internal_model.ConfirmFileInput"];
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["response.Response"] & {
+                            data?: components["schemas"]["github_com_tracerbiubiubiu_zhuzhao_internal_model.FileObject"];
+                        };
+                    };
+                };
+                /** @description 91003（含非本人/pending/非 avatar 面防枚举同形） */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["response.Response"];
+                    };
+                };
+                /** @description Internal Server Error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["response.Response"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/storage/presign/upload": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 对象预签名上传（返回直传 URL——Content-Type 已钉入签名）
+         * @description 限制矩阵预检（MIME 白名单+黑名单/大小）→ 服务端生成对象键 → 签发 PUT 直传 URL。purpose 取 avatar / attachment_create / richtext_create（ticket 态随附件批）
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            /** @description 上传声明 */
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["github_com_tracerbiubiubiu_zhuzhao_internal_model.PresignUploadInput"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["response.Response"] & {
+                            data?: components["schemas"]["github_com_tracerbiubiubiu_zhuzhao_internal_model.PresignUploadResponse"];
+                        };
+                    };
+                };
+                /** @description 91001 超限 / 91002 类型不允许 / 10003 参数错误 */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["response.Response"];
+                    };
+                };
+                /** @description Internal Server Error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["response.Response"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/system/cron-status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** cron 任务状态（只读——上次成功/失败/耗时；超时扫描含观察模式标记） */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["response.Response"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/system/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 设置列表（catalog 全量——含有效值/来源/编辑层级） */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["response.Response"] & {
+                            data?: components["schemas"]["github_com_tracerbiubiubiu_zhuzhao_internal_model.SettingView"][];
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/system/settings/update": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 更新设置（tier 分层+硬底线校验——越界 400） */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            /** @description 键值对 */
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["github_com_tracerbiubiubiu_zhuzhao_internal_model.UpdateSettingRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["response.Response"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/tasks": {
         parameters: {
             query?: never;
@@ -1858,6 +2786,78 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ticket-types/{code}/fields/impact": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 字段在途影响分析（全量替换前的变更代价）
+         * @description 每字段在途工单使用计数（非终态单 custom_data 含该键）——被删字段的在途数即变更代价
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description 类型编码 */
+                    code: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["response.Response"] & {
+                            data?: {
+                                [key: string]: number;
+                            };
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ticket-types/{code}/fields/variables": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 模板可用变量集（变量字典——06 号 A.6） */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: never;
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/tickets": {
         parameters: {
             query?: never;
@@ -1961,6 +2961,209 @@ export interface paths {
             requestBody: {
                 content: {
                     "application/json": components["schemas"]["github_com_tracerbiubiubiu_zhuzhao_internal_model.AssignTicketRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["response.Response"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tickets/attachments/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 确认上行对象（HEAD 实测→落 confirmed+etag 快照）
+         * @description 校验归属（非本人同形 404 防枚举）与 pending 态 → 对象存储 HEAD 实测（size/类型）→ 翻 confirmed。重复 confirm 409
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: components["requestBodies"]["github_com_tracerbiubiubiu_zhuzhao_internal_model.ConfirmFileInput"];
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["response.Response"] & {
+                            data?: components["schemas"]["github_com_tracerbiubiubiu_zhuzhao_internal_model.FileObject"];
+                        };
+                    };
+                };
+                /** @description 91003 不存在（含非本人防枚举同形） */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["response.Response"];
+                    };
+                };
+                /** @description 91004 已确认/已关联 */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["response.Response"];
+                    };
+                };
+                /** @description Internal Server Error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["response.Response"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tickets/attachments/delete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 删除工单附件（删关联+对象弃旧）
+         * @description L2 update 面；删关联行+对象本体 best-effort 删+标 deleted（A.4 #4）
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            /** @description 工单 ID+对象键 */
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["internal_handler.DeleteAttachmentInput"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["response.Response"];
+                    };
+                };
+                /** @description 91003 不存在/非绑定 */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["response.Response"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tickets/cc": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 添加工单抄送 */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            /** @description 添加抄送请求（user_ids 仅本人=自抄送走读可见；含他人=需 update 权） */
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["github_com_tracerbiubiubiu_zhuzhao_internal_model.AddTicketCCRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["response.Response"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tickets/cc/remove": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 移除工单抄送 */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            /** @description 移除抄送请求（本人自摘走读可见；摘他人需 update 权） */
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["github_com_tracerbiubiubiu_zhuzhao_internal_model.RemoveTicketCCRequest"];
                 };
             };
             responses: {
@@ -2104,6 +3307,61 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/tickets/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 工单导出（xlsx 流式——与列表同筛选/同可见性；行数上限 5 万） */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description 工单类型 */
+                    type_code?: string;
+                    /** @description 工单状态 */
+                    status?: string;
+                    /** @description 优先级 */
+                    priority?: number;
+                    /** @description 标签（S10 B10-2） */
+                    tag?: string;
+                    /** @description 处理人过滤，仅支持 me */
+                    assignee?: string;
+                    /** @description 创建人过滤，仅支持 me */
+                    created_by?: string;
+                    /** @description 标题关键字 */
+                    keyword?: string;
+                    /** @description 创建日期起（YYYY-MM-DD） */
+                    created_from?: string;
+                    /** @description 创建日期止（YYYY-MM-DD） */
+                    created_to?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description xlsx 附件 */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/octet-stream": string;
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/tickets/notes": {
         parameters: {
             query?: never;
@@ -2166,6 +3424,175 @@ export interface paths {
             requestBody: {
                 content: {
                     "application/json": components["schemas"]["github_com_tracerbiubiubiu_zhuzhao_internal_model.CreateRelationRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["response.Response"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tickets/richtext/render": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** richtext 字段服务端渲染（消毒 SSOT） */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            /** @description MD 源文本 */
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["github_com_tracerbiubiubiu_zhuzhao_internal_model.RenderRichtextRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["response.Response"] & {
+                            data?: components["schemas"]["github_com_tracerbiubiubiu_zhuzhao_internal_model.RenderRichtextResponse"];
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tickets/tags": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 添加工单标签 */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            /** @description 添加标签请求（读可见面协作动作——默认共享；单次 ≤20 个/单个 ≤50 字符） */
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["github_com_tracerbiubiubiu_zhuzhao_internal_model.AddTicketTagsRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["response.Response"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tickets/tags/remove": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 移除工单标签 */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            /** @description 移除标签请求（自摘=读可见；摘他人挂的=update 权） */
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["github_com_tracerbiubiubiu_zhuzhao_internal_model.RemoveTicketTagRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["response.Response"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tickets/transition": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 执行工单状态转换（condition/validator 服务端判——统一入口）
+         * @description AssertTransition 状态机 + transition_meta from>to condition 权限门（fail-closed）+ validator expr 前置条件；单事务执行+commit 后 emit ticket.transitioned
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            /** @description 转换请求 */
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["github_com_tracerbiubiubiu_zhuzhao_internal_model.TransitionTicketRequest"];
                 };
             };
             responses: {
@@ -2266,6 +3693,98 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/tickets/{id}/attachments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 工单附件列表（JOIN 视图）
+         * @description L2 read 面（工单可见性——不可见单 404 同形）；条目含 object_key/file_name/mime/size
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description 工单 ID */
+                    id: number;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["response.Response"] & {
+                            data?: components["schemas"]["github_com_tracerbiubiubiu_zhuzhao_internal_model.TicketAttachmentView"][];
+                        };
+                    };
+                };
+                /** @description Not Found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["response.Response"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tickets/{id}/cc": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 工单抄送列表 */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description 工单 ID */
+                    id: number;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["response.Response"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/tickets/{id}/comments": {
         parameters: {
             query?: never;
@@ -2313,6 +3832,87 @@ export interface paths {
             cookie?: never;
         };
         /** 工单关联列表 */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description 工单 ID */
+                    id: number;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["response.Response"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tickets/{id}/tags": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 工单标签列表 */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description 工单 ID */
+                    id: number;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["response.Response"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tickets/{id}/transitions/available": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 当前用户可执行的转换列表（Jira condition 语义——按用户过滤）
+         * @description condition 不满足的转换不出现；服务端 AssertTransition+condition 为 fail-closed 兜底，前端过滤仅 UX
+         */
         get: {
             parameters: {
                 query?: never;
@@ -3062,6 +4662,16 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        "github_com_tracerbiubiubiu_zhuzhao_internal_model.AddTicketCCRequest": {
+            /** @example 0 */
+            ticket_id: string;
+            user_ids: number[];
+        };
+        "github_com_tracerbiubiubiu_zhuzhao_internal_model.AddTicketTagsRequest": {
+            tags: string[];
+            /** @example 0 */
+            ticket_id: string;
+        };
         "github_com_tracerbiubiubiu_zhuzhao_internal_model.AssignMenusRequest": {
             menu_ids: string[];
             /** @example 0 */
@@ -3073,6 +4683,15 @@ export interface components {
              * @example 0
              */
             assigned_to?: string;
+            /**
+             * @description EscalationSupervisor 催办上级·人工指定（S10 B10-4——dd §31 基线档；nil=保持不动）
+             * @example 0
+             */
+            escalation_supervisor_id?: string;
+            /** @example 0 */
+            id: string;
+        };
+        "github_com_tracerbiubiubiu_zhuzhao_internal_model.AssignmentRuleIDRequest": {
             /** @example 0 */
             id: string;
         };
@@ -3087,6 +4706,21 @@ export interface components {
             comment?: string;
             /** @example 0 */
             id: string;
+        };
+        "github_com_tracerbiubiubiu_zhuzhao_internal_model.ConfirmFileInput": {
+            object_key: string;
+            /** @example 0 */
+            ticket_id?: string;
+        };
+        "github_com_tracerbiubiubiu_zhuzhao_internal_model.CreateAssignmentRuleRequest": {
+            enabled?: boolean;
+            keyword?: string;
+            priority?: number;
+            /** @example 0 */
+            target_org: string;
+            /** @example 0 */
+            target_user?: string;
+            type_code: string;
         };
         "github_com_tracerbiubiubiu_zhuzhao_internal_model.CreateCommentRequest": {
             content: string;
@@ -3129,8 +4763,20 @@ export interface components {
         "github_com_tracerbiubiubiu_zhuzhao_internal_model.CreateTicketRequest": {
             /** @example 0 */
             assigned_to?: string;
+            /**
+             * @description B5-3 建单前绑定（A.5 建单前链）：attachment_create/richtext_create 悬挂
+             *     confirmed 对象键列表，Create 同事务校验+落绑 ticket_attachments。
+             *     语义=增量落绑（只增不删）：解除绑定走 POST /tickets/attachments/delete
+             *     （内嵌图 ticket_richtext 不可经该端点删——随工单生命周期，A.7）
+             */
+            attachments?: string[];
             custom_data?: number[];
             description?: string;
+            /**
+             * @description EscalationSupervisor 催办上级·人工指定（S10 B10-4——dd §31 基线档；可后续 Assign 改）
+             * @example 0
+             */
+            escalation_supervisor_id?: string;
             /** @example 0 */
             org_id: string;
             priority?: number;
@@ -3176,6 +4822,28 @@ export interface components {
         "github_com_tracerbiubiubiu_zhuzhao_internal_model.DeleteTicketRequest": {
             /** @example 0 */
             id: string;
+        };
+        "github_com_tracerbiubiubiu_zhuzhao_internal_model.FileObject": {
+            bucket?: string;
+            confirmed_at?: string;
+            created_at?: string;
+            /** @example 0 */
+            created_by?: string;
+            etag?: string;
+            file_name?: string;
+            id?: number;
+            mime_type?: string;
+            object_key?: string;
+            owner_id?: string;
+            /**
+             * @description 通用归属引用（000047 随行件）：ticket 态 confirm/建单落绑填 ticket、avatar bind 填 user；
+             *     NULL = 未归属（pending / *_create 悬挂态 / 存量行）。元数据面，不作判定依据。
+             */
+            owner_kind?: string;
+            purpose?: string;
+            /** @example 0 */
+            size_bytes?: string;
+            status?: string;
         };
         "github_com_tracerbiubiubiu_zhuzhao_internal_model.LoginRequest": {
             captcha?: string;
@@ -3240,8 +4908,48 @@ export interface components {
             page_size?: number;
             total?: number;
         };
+        "github_com_tracerbiubiubiu_zhuzhao_internal_model.PresignUploadInput": {
+            file_name: string;
+            mime_type: string;
+            purpose: string;
+            /** @example 0 */
+            size_bytes: string;
+            /** @example 0 */
+            ticket_id?: string;
+        };
+        "github_com_tracerbiubiubiu_zhuzhao_internal_model.PresignUploadResponse": {
+            expires_at?: string;
+            headers?: {
+                [key: string]: string;
+            };
+            method?: string;
+            object_key?: string;
+            upload_url?: string;
+        };
         "github_com_tracerbiubiubiu_zhuzhao_internal_model.RefreshRequest": {
             refresh_token: string;
+        };
+        "github_com_tracerbiubiubiu_zhuzhao_internal_model.RemoveTicketCCRequest": {
+            /** @example 0 */
+            ticket_id: string;
+            /** @example 0 */
+            user_id: string;
+        };
+        "github_com_tracerbiubiubiu_zhuzhao_internal_model.RemoveTicketTagRequest": {
+            tag: string;
+            /** @example 0 */
+            ticket_id: string;
+        };
+        "github_com_tracerbiubiubiu_zhuzhao_internal_model.RenderRichtextRequest": {
+            /**
+             * @example # 标题
+             *
+             *     - 列表
+             */
+            content: string;
+        };
+        "github_com_tracerbiubiubiu_zhuzhao_internal_model.RenderRichtextResponse": {
+            html?: string;
         };
         "github_com_tracerbiubiubiu_zhuzhao_internal_model.ReplaceTypeFieldsRequest": {
             /** @description W1（BK-18 整改）：code 从 path param 迁入 body */
@@ -3288,15 +4996,55 @@ export interface components {
             /** @example 0 */
             user_id: string;
         };
+        "github_com_tracerbiubiubiu_zhuzhao_internal_model.SettingView": {
+            description?: string;
+            key?: string;
+            /** @description superadmin | admin */
+            min_editor_tier?: string;
+            /** @description config=出厂默认 | kv=运行时覆盖 */
+            source?: string;
+            updated_at?: string;
+            /** @example 0 */
+            updated_by?: string;
+            value?: number[];
+            /** @description kv 行当前版本（回传 expected_version 用） */
+            version?: number;
+        };
+        "github_com_tracerbiubiubiu_zhuzhao_internal_model.TicketAttachmentView": {
+            created_at?: string;
+            file_name?: string;
+            id?: number;
+            mime_type?: string;
+            object_key?: string;
+            /** @example 0 */
+            size_bytes?: string;
+            /** @example 0 */
+            ticket_id?: string;
+            /** @example 0 */
+            uploaded_by?: string;
+        };
         "github_com_tracerbiubiubiu_zhuzhao_internal_model.TicketTypeFieldInput": {
             field_key: string;
             field_label: string;
+            /** @description B1-3 formula/extension（附录 A.2 方案 b） */
+            field_meta?: number[];
             field_options?: number[];
             /** @enum {string} */
-            field_type: "input" | "textarea" | "number" | "date" | "select" | "multi_select" | "tips";
+            field_type: "input" | "textarea" | "number" | "date" | "select" | "multi_select" | "tips" | "richtext";
             required?: boolean;
             sort_order?: number;
             validate_regex?: string;
+        };
+        "github_com_tracerbiubiubiu_zhuzhao_internal_model.TransitionTicketRequest": {
+            comment?: string;
+            /** @example 0 */
+            id: string;
+            to: string;
+        };
+        "github_com_tracerbiubiubiu_zhuzhao_internal_model.UpdateAssignmentRuleEnabledRequest": {
+            enabled?: boolean;
+            /** @example 0 */
+            id: string;
         };
         "github_com_tracerbiubiubiu_zhuzhao_internal_model.UpdatePasswordRequest": {
             /** @description 与登录时一致；空则使用 default */
@@ -3328,7 +5076,28 @@ export interface components {
             status?: 0 | 1;
             version: number;
         };
+        "github_com_tracerbiubiubiu_zhuzhao_internal_model.UpdateSettingRequest": {
+            /**
+             * @description ExpectedVersion F-D2 乐观锁（可选）：传 List 返回的 version——并发他人
+             *     已改过即 400 提示刷新；不传=服务端重读重试（兼容存量调用，last-write-wins）。
+             */
+            expected_version?: number;
+            key: string;
+            value: number[];
+        };
         "github_com_tracerbiubiubiu_zhuzhao_internal_model.UpdateTicketRequest": {
+            /**
+             * @description B5-4 编辑增量绑定（05 号 A.3 a 案）：悬挂 confirmed 对象（attachment_create/
+             *     richtext_create）键列表，随保存同事务落绑——与 CreateTicketRequest.Attachments
+             *     同语义（本人/confirmed/悬挂态/未绑定，超上限 400）；删附件走 attachments/delete 端点
+             */
+            attachments?: string[];
+            /**
+             * @description B5-4 custom_data 增量 patch（05 号 §6/A.3 拍板项 2026-10-20）：仅传入键覆盖基线、
+             *     值为 null 的键删除（清空字段）；合并后整体按类型字段 schema G2 重校验；仅非终态可改。
+             *     字段级 diff（D20 changes[]）随 S6 B6-1 事件面统一落地——请求体已入通用审计行。
+             */
+            custom_data?: number[];
             description?: string;
             /** @example 0 */
             id: string;
@@ -3355,6 +5124,11 @@ export interface components {
             is_active?: boolean;
             name?: string;
             states?: number[];
+            /**
+             * @description TransitionMeta state 级节点元数据（S10 B10-4——timeout_minutes/escalation；
+             *     nil=不动，非空 JSON 对象=全量替换；服务端 validateTransitionMeta 校验）
+             */
+            transition_meta?: number[];
             transitions?: number[];
             /**
              * @description Version 可选乐观锁：nil = 不做 CAS（保持旧 patch 行为）；非 nil = 命中
@@ -3395,6 +5169,15 @@ export interface components {
             task_id?: string;
             timeout_secs?: number;
         };
+        "internal_handler.DeleteAttachmentInput": {
+            object_key: string;
+            /** @example 0 */
+            ticket_id: string;
+        };
+        "internal_handler.notificationIDReq": {
+            /** @example 0 */
+            id: string;
+        };
         "response.Response": {
             code?: number;
             data?: unknown;
@@ -3409,6 +5192,12 @@ export interface components {
         "github_com_tracerbiubiubiu_zhuzhao_internal_model.BindOrgRoleRequest": {
             content: {
                 "application/json": components["schemas"]["github_com_tracerbiubiubiu_zhuzhao_internal_model.BindOrgRoleRequest"];
+            };
+        };
+        /** @description 对象键 */
+        "github_com_tracerbiubiubiu_zhuzhao_internal_model.ConfirmFileInput": {
+            content: {
+                "application/json": components["schemas"]["github_com_tracerbiubiubiu_zhuzhao_internal_model.ConfirmFileInput"];
             };
         };
     };

@@ -77,8 +77,8 @@
               <template #default="{ row }">{{ formatDateTime(row.created_at) }}</template>
             </el-table-column>
           </el-table>
-          <div v-if="logTotal > logPageSize" class="mt-2 text-center">
-            <el-pagination v-model:current-page="logPage" :page-size="logPageSize" :total="logTotal" layout="prev, pager, next" @current-change="fetchLogs" />
+          <div v-if="logTotal > logPageSize" class="mt-2 flex justify-end">
+            <el-pagination v-model:current-page="logPage" :page-size="logPageSize" :total="logTotal" layout="total, prev, pager, next" @current-change="fetchLogs" />
           </div>
         </el-tab-pane>
       </el-tabs>

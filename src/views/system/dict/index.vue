@@ -25,7 +25,17 @@ defineOptions({ name: 'system_dict_page' })
 const types = ref<DictTypeRow[]>([])
 const typesLoading = ref(false)
 const selectedType = ref<DictTypeRow | null>(null)
+// 豁免登记（分页约定 §禁伪装全量）：双表 page_size=100 拉近全量——字典量级
+// 设计为小（类型/项各 ≤ 数十）；超 100 静默截断属异常场景可接受（frontend-standard
+// 分页统一约定在册豁免，量级增长时改真分页）。
 const keyword = ref('')
+// 客户端触发即时化（2026-10-28 筛选 v2 整改）：输入 300ms 防抖即查——
+// 服务端 keyword 过滤不变，仅去掉按钮/回车触发旧形态
+let kwTimer: ReturnType<typeof setTimeout> | undefined
+function onKeywordInput() {
+  clearTimeout(kwTimer)
+  kwTimer = setTimeout(() => fetchTypes(), 300)
+}
 
 async function fetchTypes() {
   typesLoading.value = true
@@ -201,8 +211,7 @@ useTableFit(itemsTable, () => items.value)
           </div>
         </template>
         <el-form inline @submit.prevent class="mb-2">
-          <el-input v-model="keyword" placeholder="code/name 搜索" clearable class="!w-48" @keyup.enter="fetchTypes" />
-          <el-button class="ml-2" @click="fetchTypes">搜索</el-button>
+          <el-input v-model="keyword" placeholder="code/name 过滤" clearable class="!w-[160px]" @input="onKeywordInput" />
         </el-form>
         <div class="min-h-0 flex-initial">
         <el-table

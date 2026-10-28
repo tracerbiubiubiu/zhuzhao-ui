@@ -40,6 +40,8 @@ function walk(dir: string, out: string[] = []): string[] {
 }
 
 describe('request 调用路径必须自带网关前缀（防 SPA fallback 静默失效）', () => {
+  // 显式超时：全量遍历 src/ 约 185 文件、实测 1.6–4.7s，默认 5s 在并发负载下
+  // 逼近上限偶发超时（2026-10-28 验证批首跑失败复现），扫描类用例给足余量
   it('src/ 下所有字面量 URL 以 /api/ 或 /al/ 开头', () => {
     const offenders: string[] = []
     let checked = 0
@@ -56,5 +58,5 @@ describe('request 调用路径必须自带网关前缀（防 SPA fallback 静默
     }
     expect(checked, '扫描面为零=正则或目录失配，测试本身失效').toBeGreaterThan(50)
     expect(offenders, `以下调用缺网关前缀：\n${offenders.join('\n')}`).toEqual([])
-  })
+  }, 30_000)
 })
