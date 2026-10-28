@@ -95,7 +95,7 @@ function prettyBody(row: AuditLogRow): string {
 async function copyRequestBody() {
   if (!payloadRow.value) return
   const text = prettyBody(payloadRow.value)
-  if (!text || text === '—') {
+  if (!text || text === '（无 body）') {
     ElMessage.info('该请求无报文（GET 类或空 body）')
     return
   }
