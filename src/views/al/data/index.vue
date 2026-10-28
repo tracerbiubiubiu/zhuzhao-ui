@@ -169,12 +169,29 @@ function openEdit(row: AlDataDoc) {
   formVisible.value = true
 }
 
-/** 表单值 → 提交 body（list 文本按行拆分；int_list 转 number[]） */
+/** 列表文本 → 项数组（容积分隔：换行/逗号/分号中英文皆可——Excel 列粘贴与
+ *  逗号串直接可用；trim + 剔空。校验与提交共用此解析，无第二份分隔语义） */
+function parseListLines(text: string | undefined): string[] {
+  return (text ?? '').split(/[\n,，;；]+/).map((s) => s.trim()).filter(Boolean)
+}
+
+/** 去重（保序，首个出现位留原值）写回文本域 */
+function dedupList(name: string) {
+  const lines = parseListLines(listText.value[name])
+  const seen = new Set<string>()
+  const out = lines.filter((s) => !seen.has(s) && seen.add(s))
+  const removed = lines.length - out.length
+  listText.value[name] = out.join('\n')
+  if (removed > 0) ElMessage.success(`已去重 ${removed} 项`)
+  else ElMessage.info('无重复项')
+}
+
+/** 表单值 → 提交 body（list 文本经 parseListLines 拆分；int_list 转 number[]） */
 function buildDataBody(): Record<string, unknown> {
   const out: Record<string, unknown> = {}
   for (const f of schema.value) {
     if (f.type === 'int_list' || f.type === 'string_list') {
-      const lines = (listText.value[f.name] ?? '').split('\n').map((s) => s.trim()).filter(Boolean)
+      const lines = parseListLines(listText.value[f.name])
       out[f.name] = f.type === 'int_list' ? lines.map(Number) : lines
     } else {
       const v = formData.value[f.name]
@@ -185,17 +202,36 @@ function buildDataBody(): Record<string, unknown> {
 }
 
 async function submitForm() {
-  // required 手检（动态 prop 校验在此场景过重——四类型封闭手检即可）
+  // required + 长度手检（动态 prop 校验在此场景过重——四类型封闭手检即可；
+  // 长度上限与后端 checkValue 同源语义：字符数非字节，0/缺省=255——2026-10-27 拍板）
   for (const f of schema.value) {
-    if (!f.required) continue
-    if (f.type === 'int_list' || f.type === 'string_list') {
-      if (!(listText.value[f.name] ?? '').trim()) {
+    if (f.required) {
+      if (f.type === 'int_list' || f.type === 'string_list') {
+        if (!parseListLines(listText.value[f.name]).length) {
+          formError.value = `「${f.name}」为必填`
+          return
+        }
+      } else if (formData.value[f.name] === undefined || formData.value[f.name] === '') {
         formError.value = `「${f.name}」为必填`
         return
       }
-    } else if (formData.value[f.name] === undefined || formData.value[f.name] === '') {
-      formError.value = `「${f.name}」为必填`
-      return
+    }
+    if (f.type === 'int_list' || f.type === 'string_list') {
+      const items = parseListLines(listText.value[f.name])
+      const itemLimit = f.max_items || 100
+      if (items.length > itemLimit) {
+        formError.value = `「${f.name}」共 ${items.length} 项，超上限 ${itemLimit}`
+        return
+      }
+    }
+    if (f.type === 'string_list') {
+      const limit = f.max_len || 255
+      const lines = parseListLines(listText.value[f.name])
+      const bad = lines.findIndex((s) => [...s].length > limit)
+      if (bad >= 0) {
+        formError.value = `「${f.name}」第 ${bad + 1} 项超长（上限 ${limit} 字符）`
+        return
+      }
     }
   }
   formSaving.value = true
@@ -491,11 +527,23 @@ useTableFit(dataTable, () => list.value)
       <el-form label-width="120px">
         <el-form-item v-for="f in schema" :key="f.name" :label="f.name" :required="f.required">
           <el-input-number v-if="f.type === 'int'" v-model="(formData[f.name] as number | undefined)" class="!w-48" />
-          <el-input v-else-if="f.type === 'string'" v-model="(formData[f.name] as string | undefined)" />
           <el-input
-            v-else v-model="listText[f.name]" type="textarea" :rows="3"
-            :placeholder="f.type === 'int_list' ? '每行一个整数' : '每行一项'"
+            v-else-if="f.type === 'string'" v-model="(formData[f.name] as string | undefined)"
+            :maxlength="f.max_len || 255" show-word-limit clearable
           />
+          <template v-else>
+            <el-input
+              v-model="listText[f.name]" type="textarea" :rows="3" clearable
+              :placeholder="f.type === 'int_list' ? '每行一个整数，逗号分隔亦可' : '每行一项，逗号/分号分隔亦可'"
+            />
+            <div v-if="(listText[f.name] ?? '').trim()" class="flex items-center gap-2 mt-1">
+              <span
+                class="text-xs"
+                :class="parseListLines(listText[f.name]).length > (f.max_items || 100) ? 'text-red-500' : 'text-gray-400'"
+              >共 {{ parseListLines(listText[f.name]).length }} 项 / 上限 {{ f.max_items || 100 }}</span>
+              <el-button link type="primary" size="small" @click="dedupList(f.name)">去重</el-button>
+            </div>
+          </template>
         </el-form-item>
       </el-form>
       <template #footer>

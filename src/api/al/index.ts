@@ -19,6 +19,10 @@ export interface AlFieldDef {
   required: boolean
   /** 敏感字段（日志侧脱敏语义——响应值原样，前端不脱显） */
   sensitive?: boolean
+  /** string/string_list 单值字符上限（后端恒出；0/缺省=默认 255——2026-10-27 拍板） */
+  max_len?: number
+  /** int_list/string_list 项数上限（后端恒出；0/缺省=默认 100——同批拍板） */
+  max_items?: number
 }
 
 /** 类型定义（meta.Definition 投影） */

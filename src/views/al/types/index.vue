@@ -10,7 +10,7 @@
 import { computed, reactive, ref } from 'vue'
 import { useTableFit } from '@vea/hooks'
 import {
-  ElButton, ElCard, ElDrawer, ElForm, ElFormItem, ElInput, ElMessage, ElMessageBox,
+  ElButton, ElCard, ElDrawer, ElForm, ElFormItem, ElInput, ElInputNumber, ElMessage, ElMessageBox,
   ElSwitch, ElTable, ElTableColumn, ElTag, ElSelect, ElOption, ElAlert,
   ElDialog,
 } from 'element-plus'
@@ -94,7 +94,15 @@ function removeFieldRow(i: number) {
 async function submitEditor() {
   const valid = await formRef.value?.validate().catch(() => false)
   if (!valid) return
-  const fields = editorForm.fields.filter((f) => f.name.trim())
+  const fields = editorForm.fields
+    .filter((f) => f.name.trim())
+    // 约束键按类型剥离（后端注册校验对语义错配 422——提交前清干净）：
+    // int/int_list 无 max_len；string/string_list 无 max_items
+    .map((f) => {
+      if (f.type === 'int' || f.type === 'int_list') return { ...f, max_len: undefined }
+      if (f.type === 'string' || f.type === 'string_list') return { ...f, max_items: undefined }
+      return f
+    })
   if (!fields.length) {
     editorError.value = '至少定义一个字段'
     return
@@ -245,14 +253,42 @@ useTableFit(typesTable, () => rows.value)
         </el-form-item>
         <el-form-item label="字段定义">
           <div class="w-full">
-            <div v-for="(f, i) in editorForm.fields" :key="i" class="flex items-center gap-2 mb-2">
-              <el-input v-model="f.name" placeholder="字段名" class="!w-40" />
-              <el-select v-model="f.type" class="!w-32">
-                <el-option v-for="t in FIELD_TYPES" :key="t" :label="t" :value="t" />
-              </el-select>
-              <el-switch v-model="f.required" active-text="必填" inline-prompt class="mr-1" />
-              <el-switch v-model="f.sensitive" active-text="敏感" inline-prompt />
-              <el-button link type="danger" :disabled="editorForm.fields.length <= 1" @click="removeFieldRow(i)">删</el-button>
+            <div v-for="(f, i) in editorForm.fields" :key="i" class="mb-2">
+              <div class="flex items-center gap-2">
+                <el-input v-model="f.name" placeholder="字段名" class="!w-40" />
+                <el-select v-model="f.type" class="!w-32">
+                  <el-option v-for="t in FIELD_TYPES" :key="t" :label="t" :value="t" />
+                </el-select>
+                <!-- 开/关双态同文案：关闭态药丸不再空白（走查反馈——点开才知道是什么开关） -->
+                <el-switch
+                  v-model="f.required" active-text="必填" inactive-text="必填"
+                  inline-prompt class="mr-1"
+                />
+                <el-switch v-model="f.sensitive" active-text="敏感" inactive-text="敏感" inline-prompt />
+                <el-button
+                  link type="danger" class="ml-auto"
+                  :disabled="editorForm.fields.length <= 1" @click="removeFieldRow(i)"
+                >删</el-button>
+              </div>
+              <!-- 约束行（随类型显隐；2026-10-27 拍板：字符上限/项数上限两级护栏） -->
+              <div v-if="f.type !== 'int'" class="flex items-center gap-2 mt-1 pl-1">
+                <template v-if="f.type === 'string' || f.type === 'string_list'">
+                  <span class="text-xs text-gray-400 flex-none">上限</span>
+                  <el-input-number
+                    v-model="f.max_len" :min="0" :max="65535" :controls="false"
+                    placeholder="默认 255" class="!w-24" data-testid="al-field-maxlen"
+                    title="string/string_list 单值字符上限；留空=默认 255"
+                  />
+                </template>
+                <template v-if="f.type === 'int_list' || f.type === 'string_list'">
+                  <span class="text-xs text-gray-400 flex-none">项数</span>
+                  <el-input-number
+                    v-model="f.max_items" :min="0" :max="65535" :controls="false"
+                    placeholder="默认 100" class="!w-24" data-testid="al-field-maxitems"
+                    title="int_list/string_list 项数上限；留空=默认 100"
+                  />
+                </template>
+              </div>
             </div>
             <el-button size="small" @click="addFieldRow">+ 添加字段</el-button>
             <div class="text-xs text-gray-400 mt-2">
