@@ -4,13 +4,14 @@
  */
 import request from '@vea/request'
 
-/** 情报查询结果（09 号 A.4 契约——result 上游原样 ACL 透传；stale=过期缓存降级标记） */
+/** 情报查询结果（09 号 A.4 契约——result 上游原样 ACL 透传；stale=过期缓存降级标记；expires_at=缓存到期，2026-10-27 增补） */
 export interface IntelQueryResult {
   type: string
   value: string
   result: Record<string, unknown>
   stale: boolean
   fetched_at: string
+  expires_at?: string
   hit_count?: number
 }
 

@@ -30,6 +30,8 @@ const loading = ref(false)
 const result = ref<unknown>(null)
 const stale = ref(false)
 const fetchedAt = ref('')
+const expiresAt = ref('')
+const hitCount = ref(0)
 /** 最近一次成功查询的值（结果摘要行展示用——回填历史时与输入框可能不同步） */
 const lastValue = ref('')
 /** 结果展示形态：结构化键值树 / 原始 JSON（复制粘贴友好） */
@@ -74,7 +76,9 @@ function persistHistory() {
   }
 }
 
-/** 追加式流水：每笔查询一条记录（不去重——查询次数统计依赖逐笔留痕） */
+/** 追加式流水：每笔查询一条记录（不去重——查询次数统计依赖逐笔留痕）。
+ *  不存 result 快照（09 号 A.6 定论）：同键重查命中缓存近零成本覆盖「回看」诉求；
+ *  取证/审计诉求走服务端查询日志端点（触发驱动登记）——本机快照自证无效。 */
 function recordHistory(entry: IntelHistoryEntry) {
   history.value.unshift(entry)
   if (history.value.length > HISTORY_CAP) history.value.length = HISTORY_CAP
@@ -223,6 +227,8 @@ async function query() {
     result.value = data.result
     stale.value = data.stale
     fetchedAt.value = data.fetched_at
+    expiresAt.value = data.expires_at ?? ''
+    hitCount.value = data.hit_count ?? 0
     lastValue.value = v
     recordHistory({ type: intelType.value, value: v, ts: Date.now(), stale: data.stale, hit_count: data.hit_count ?? 0 })
   } catch {
@@ -244,6 +250,22 @@ async function copyRaw() {
 
 function formatTs(ts: number): string {
   return new Date(ts).toLocaleString('zh-CN', { hour12: false })
+}
+
+/** 缓存 TTL 剩余的粗粒度人话表述（一次性快照不计时——刷新/重查即更新） */
+function ttlText(iso: string): string {
+  if (!iso) return ''
+  const ms = new Date(iso).getTime() - Date.now()
+  if (ms <= 0) return '已到期'
+  const h = ms / 3600000
+  if (h >= 48) return `剩 ${Math.floor(h / 24)} 天`
+  if (h >= 1) return `剩 ${Math.floor(h)} 小时`
+  return `剩 ${Math.max(1, Math.floor(ms / 60000))} 分钟`
+}
+
+/** ISO 时间戳的分钟级短展示（缓存至 …） */
+function formatIsoMin(iso: string): string {
+  return iso ? new Date(iso).toLocaleString('zh-CN', { hour12: false, month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : ''
 }
 </script>
 
@@ -269,6 +291,8 @@ function formatTs(ts: number): string {
           <el-tag size="small">{{ TYPE_LABELS[intelType] ?? intelType }} · {{ lastValue }}</el-tag>
           <el-tag v-if="stale" type="warning" size="small">陈旧缓存（上游配额耗尽降级）</el-tag>
           <span>数据时间：{{ fetchedAt }}</span>
+          <span v-if="hitCount > 0" class="text-gray-400">缓存命中 {{ hitCount }} 次</span>
+          <span v-if="expiresAt" class="text-gray-400">缓存至 {{ formatIsoMin(expiresAt) }}（{{ ttlText(expiresAt) }}）</span>
           <div class="ml-auto flex items-center gap-2">
             <el-radio-group v-model="resultView" size="small">
               <el-radio-button value="pretty">结构化</el-radio-button>
