@@ -5,6 +5,7 @@
  * 通知行=摘要+时间+深链（link 直跳）；单条点击即读+全部已读。
  * 待办 tab 数据源=S10 角标同源（assignee=me 列表——状态派生非快照）。
  */
+import { formatDateTime } from '@/utils/datetime'
 import { computed, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import {
@@ -58,7 +59,7 @@ function goTodo(row: { id: string; status: string }) {
   void router.push(`/tickets/${row.id}`)
 }
 
-const timeText = (t: string) => (t ? new Date(t).toLocaleString('zh-CN', { hour12: false }) : '')
+const timeText = (t: string) => formatDateTime(t)
 </script>
 
 <template>

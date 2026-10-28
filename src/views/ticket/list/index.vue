@@ -10,6 +10,7 @@
  * - 详情路由 → 静态路由 /tickets/:id（§3.2④；发起页/详情页均菜单外静态路由）
  * - 新建入口（ticket:create）→ /tickets/new（发起表单页=form-create 渲染器）
  */
+import { formatDateTime } from '@/utils/datetime'
 import { reactive, ref } from 'vue'
 import {
   ElButton, ElCard, ElCheckbox, ElDatePicker, ElForm, ElFormItem, ElInput, ElLink,
@@ -148,7 +149,7 @@ const columns: ProTableColumn[] = [
 
 function formatTime(iso?: string): string {
   if (!iso) return '—'
-  return new Date(iso).toLocaleString('zh-CN', { hour12: false })
+  return formatDateTime(iso)
 }
 
 function typeLabel(code: string): string {

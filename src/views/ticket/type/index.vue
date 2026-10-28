@@ -19,6 +19,7 @@ import { useTableFit } from '@vea/hooks'
 import {
   ElAlert, ElButton, ElCard, ElCheckbox, ElDialog, ElForm, ElFormItem, ElInput, ElInputNumber,
   ElMessage, ElMessageBox, ElOption, ElRadioButton, ElRadioGroup, ElSelect, ElSwitch, ElTable, ElTableColumn, ElTabPane, ElTabs, ElTag,
+  ElEmpty,
 } from 'element-plus'
 import type { FormInstance } from 'element-plus'
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
@@ -565,6 +566,11 @@ useTableFit(tplTable, () => templatesQuery.data.value)
           </div>
           <div class="min-h-0 flex-initial">
           <el-table ref="ttTable" v-loading="typesQuery.isLoading.value" :data="filteredTicketTypes" row-key="id" stripe height="100%">
+            <template #empty>
+              <el-empty description="暂无类型——新建后在此管理" :image-size="60">
+                <el-button v-permission="'ticket:type:manage'" type="primary" @click="openTypeCreate">新建首个类型</el-button>
+              </el-empty>
+            </template>
             <el-table-column v-for="col in typeColumns" :key="col.prop" :prop="col.prop" :label="col.label" :width="col.width" :min-width="col.minWidth" :align="col.align">
               <template #default="{ row }">
                 <template v-if="col.prop === 'has_custom_fields'">

@@ -11,6 +11,7 @@
  * - 按钮码（000010/000031 种子）：ticket:update/close/assign/delete/comment/note/relation
  * - 静态路由（§3.2④，菜单外——入口在列表页「详情」按钮，挂 ticket:read 码）
  */
+import { formatDateTime } from '@/utils/datetime'
 import { computed, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
@@ -274,7 +275,7 @@ function labelOf(f: TicketTypeFieldDef, v: string): string {
 
 function formatTime(iso?: string): string {
   if (!iso) return '—'
-  return new Date(iso).toLocaleString('zh-CN', { hour12: false })
+  return formatDateTime(iso)
 }
 
 /** 动作后统一失效（close/assign/update 无有效响应体——S10 靠失效刷新，勿依赖返回值） */

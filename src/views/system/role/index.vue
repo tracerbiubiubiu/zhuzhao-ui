@@ -13,6 +13,7 @@
  * - 角色复制（随手项池排 W3）：预填源角色字段开创建框
  * - 菜单树走 vue-query（queryKey=['system','menus']）
  */
+import { apiErrorBody } from '@/utils/apiError'
 import { reactive, ref } from 'vue'
 import {
   ElButton, ElCard, ElDialog, ElForm, ElFormItem, ElInput, ElInputNumber, ElMessage,
@@ -158,7 +159,7 @@ async function submitEdit() {
     await queryClient.invalidateQueries({ queryKey: ['system', 'roles'] })
     tableRef.value?.refresh()
   } catch (err: unknown) {
-    const resp = (err as { response?: { data?: { code?: number; message?: string } } })?.response?.data
+    const resp = apiErrorBody(err)
     if (resp?.code === 10006) {
       editVisible.value = false
       ElMessage.warning('该角色已被他人修改，请刷新后重试')

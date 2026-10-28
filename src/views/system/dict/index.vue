@@ -9,6 +9,7 @@ import { reactive, ref } from 'vue'
 import {
   ElAlert, ElButton, ElCard, ElDialog, ElForm, ElInput, ElInputNumber, ElMessage, ElMessageBox,
   ElSwitch, ElTable, ElTableColumn, ElTag,
+  ElEmpty,
 } from 'element-plus'
 import { useTableFit } from '@vea/hooks'
 import {
@@ -209,6 +210,11 @@ useTableFit(itemsTable, () => items.value)
           :data="types" v-loading="typesLoading" row-key="id" highlight-current-row height="100%"
           @current-change="(r: DictTypeRow | null) => r && selectType(r)"
         >
+          <template #empty>
+            <el-empty description="暂无类型——新建后维护键值" :image-size="60">
+              <el-button v-permission="'dict:manage'" type="primary" size="small" @click="openTypeCreate">新建首个类型</el-button>
+            </el-empty>
+          </template>
           <el-table-column prop="code" label="code" min-width="120" />
           <el-table-column prop="name" label="名称" min-width="100" />
           <el-table-column label="启用" width="70" align="center">

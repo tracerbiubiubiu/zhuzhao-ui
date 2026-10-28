@@ -15,6 +15,7 @@
  *   EP 无内置 showLine）；「展开至 ▾」按级别展开（BI 矩阵同款，替换原展开全部按钮）；
  *   节点名悬停 title 显全路径（廉价兜底）
  */
+import { apiErrorBody } from '@/utils/apiError'
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import {
   ElButton, ElCard, ElDialog, ElDropdown, ElDropdownItem, ElDropdownMenu, ElForm,
@@ -278,7 +279,7 @@ async function submitEdit() {
     editVisible.value = false
     await refresh()
   } catch (err: unknown) {
-    const resp = (err as { response?: { data?: { code?: number; message?: string } } })?.response?.data
+    const resp = apiErrorBody(err)
     if (resp?.code === 10006) {
       editVisible.value = false
       await refresh()

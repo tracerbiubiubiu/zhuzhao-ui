@@ -7,6 +7,8 @@
  *   编辑器不拦破坏性操作，仅提示语义
  * - 废弃=幂等危险操作（deprecated 后数据写门关闭）；历史抽屉按 op/version 展示
  */
+import { apiErrorBody } from '@/utils/apiError'
+import { formatDateTime } from '@/utils/datetime'
 import { computed, reactive, ref } from 'vue'
 import { useTableFit } from '@vea/hooks'
 import {
@@ -131,7 +133,7 @@ async function submitEditor() {
     editorVisible.value = false
     refresh()
   } catch (err: unknown) {
-    const resp = (err as { response?: { data?: { code?: number; message?: string } } })?.response?.data
+    const resp = apiErrorBody(err)
     if (resp?.code === 100008) {
       // activelist 跨服务码段（≠zhuzhao 10006）——版本冲突统一 409+100008
       editorError.value = '版本冲突：类型已被他人变更，关闭后重新打开编辑（乐观锁）'
@@ -188,7 +190,7 @@ function fieldSummary(fields: AlFieldDef[] | undefined): string {
 
 function formatTime(iso?: string): string {
   if (!iso) return '—'
-  return new Date(iso).toLocaleString('zh-CN', { hour12: false })
+  return formatDateTime(iso)
 }
 
 const typesTable = ref()

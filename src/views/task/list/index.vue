@@ -14,6 +14,7 @@
  * - jobs 写操作挂 task:manage；trigger 对 enabled=false 后端 409——按钮同步禁用
  * - 「只看我提交的」仅运行记录（submitted_by=me 由 zhuzhao 代理换 actor 透传）
  */
+import { formatDateTime } from '@/utils/datetime'
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { useAutoFilterRun, useTableFit } from '@vea/hooks'
 import { usePermission } from '@/common/auth'
@@ -423,7 +424,7 @@ async function onSubmitTask() {
 
 function formatTime(iso?: string | null): string {
   if (!iso) return '—'
-  return new Date(iso).toLocaleString('zh-CN', { hour12: false })
+  return formatDateTime(iso)
 }
 
 const deadTable = ref()

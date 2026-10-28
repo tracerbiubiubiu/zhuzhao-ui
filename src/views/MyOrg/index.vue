@@ -8,6 +8,7 @@
  * - owner/admin 控件：组内角色 member↔admin（SetMemberRole）、数据范围（SetMemberScope）、
  *   移除成员（RemoveMember——不可移除 owner）
  */
+import { formatDateTime } from '@/utils/datetime'
 import { computed, ref } from 'vue'
 import { useTableFit } from '@vea/hooks'
 import {
@@ -219,7 +220,7 @@ useTableFit(rosterTable, () => roster.value)
           </template>
         </el-table-column>
         <el-table-column prop="joined_at" label="加入时间" width="170">
-          <template #default="{ row }">{{ row.joined_at ? new Date(row.joined_at).toLocaleString('zh-CN', { hour12: false }) : '—' }}</template>
+          <template #default="{ row }">{{ formatDateTime(row.joined_at) || '—' }}</template>
         </el-table-column>
         <el-table-column v-if="!readonlyMode" label="操作" width="150" fixed="right">
           <template #default="{ row }">

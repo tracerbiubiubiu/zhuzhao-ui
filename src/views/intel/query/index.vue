@@ -9,6 +9,7 @@
  * 次数徽标 + 趋势抽屉（日粒度柱状图，近 7/14/30 天可切）、类型/关键字/
  * 日期范围即时筛选、结果「结构化 / 原始 JSON」双视图（原始便于复制粘贴）。
  */
+import { formatDateTime, formatDateTimeShort } from '@/utils/datetime'
 import { computed, ref } from 'vue'
 import {
   ElButton, ElCard, ElDatePicker, ElDrawer, ElEmpty, ElInput, ElMessage, ElOption,
@@ -249,7 +250,7 @@ async function copyRaw() {
 }
 
 function formatTs(ts: number): string {
-  return new Date(ts).toLocaleString('zh-CN', { hour12: false })
+  return formatDateTime(ts)
 }
 
 /** 缓存 TTL 剩余的粗粒度人话表述（一次性快照不计时——刷新/重查即更新） */
@@ -265,7 +266,7 @@ function ttlText(iso: string): string {
 
 /** ISO 时间戳的分钟级短展示（缓存至 …） */
 function formatIsoMin(iso: string): string {
-  return iso ? new Date(iso).toLocaleString('zh-CN', { hour12: false, month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : ''
+  return formatDateTimeShort(iso)
 }
 </script>
 

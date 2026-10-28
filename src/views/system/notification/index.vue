@@ -10,6 +10,11 @@
             <span class="text-xs text-gray-400 ml-2">占位符用双花括号包字段名（ticket.title / ticket.human_key / ticket.link）；种子模板（系统）只读</span>
           </div>
           <el-table ref="tplTable" :data="templates" v-loading="tplLoading" size="small" border>
+            <template #empty>
+              <el-empty description="暂无模板——新建后供规则引用" :image-size="60">
+                <el-button v-permission="'notification:manage'" type="primary" size="small" @click="openTplCreate">新建首个模板</el-button>
+              </el-empty>
+            </template>
             <el-table-column prop="code" label="标识" width="200" />
             <el-table-column prop="name" label="名称" width="180" />
             <el-table-column prop="biz_type" label="业务域" width="80" />
@@ -36,6 +41,11 @@
             <span class="text-xs text-gray-400 ml-2">规则=开关与默认模板；notify 动作可在 params.template 逐次覆盖</span>
           </div>
           <el-table ref="ruleTable" :data="rules" v-loading="ruleLoading" size="small" border>
+            <template #empty>
+              <el-empty description="暂无规则——新建后按业务域路由通知" :image-size="60">
+                <el-button v-permission="'notification:manage'" type="primary" size="small" @click="openRuleCreate">新建首个规则</el-button>
+              </el-empty>
+            </template>
             <el-table-column prop="biz_type" label="业务域" width="80" />
             <el-table-column prop="event_action" label="事件动作" width="200" />
             <el-table-column prop="template_code" label="使用模板" width="200" />
@@ -64,7 +74,7 @@
               <template #default="{ row }"><el-tag :type="row.status === 'sent' ? 'success' : 'danger'" size="small">{{ row.status === 'sent' ? '已发' : '失败' }}</el-tag></template>
             </el-table-column>
             <el-table-column prop="created_at" label="时间" width="170">
-              <template #default="{ row }">{{ new Date(row.created_at).toLocaleString('zh-CN', { hour12: false }) }}</template>
+              <template #default="{ row }">{{ formatDateTime(row.created_at) }}</template>
             </el-table-column>
           </el-table>
           <div v-if="logTotal > logPageSize" class="mt-2 text-center">
@@ -161,12 +171,14 @@
  * 规则语义：biz_type+event_action 唯一（一事件一规则）——同键保存=改绑模板/收件人；规则=开关与默认模板，
  * notify 动作可在 params.template 逐次覆盖（000079 起 ticket.action_notify 有种子默认路由）。
  */
+import { formatDateTime } from '@/utils/datetime'
 import { reactive, ref, onMounted } from 'vue'
 import { useTableFit } from '@vea/hooks'
 import {
   ElAlert, ElButton, ElCard, ElDialog, ElForm, ElFormItem, ElInput,
   ElMessage, ElMessageBox, ElOption, ElPagination, ElSelect, ElSwitch,
   ElTabPane, ElTable, ElTableColumn, ElTabs, ElTag,
+  ElEmpty,
 } from 'element-plus'
 import request from '@/common/request'
 

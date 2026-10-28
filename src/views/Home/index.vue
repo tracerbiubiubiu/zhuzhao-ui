@@ -8,6 +8,7 @@
  * 待办=分派给我且未关闭（assigned+in_progress），已办=分派给我且已关闭（closed）
  */
 
+import { formatDateTime } from '@/utils/datetime'
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElCard, ElCol, ElRow, ElTable, ElTableColumn, ElTag, ElEmpty } from 'element-plus'
@@ -91,7 +92,7 @@ onMounted(async () => {
 function formatTime(iso?: string): string {
   if (!iso) return ''
   // P3-8 修复：对齐仓内范式（toLocaleString zh-CN+hour12:false）——原 replace('T',' ') 无时区转换
-  return new Date(iso).toLocaleString('zh-CN', { hour12: false })
+  return formatDateTime(iso)
 }
 
 const homeTable = ref()

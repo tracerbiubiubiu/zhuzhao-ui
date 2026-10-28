@@ -9,6 +9,7 @@ import {
   ElAlert, ElButton, ElCard, ElDialog, ElForm, ElFormItem, ElInput, ElInputNumber,
   ElOption, ElSelect,
   ElMessage, ElMessageBox, ElSwitch, ElTable, ElTableColumn, ElTag,
+  ElEmpty,
 } from 'element-plus'
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
 import {
@@ -117,6 +118,11 @@ async function onToggle(row: AssignmentRuleRow) {
         工单创建后按 priority 升序遍历——首个 keyword 命中的规则自动分派到 target_user（须属 target_org）；无命中保持 open。
       </div>
       <el-table ref="ruleTable" v-loading="rulesQuery.isLoading.value" :data="rulesQuery.data.value ?? []" stripe>
+        <template #empty>
+          <el-empty description="暂无规则——新建后按关键词自动分派" :image-size="60">
+            <el-button v-permission="'ticket:type:manage'" type="primary" @click="openCreate">新建首个规则</el-button>
+          </el-empty>
+        </template>
         <el-table-column prop="id" label="ID" width="70" />
         <el-table-column prop="type_code" label="工单类型" width="120" />
         <el-table-column prop="keyword" label="关键词（LIKE）" min-width="120">

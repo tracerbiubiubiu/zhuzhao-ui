@@ -8,6 +8,7 @@
  * - 编辑成功后重拉 /user/profile 刷新 store（侧栏头像等消费点同步）
  */
 
+import { formatDateTime } from '@/utils/datetime'
 import { reactive, ref, computed } from 'vue'
 import {
   ElCard, ElForm, ElFormItem, ElInput, ElButton, ElDescriptions,
@@ -173,7 +174,7 @@ async function copySecret() {
 
 function formatTime(iso?: string | null): string {
   if (!iso) return '—'
-  return new Date(iso).toLocaleString('zh-CN', { hour12: false })
+  return formatDateTime(iso)
 }
 </script>
 

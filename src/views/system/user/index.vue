@@ -11,6 +11,8 @@
  * - 时间本地化渲染（new Date + toLocaleString——后端 RFC3339 带时区）
  * - 服务端态走 vue-query（角色字典 queryKey=['system','roles']）；列表态归 ProTable/useCrud
  */
+import { apiErrorBody } from '@/utils/apiError'
+import { formatDateTime } from '@/utils/datetime'
 import { computed, reactive, ref } from 'vue'
 import {
   ElAlert, ElButton, ElCard, ElDialog, ElDropdown, ElDropdownItem, ElDropdownMenu,
@@ -95,7 +97,7 @@ function onMoreCommand(cmd: UserMoreCommand, row: UserRow) {
 
 function formatTime(iso: string): string {
   if (!iso) return '—'
-  return new Date(iso).toLocaleString('zh-CN', { hour12: false })
+  return formatDateTime(iso)
 }
 
 // ─── 新建/编辑对话框 ───
@@ -169,7 +171,7 @@ async function submitEdit() {
     editVisible.value = false
     tableRef.value?.refresh({ resetPage: editIsCreate.value })
   } catch (err: unknown) {
-    const resp = (err as { response?: { data?: { code?: number; message?: string } } })?.response?.data
+    const resp = apiErrorBody(err)
     if (resp?.code === 10006) {
       // 乐观锁冲突范式（01 §3.3：重拉让用户重填，非 toast）——列表行 version 已过期
       editVisible.value = false
@@ -342,7 +344,7 @@ async function submitOrgs() {
     orgsVisible.value = false
     tableRef.value?.refresh()
   } catch (err: unknown) {
-    const resp = (err as { response?: { data?: { code?: number; message?: string } } })?.response?.data
+    const resp = apiErrorBody(err)
     orgsError.value = resp?.message ?? '保存失败，请稍后重试'
   } finally {
     orgsLoading.value = false

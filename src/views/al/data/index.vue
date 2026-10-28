@@ -13,6 +13,8 @@
  * - 2026-10-12 两栏改版：类型选择由下拉改**左右双栏**（左类型清单分组+搜索，右数据区）——
  *   类型全集与废弃态一眼可见；废弃只读/门控语义不变
  */
+import { apiErrorBody } from '@/utils/apiError'
+import { formatDateTime } from '@/utils/datetime'
 import { computed, reactive, ref, watch } from 'vue'
 import { useTableFit } from '@vea/hooks'
 import {
@@ -277,7 +279,7 @@ async function submitForm() {
     formVisible.value = false
     refresh()
   } catch (err: unknown) {
-    const resp = (err as { response?: { data?: { code?: number; message?: string } } })?.response?.data
+    const resp = apiErrorBody(err)
     // 100008(CONFLICT) 双语义分档：版本冲突仅存在于更新路径（插入无乐观锁）；
     // 插入态透传后端原文（唯一键冲突等——否则被误标成「版本冲突」）
     if (!formIsCreate.value && resp?.code === 100008) {
@@ -392,7 +394,7 @@ function cellText(f: AlFieldDef, row: AlDataDoc): string {
 
 function formatTime(iso?: string): string {
   if (!iso) return '—'
-  return new Date(iso).toLocaleString('zh-CN', { hour12: false })
+  return formatDateTime(iso)
 }
 
 // ─── 行详情抽屉（点行开——动态 schema 行的全字段视图；编辑/删除收进抽屉底部）───

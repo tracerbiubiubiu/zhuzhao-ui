@@ -7,6 +7,7 @@
  * - offset 分页（ProTable）；行展开显 request_body/user_agent（审计溯源载荷）
  * - P4-8 对账/指标极简查询页：后端本体未开工（穿插池件），本页不含——随本体批交付
  */
+import { formatDateTime } from '@/utils/datetime'
 import { reactive, ref, watch } from 'vue'
 import { ElAlert, ElButton, ElCard, ElDatePicker, ElDescriptions, ElDescriptionsItem, ElDialog, ElForm, ElFormItem, ElInput, ElOption, ElPagination, ElSelect, ElTabPane, ElTable, ElTableColumn, ElTabs, ElTag } from 'element-plus'
 import ProTable from '@/components/ProTable/index.vue'
@@ -69,7 +70,7 @@ function statusTag(code: number): 'success' | 'danger' | 'warning' {
 
 function formatTime(iso?: string): string {
   if (!iso) return '—'
-  return new Date(iso).toLocaleString('zh-CN', { hour12: false })
+  return formatDateTime(iso)
 }
 
 const payloadVisible = ref(false)
