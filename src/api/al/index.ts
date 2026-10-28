@@ -119,7 +119,17 @@ export async function listAlTypeHistoryApi(typeName: string): Promise<{ list: Al
 
 export async function listAlDataApi(
   typeName: string,
-  params: { page_size?: number; after_created_at?: string; after_id?: string; include_deleted?: boolean },
+  params: {
+    page_size?: number
+    after_created_at?: string
+    after_id?: string
+    include_deleted?: boolean
+    /** 关键字——全标量字段 ILIKE 模糊（≤100 字符，2026-10-28） */
+    q?: string
+    /** 单字段精确筛选（与 value 成对；限标量字段） */
+    field?: string
+    value?: string
+  },
 ): Promise<{ list: AlDataDoc[]; page_size: number; next_cursor: AlCursor | null }> {
   const data = await request.get(`/al/api/v1/data/${encodeURIComponent(typeName)}`, { params })
   return data as unknown as { list: AlDataDoc[]; page_size: number; next_cursor: AlCursor | null }
