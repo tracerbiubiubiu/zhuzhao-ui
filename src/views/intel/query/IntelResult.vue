@@ -19,6 +19,12 @@ function isPlainObject(v: unknown): v is Record<string, unknown> {
   return !!v && typeof v === 'object' && !Array.isArray(v)
 }
 
+/** 短标量（≤36 字符且非 URL）并排成列，长值（hash/URL/长文）跨全列——多列网格判定 */
+function isWideScalar(v: unknown): boolean {
+  const s = String(v ?? '')
+  return s.length > 36 || s.startsWith('http')
+}
+
 /** 点击标量值复制（威胁情报典型用法——取单个 hash/IP 去别处用） */
 async function copyScalar(v: unknown) {
   try {
@@ -31,7 +37,7 @@ async function copyScalar(v: unknown) {
 </script>
 
 <template>
-  <div class="ir-row">
+  <div class="ir-row" :class="label === undefined ? 'ir-root' : ''">
     <span v-if="label !== undefined" class="ir-key">{{ label }}</span>
 
     <div
@@ -57,14 +63,14 @@ async function copyScalar(v: unknown) {
       v-else-if="data === null" class="ir-scalar ir-null"
     >null</span>
     <span
-      v-else-if="typeof data === 'boolean'" class="ir-scalar ir-bool ir-copy"
+      v-else-if="typeof data === 'boolean'" class="ir-scalar ir-bool ir-copy" :class="isWideScalar(data) ? 'ir-col-wide' : ''"
       title="点击复制" @click="copyScalar(data)"
     >{{ data }}</span>
     <span
-      v-else-if="typeof data === 'number'" class="ir-scalar ir-num ir-copy"
+      v-else-if="typeof data === 'number'" class="ir-scalar ir-num ir-copy" :class="isWideScalar(data) ? 'ir-col-wide' : ''"
       title="点击复制" @click="copyScalar(data)"
     >{{ data }}</span>
-    <span v-else class="ir-scalar ir-str ir-copy" title="点击复制" @click="copyScalar(data)">{{ String(data) }}</span>
+    <span v-else class="ir-scalar ir-str ir-copy" :class="isWideScalar(data) ? 'ir-col-wide' : ''" title="点击复制" @click="copyScalar(data)">{{ String(data) }}</span>
   </div>
 </template>
 
@@ -86,6 +92,8 @@ async function copyScalar(v: unknown) {
 }
 
 /* 嵌套容器：浅底色+左缘细线区分层级 */
+/* 多列网格（2026-10-28 走查批）：顶层短标量并排 2–3 列自适应、长值与嵌套层跨全列
+   （VirusTotal 报告页属性区同构）——仅顶层 .ir-box（无 label 时）启用网格 */
 .ir-box {
   flex: 1 1 100%;
   display: flex;
@@ -96,6 +104,16 @@ async function copyScalar(v: unknown) {
   border-left: 2px solid var(--el-border-color);
   border-radius: 4px;
   background: var(--el-fill-color-lighter);
+}
+
+.ir-root > .ir-box {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 3px 14px;
+}
+
+.ir-col-wide {
+  grid-column: 1 / -1;
 }
 
 .ir-scalar {

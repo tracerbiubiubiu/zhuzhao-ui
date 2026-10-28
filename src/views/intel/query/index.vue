@@ -14,6 +14,7 @@ import { computed, ref } from 'vue'
 import {
   ElButton, ElCard, ElDatePicker, ElDrawer, ElEmpty, ElInput, ElMessage, ElOption,
   ElRadioButton, ElRadioGroup, ElSelect, ElTable, ElTableColumn, ElTag,
+ElPagination, ElTabPane, ElTabs,
 } from 'element-plus'
 import { useTableFit } from '@vea/hooks'
 import { queryIntelApi } from '@/api/intel'
@@ -37,6 +38,10 @@ const hitCount = ref(0)
 const lastValue = ref('')
 /** 结果展示形态：结构化键值树 / 原始 JSON（复制粘贴友好） */
 const resultView = ref<'pretty' | 'raw'>('pretty')
+/** 页内双 Tab（2026-10-28 走查批）：查询页聚焦表单+结果；历史页独立承载分组/分页/筛选 */
+const activeTab = ref<'query' | 'history'>('query')
+/** 组表时间列标签（组行=最近一次；子行=该次） */
+const dateLabel = '查询时间（组=最近）'
 
 // ─── 本机查询流水（localStorage 按 employee_no 隔离；追加式、时间降序）───
 
@@ -86,8 +91,8 @@ function recordHistory(entry: IntelHistoryEntry) {
   persistHistory()
 }
 
-/** 历史行点击/行内按钮 → 回填表单并发起查询（查看型列表行点击直达惯例） */
-function rerun(row: IntelHistoryEntry) {
+/** 历史（组/次）行点击或按钮 → 回填表单并发起查询（查看型列表行点击直达惯例） */
+function rerun(row: { type: string; value: string }) {
   intelType.value = row.type
   value.value = row.value
   query()
@@ -210,9 +215,69 @@ function resetFilters() {
   filterType.value = ''
   filterKeyword.value = ''
   filterRange.value = null
+  datePreset.value = ''
+  groupedPage.value = 1
 }
 
-useTableFit(historyTable, () => filteredHistory.value)
+// ─── 快捷日期（2026-10-28 走查批：daterange 常驻占宽 → 快捷段+自定义按需弹出）───
+const datePreset = ref<'' | '7d' | '30d' | 'custom'>('')
+function applyDatePreset(v: string | number | boolean | undefined) {
+  const p = (v ?? '') as '' | '7d' | '30d' | 'custom'
+  datePreset.value = p
+  groupedPage.value = 1
+  if (p === '7d' || p === '30d') {
+    const today = new Date()
+    const pad = (n: number) => String(n).padStart(2, '0')
+    const from = new Date(today.getTime() - (Number(p.slice(0, 1)) * 7 - 1) * 86400000)
+    filterRange.value = [
+      `${from.getFullYear()}-${pad(from.getMonth() + 1)}-${pad(from.getDate())}`,
+      `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`,
+    ]
+  } else if (p === '') {
+    filterRange.value = null
+  }
+  // custom：保留现值由 daterange 选择
+}
+
+// ─── 历史分组视图（2026-10-28 走查批：同查询值合并、组为单位分页+点开明细）───
+// 存储仍为追加式流水（统计依赖）；展示层按 类型+值 聚合——组行=汇总（次数/最近），
+// children=逐次记录（默认收起，展开见明细）。
+interface HistoryGroupRow {
+  isGroup: true
+  key: string
+  type: string
+  value: string
+  count: number
+  lastTs: number
+  lastStale: boolean
+  lastHit: number
+  children: IntelHistoryEntry[]
+}
+
+const groupedHistory = computed<HistoryGroupRow[]>(() => {
+  const map = new Map<string, HistoryGroupRow>()
+  // filteredHistory 本身时间降序（追加式 unshift）——首见即最近
+  for (const e of filteredHistory.value) {
+    const key = `${e.type}|${e.value}`
+    let g = map.get(key)
+    if (!g) {
+      g = { isGroup: true, key, type: e.type, value: e.value, count: 0, lastTs: e.ts, lastStale: e.stale, lastHit: e.hit_count, children: [] }
+      map.set(key, g)
+    }
+    g.count += 1
+    g.children.push(e)
+  }
+  return [...map.values()].sort((a, b) => b.lastTs - a.lastTs)
+})
+
+// 客户端分页（组为单位，面板型 20/页——数据全量在内存）
+const GROUP_PAGE_SIZE = 20
+const groupedPage = ref(1)
+const pagedGroups = computed(() =>
+  groupedHistory.value.slice((groupedPage.value - 1) * GROUP_PAGE_SIZE, groupedPage.value * GROUP_PAGE_SIZE),
+)
+
+useTableFit(historyTable, () => pagedGroups.value)
 
 // ─── 查询 ───
 
@@ -272,9 +337,11 @@ function formatIsoMin(iso: string): string {
 
 <template>
   <div class="fill-page">
-    <el-card shadow="never" class="mb-4 !flex-none">
+    <el-card shadow="never">
       <template #header><span class="font-semibold">威胁情报查询（缓存代理——先本地缓存后上游）</span></template>
-      <div class="flex items-center gap-2 mb-3">
+      <el-tabs v-model="activeTab" class="fill-tabs">
+        <el-tab-pane label="查询" name="query">
+        <div class="flex items-center gap-2 mb-3">
         <el-select v-model="intelType" class="!w-[120px]">
           <el-option label="IP" value="ip" />
           <el-option label="域名" value="domain" />
@@ -310,75 +377,103 @@ function formatIsoMin(iso: string): string {
         </div>
         <pre v-else class="text-xs bg-gray-50 dark:bg-gray-800 p-3 rounded overflow-auto max-h-[360px]">{{ JSON.stringify(result, null, 2) }}</pre>
       </template>
-      <el-empty v-else description="输入查询值开始" :image-size="60" />
-    </el-card>
+        <el-empty v-else description="输入查询值开始" :image-size="60" />
+        </el-tab-pane>
 
-    <el-card shadow="never">
-      <template #header>
-        <div class="flex flex-wrap items-center gap-x-4 gap-y-1">
-          <span class="font-semibold">
-            查询历史
-            <span class="text-xs text-gray-400 font-normal">本机记录 · 按时间降序 · 点击行重新查询</span>
+        <el-tab-pane label="查询历史" name="history" lazy>
+        <!-- 统计徽标（聚合口径；逐日趋势在「趋势」抽屉） -->
+        <div class="flex flex-wrap items-center gap-3 mb-3">
+          <span v-for="s in stats" :key="s.label" class="text-xs text-gray-500">
+            {{ s.label }} <span class="font-semibold text-sm">{{ s.count }}</span> 次
           </span>
-          <!-- 查询次数统计（聚合口径；逐日趋势在「趋势」抽屉） -->
-          <div class="ml-auto flex items-baseline gap-3 text-xs text-gray-500">
-            <span v-for="s in stats" :key="s.label">
-              {{ s.label }} <span class="font-semibold text-sm">{{ s.count }}</span> 次
-            </span>
-            <el-button link type="primary" size="small" @click="trendOpen = true">趋势</el-button>
-          </div>
+          <el-button link type="primary" size="small" @click="trendOpen = true">趋势</el-button>
         </div>
-      </template>
 
-      <!-- 筛选栏（客户端即时过滤——变更即生效，重置钉右） -->
-      <div class="flex flex-wrap items-center gap-4 mb-3">
-        <el-select v-model="filterType" class="!w-[110px]">
-          <el-option label="全部类型" value="" />
-          <el-option v-for="(l, t) in TYPE_LABELS" :key="t" :label="l" :value="t" />
-        </el-select>
-        <el-input v-model="filterKeyword" placeholder="查询值关键字" class="!w-[160px]" clearable />
-        <el-date-picker
-          v-model="filterRange" type="daterange" value-format="YYYY-MM-DD"
-          start-placeholder="开始日期" end-placeholder="结束日期" class="!w-[210px]"
-        />
-        <el-button class="ml-auto !mr-0" size="small" @click="resetFilters">重置</el-button>
-      </div>
+        <!-- 筛选栏（客户端即时过滤）：类型/关键字 + 快捷日期段（自定义按需弹出，省常驻宽） -->
+        <div class="flex flex-wrap items-center gap-3 mb-3">
+          <el-select v-model="filterType" class="!w-[110px]" @change="groupedPage = 1">
+            <el-option label="全部类型" value="" />
+            <el-option v-for="(l, t) in TYPE_LABELS" :key="t" :label="l" :value="t" />
+          </el-select>
+          <el-input v-model="filterKeyword" placeholder="查询值关键字" class="!w-[160px]" clearable @input="groupedPage = 1" />
+          <el-radio-group
+            :model-value="datePreset" size="small"
+            @update:model-value="(v: string | number | boolean | undefined) => applyDatePreset(v)"
+          >
+            <el-radio-button value="">全部</el-radio-button>
+            <el-radio-button value="7d">近 7 天</el-radio-button>
+            <el-radio-button value="30d">近 30 天</el-radio-button>
+            <el-radio-button value="custom">自定义</el-radio-button>
+          </el-radio-group>
+          <el-date-picker
+            v-if="datePreset === 'custom'"
+            v-model="filterRange" type="daterange" value-format="YYYY-MM-DD"
+            start-placeholder="开始日期" end-placeholder="结束日期" class="!w-[210px]"
+            @change="groupedPage = 1"
+          />
+          <el-button class="ml-auto !mr-0" size="small" @click="resetFilters">重置</el-button>
+        </div>
 
-      <!-- 主列表包裹层：flex-1 吃满卡片剩余高（复合页主列表配方；行多内滚/行少表格区内留白） -->
-      <div class="min-h-0 flex-1">
-        <el-table
-          ref="historyTable" :data="filteredHistory" height="100%" row-key="ts"
-          class="history-table" @row-click="(row: IntelHistoryEntry) => rerun(row)"
-        >
-          <el-table-column label="查询时间" width="170">
-            <template #default="{ row }">{{ formatTs(row.ts as number) }}</template>
-          </el-table-column>
-          <el-table-column label="类型" width="90">
-            <template #default="{ row }">
-              <el-tag size="small" effect="plain">{{ TYPE_LABELS[row.type as string] ?? row.type }}</el-tag>
+        <!-- 分组树表：组行=同查询值合并（次数/最近），展开见逐次记录；组为单位客户端分页 -->
+        <div class="min-h-0 flex-1">
+          <el-table
+            ref="historyTable" :data="pagedGroups" height="100%" row-key="key"
+            :tree-props="{ children: 'children' }" default-expand-all
+            class="history-table"
+            :row-class-name="({ row }: { row: { isGroup?: boolean } }) => (row.isGroup ? 'history-group-row' : 'history-child-row')"
+          >
+            <el-table-column label="查询值" min-width="240" show-overflow-tooltip>
+              <template #default="{ row }">
+                <el-tag v-if="row.isGroup" size="small" effect="plain" class="mr-1">{{ TYPE_LABELS[row.type as string] ?? row.type }}</el-tag>
+                <span :class="row.isGroup ? 'font-medium' : 'text-gray-400'">{{ row.value }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="次数" width="80" align="center">
+              <template #default="{ row }">
+                <el-tag v-if="row.isGroup" size="small" type="info" effect="plain">{{ row.count }} 次</el-tag>
+                <span v-else class="text-xs text-gray-400">—</span>
+              </template>
+            </el-table-column>
+            <el-table-column :label="dateLabel" width="170">
+              <template #default="{ row }">
+                {{ row.isGroup ? formatTs(row.lastTs as number) : formatTs(row.ts as number) }}
+              </template>
+            </el-table-column>
+            <el-table-column label="缓存状态" width="130">
+              <template #default="{ row }">
+                <template v-if="row.isGroup">
+                  <el-tag v-if="row.lastStale" type="warning" size="small">陈旧缓存</el-tag>
+                  <span v-else-if="row.lastHit > 0" class="text-xs text-gray-500">命中 {{ row.lastHit }} 次</span>
+                  <span v-else class="text-xs text-gray-400">首次查询</span>
+                </template>
+                <template v-else>
+                  <el-tag v-if="row.stale" type="warning" size="small">陈旧缓存</el-tag>
+                  <span v-else-if="row.hit_count > 0" class="text-xs text-gray-500">命中 {{ row.hit_count }} 次</span>
+                  <span v-else class="text-xs text-gray-400">首次查询</span>
+                </template>
+              </template>
+            </el-table-column>
+            <el-table-column label="操作" width="80" fixed="right">
+              <template #default="{ row }">
+                <el-button link type="primary" size="small" @click.stop="rerun(row as { type: string; value: string })">查询</el-button>
+              </template>
+            </el-table-column>
+            <template #empty>
+              <el-empty v-if="!history.length" description="暂无查询记录——在「查询」页发起首笔查询" :image-size="60" />
+              <el-empty v-else description="无匹配记录——调整或重置筛选条件" :image-size="60" />
             </template>
-          </el-table-column>
-          <el-table-column label="查询值" min-width="220" show-overflow-tooltip>
-            <template #default="{ row }">{{ row.value }}</template>
-          </el-table-column>
-          <el-table-column label="缓存状态" width="130">
-            <template #default="{ row }">
-              <el-tag v-if="row.stale" type="warning" size="small">陈旧缓存</el-tag>
-              <span v-else-if="row.hit_count > 0" class="text-xs text-gray-500">命中 {{ row.hit_count }} 次</span>
-              <span v-else class="text-xs text-gray-400">首次查询</span>
-            </template>
-          </el-table-column>
-          <el-table-column label="操作" width="80" fixed="right">
-            <template #default="{ row }">
-              <el-button link type="primary" size="small" @click.stop="rerun(row as IntelHistoryEntry)">查询</el-button>
-            </template>
-          </el-table-column>
-          <template #empty>
-            <el-empty v-if="!history.length" description="暂无查询记录——在上方发起首笔查询" :image-size="60" />
-            <el-empty v-else description="无匹配记录——调整或重置筛选条件" :image-size="60" />
-          </template>
-        </el-table>
-      </div>
+          </el-table>
+        </div>
+
+        <!-- 分组分页（面板型：钉右+total 必显——分页统一约定） -->
+        <div class="mt-3 flex justify-end">
+          <el-pagination
+            v-model:current-page="groupedPage" :page-size="GROUP_PAGE_SIZE"
+            :total="groupedHistory.length" layout="total, prev, pager, next"
+          />
+        </div>
+        </el-tab-pane>
+      </el-tabs>
     </el-card>
 
     <!-- 查询趋势抽屉：日粒度柱状图（近 7/14/30 天）——周/月分桶见 script 注记 -->

@@ -31,7 +31,8 @@ test('W5 冒烟：审计日志页渲染+工号过滤+请求详情弹窗', async 
   // 请求详情弹窗（2026-10-12 由「载荷」升级：descriptions 全上下文 + request_body 美化区）
   // ——内容级断言延续（2026-10-02 加固）：pre 必须非空（'（无 body）' 占位亦算）
   await rows.first().getByRole('button', { name: '详情' }).click()
-  const dlg = page.locator('.el-dialog').filter({ hasText: '请求详情' })
+  // 2026-10-28 走查批适配：详情由居中弹窗改右侧抽屉（看报文保留列表上下文）
+  const dlg = page.locator('.el-drawer').filter({ hasText: '请求详情' })
   await expect(dlg).toBeVisible()
   const preText = await dlg.locator('pre').innerText({ timeout: 10_000 })
   expect(preText.trim().length, '载荷 pre 内容为空——美化区未渲染').toBeGreaterThan(0)

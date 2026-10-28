@@ -9,7 +9,7 @@
  */
 import { formatDateTime } from '@/utils/datetime'
 import { reactive, ref, watch } from 'vue'
-import { ElAlert, ElButton, ElCard, ElDatePicker, ElDescriptions, ElDescriptionsItem, ElDialog, ElForm, ElFormItem, ElInput, ElOption, ElPagination, ElSelect, ElTabPane, ElTable, ElTableColumn, ElTabs, ElTag } from 'element-plus'
+import { ElMessage, ElAlert, ElButton, ElCard, ElDatePicker, ElDescriptions, ElDescriptionsItem, ElDrawer, ElForm, ElFormItem, ElInput, ElOption, ElPagination, ElSelect, ElTabPane, ElTable, ElTableColumn, ElTabs, ElTag } from 'element-plus'
 import ProTable from '@/components/ProTable/index.vue'
 import UserNameText from '@/components/UserNameText/index.vue'
 import type { ProTableColumn } from '@/components/ProTable/types'
@@ -20,7 +20,7 @@ import { useAutoFilterRun, useTableFit } from '@vea/hooks'
 defineOptions({ name: 'audit_log_page' })
 
 const tableRef = ref<InstanceType<typeof ProTable>>()
-const search = reactive({ employee_no: '', path: '', method: '', range: [] as string[] })
+const search = reactive({ employee_no: '', path: '', method: [] as string[], range: [] as string[] })
 
 // 筛选即时生效（筛选栏配方触发口径：全部控件变更即查，文本防抖 300ms 收敛）
 useAutoFilterRun(
@@ -31,7 +31,7 @@ useAutoFilterRun(
 function onReset() {
   search.employee_no = ''
   search.path = ''
-  search.method = ''
+  search.method = []
   search.range = []
   tableRef.value?.refresh({ resetPage: true })
 }
@@ -42,7 +42,7 @@ function fetcher(params: { page: number; page_size: number }) {
     page_size: params.page_size,
     ...(search.employee_no ? { employee_no: search.employee_no.trim() } : {}),
     ...(search.path ? { path: search.path.trim() } : {}),
-    ...(search.method ? { method: search.method } : {}),
+    ...(search.method.length ? { method: search.method.join(',') } : {}),
     ...(search.range?.[0] ? { start: String(search.range[0]) } : {}),
     ...(search.range?.[1] ? { end: String(search.range[1]) } : {}),
   })
@@ -88,6 +88,22 @@ function prettyBody(row: AuditLogRow): string {
     return JSON.stringify(JSON.parse(row.request_body), null, 2)
   } catch {
     return row.request_body
+  }
+}
+
+/** 一键复制请求报文（格式化 JSON；空报文提示） */
+async function copyRequestBody() {
+  if (!payloadRow.value) return
+  const text = prettyBody(payloadRow.value)
+  if (!text || text === '—') {
+    ElMessage.info('该请求无报文（GET 类或空 body）')
+    return
+  }
+  try {
+    await navigator.clipboard.writeText(text)
+    ElMessage.success('已复制请求报文')
+  } catch {
+    ElMessage.error('复制失败（浏览器剪贴板权限）')
   }
 }
 
@@ -143,7 +159,7 @@ useTableFit(panicsTable, () => panics.value)
               <el-input v-model="search.employee_no" placeholder="如 E000001（含已删用户）" clearable class="!w-44" />
             </el-form-item>
             <el-form-item label="方法">
-              <el-select v-model="search.method" placeholder="全部" clearable class="!w-[110px]">
+              <el-select v-model="search.method" multiple collapse-tags placeholder="全部" clearable class="!w-[150px]" data-testid="audit-method-filter">
                 <el-option v-for="m in ['GET', 'POST', 'PUT', 'DELETE', 'PATCH']" :key="m" :label="m" :value="m" />
               </el-select>
             </el-form-item>
@@ -233,8 +249,15 @@ useTableFit(panicsTable, () => panics.value)
     </el-tabs>
 
     <!-- 审计载荷（request_body JSON 美化——溯源） -->
-    <!-- 请求详情：审计上下文全字段 + 请求体（载荷溯源）——2026-10-12 由「载荷」弹窗升级 -->
-    <el-dialog v-model="payloadVisible" :title="`#${payloadRow?.id ?? ''} 请求详情`" width="640px">
+    <!-- 请求详情：右侧抽屉（看报文时保留列表上下文——2026-10-28 走查批由居中弹窗改）
+         + 一键复制报文（格式化 JSON） -->
+    <el-drawer v-model="payloadVisible" :title="`#${payloadRow?.id ?? ''} 请求详情`" size="620px">
+      <template #header>
+        <div class="flex items-center gap-2">
+          <span class="font-semibold">#{{ payloadRow?.id ?? '' }} 请求详情</span>
+          <el-button link type="primary" size="small" data-testid="audit-copy-body" @click="copyRequestBody">复制报文</el-button>
+        </div>
+      </template>
       <el-descriptions v-if="payloadRow" :column="2" border size="small">
         <el-descriptions-item label="操作人">{{ payloadRow.username || '—' }}</el-descriptions-item>
         <el-descriptions-item label="时间">{{ formatTime(payloadRow.created_at) }}</el-descriptions-item>
@@ -251,6 +274,6 @@ useTableFit(panicsTable, () => panics.value)
           <pre class="whitespace-pre-wrap text-xs bg-gray-50 dark:bg-gray-800 p-3 rounded max-h-[280px] overflow-auto m-0">{{ prettyBody(payloadRow) }}</pre>
         </el-descriptions-item>
       </el-descriptions>
-    </el-dialog>
+    </el-drawer>
   </div>
 </template>
