@@ -18,7 +18,7 @@ import { useTableFit } from '@vea/hooks'
 import {
   ElAlert, ElButton, ElCard, ElDescriptions, ElDescriptionsItem, ElDialog, ElDrawer,
   ElEmpty, ElForm, ElFormItem, ElInput, ElInputNumber, ElMessage, ElMessageBox,
-  ElTable, ElTableColumn, ElTag,
+  ElOption, ElSelect, ElTable, ElTableColumn, ElTag,
 } from 'element-plus'
 import { useRouter } from 'vue-router'
 import { useQuery } from '@tanstack/vue-query'
@@ -85,6 +85,8 @@ async function fetchPage(cursor: AlCursor | null) {
     const res = await listAlDataApi(selectedType.value, {
       page_size: pageSize.value,
       include_deleted: true,
+      ...(filt.q ? { q: filt.q } : {}),
+      ...(filt.field && filt.value ? { field: filt.field, value: filt.value } : {}),
       ...(cursor ? { after_created_at: cursor.after_created_at, after_id: cursor.after_id } : {}),
     })
     if (seq !== fetchSeq) return // 已切别的类型——弃置过期响应
@@ -109,7 +111,34 @@ function goPrev() {
   fetchPage(popCursor(cursorStack.value))
 }
 
+// ─── 搜索/筛选（2026-10-28：q 全标量字段模糊 + 字段/值精确——后端同批交付）───
+// 变更即查（筛选栏配方：文本 300ms 防抖）；筛选变更重置游标从头查
+const filt = reactive({ q: '', field: '', value: '' })
+const scalarFieldNames = computed(() =>
+  schema.value.filter((f) => f.type === 'int' || f.type === 'string').map((f) => f.name),
+)
+let filtTimer: ReturnType<typeof setTimeout> | undefined
+function scheduleFiltFetch() {
+  clearTimeout(filtTimer)
+  filtTimer = setTimeout(() => {
+    resetCursor(cursorStack.value)
+    fetchPage(null)
+  }, 300)
+}
+function resetFilt() {
+  clearTimeout(filtTimer)
+  filt.q = ''
+  filt.field = ''
+  filt.value = ''
+  resetCursor(cursorStack.value)
+  fetchPage(null)
+}
+
 watch(selectedType, () => {
+  clearTimeout(filtTimer)
+  filt.q = ''
+  filt.field = ''
+  filt.value = ''
   resetCursor(cursorStack.value)
   list.value = []
   fetchPage(null)
@@ -249,7 +278,9 @@ async function submitForm() {
     refresh()
   } catch (err: unknown) {
     const resp = (err as { response?: { data?: { code?: number; message?: string } } })?.response?.data
-    if (resp?.code === 100008) {
+    // 100008(CONFLICT) 双语义分档：版本冲突仅存在于更新路径（插入无乐观锁）；
+    // 插入态透传后端原文（唯一键冲突等——否则被误标成「版本冲突」）
+    if (!formIsCreate.value && resp?.code === 100008) {
       formError.value = '版本冲突：该行已被他人变更，关闭后重开编辑（乐观锁）'
     } else {
       formError.value = resp?.message ?? '保存失败，请稍后重试'
@@ -470,6 +501,25 @@ useTableFit(dataTable, () => list.value)
           type="warning" show-icon :closable="false" class="mb-3"
         />
 
+        <!-- 搜索/筛选（2026-10-28）：关键字全标量字段模糊 + 单字段精确；变更即查 300ms 防抖 -->
+        <div v-if="selectedType" class="flex flex-wrap items-center gap-4 mb-3">
+          <el-input
+            v-model="filt.q" placeholder="关键字（全字段模糊）" class="!w-[220px]" clearable
+            data-testid="al-data-q" @input="scheduleFiltFetch"
+          />
+          <el-select
+            v-model="filt.field" placeholder="筛选字段" clearable class="!w-[140px]"
+            data-testid="al-data-field" @change="scheduleFiltFetch"
+          >
+            <el-option v-for="n in scalarFieldNames" :key="n" :label="n" :value="n" />
+          </el-select>
+          <el-input
+            v-model="filt.value" placeholder="字段值（精确）" class="!w-[160px]" clearable
+            :disabled="!filt.field" data-testid="al-data-value" @input="scheduleFiltFetch"
+          />
+          <el-button size="small" @click="resetFilt">重置</el-button>
+        </div>
+
         <el-empty v-if="!listLoading && !list.length" description="暂无数据">
           <el-button v-if="!isDeprecated" v-permission="'activelist:data:write'" type="primary" @click="openCreate">写入首条</el-button>
         </el-empty>
@@ -478,12 +528,8 @@ useTableFit(dataTable, () => list.value)
           <div class="min-h-0 flex-initial">
             <el-table ref="dataTable" :data="list" v-loading="listLoading" row-key="id" :row-class-name="rowClass" height="100%" @row-click="openDetail">
             <el-table-column prop="id" label="ID" width="90" />
-            <el-table-column label="状态" width="76" align="center">
-              <template #default="{ row }">
-                <el-tag v-if="(row as AlDataDoc).status === 'deleted'" size="small" type="info">已删除</el-tag>
-                <span v-else class="text-xs text-gray-300">—</span>
-              </template>
-            </el-table-column>
+            <!-- 状态列已移除（2026-10-28 走查）：软删行由整行灰态+操作列「恢复」承载，
+                 活跃行整列横线是纯噪音 -->
             <!-- 动态列：schema 驱动（sensitive 原样显示——脱敏属日志侧语义） -->
             <el-table-column
               v-for="f in schema" :key="f.name" :label="f.name" :min-width="140" show-overflow-tooltip

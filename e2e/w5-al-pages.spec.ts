@@ -78,15 +78,16 @@ test('W5 冒烟：al 类型注册/数据写入/cursor 分页/软删恢复', asyn
     await expect(confirmBox).toBeVisible({ timeout: 10_000 })
     await confirmBox.getByRole('button', { name: '删除' }).click()
 
-    // 行不消失：灰态行类 + 已删除徽标 + 操作列变「恢复」（编辑随之隐藏）
+    // 行不消失：灰态行类 + 操作列变「恢复」（编辑随之隐藏）——
+    // 2026-10-28 适配：状态列移除（软删信息由灰态+恢复按钮承载，无徽标）
     await expect(uiRow).toHaveClass(/al-row-deleted/, { timeout: 10_000 })
-    await expect(uiRow.locator('.el-tag')).toContainText('已删除')
+    await expect(uiRow.getByRole('button', { name: '恢复' })).toBeVisible()
     await expect(uiRow.getByRole('button', { name: '编辑' })).toHaveCount(0)
 
-    // UI 恢复 → 行回正常态（灰态类/徽标消失、编辑回归——行为闭环不再借道 API）
+    // UI 恢复 → 行回正常态（灰态类消失、编辑回归、恢复按钮退场——行为闭环不再借道 API）
     await uiRow.getByRole('button', { name: '恢复' }).click()
     await expect(uiRow).toHaveClass(/al-data-row/, { timeout: 10_000 })
-    await expect(uiRow.locator('.el-tag')).toHaveCount(0)
+    await expect(uiRow.getByRole('button', { name: '恢复' })).toHaveCount(0)
     await expect(uiRow.getByRole('button', { name: '编辑' })).toBeVisible()
   } finally {
     // 清理：废弃类型（幂等；数据留存——历史行无跨 spec 约束）
