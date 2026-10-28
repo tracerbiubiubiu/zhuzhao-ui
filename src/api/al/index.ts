@@ -20,15 +20,17 @@ export interface AlFieldDef {
   /** 敏感字段（日志侧脱敏语义——响应值原样，前端不脱显） */
   sensitive?: boolean
   /** string/string_list 单值字符上限（后端恒出；0/缺省=默认 255——2026-10-27 拍板） */
-  max_len?: number
+  max_chars?: number
   /** int_list/string_list 项数上限（后端恒出；0/缺省=默认 100——同批拍板） */
-  max_items?: number
+  max_list_items?: number
 }
 
 /** 类型定义（meta.Definition 投影） */
 export interface AlTypeDef {
   type_name: string
   fields: AlFieldDef[]
+  /** 唯一键（标量字段组合，空数组=无唯一约束——写路径对活跃行查重 409） */
+  unique_fields?: string[]
   status: 'active' | 'deprecated'
   version: number
   created_at: string
@@ -82,7 +84,11 @@ export async function getAlTypeRulesApi(): Promise<unknown> {
   return data
 }
 
-export async function registerAlTypeApi(input: { type_name: string; fields: AlFieldDef[] }): Promise<AlTypeDef> {
+export async function registerAlTypeApi(input: {
+  type_name: string
+  fields: AlFieldDef[]
+  unique_fields?: string[]
+}): Promise<AlTypeDef> {
   const data = await request.post('/al/api/v1/admin/types', input, { _silentError: true })
   return data as unknown as AlTypeDef
 }
@@ -91,6 +97,7 @@ export async function registerAlTypeApi(input: { type_name: string; fields: AlFi
 export async function evolveAlTypeApi(input: {
   type_name: string
   fields: AlFieldDef[]
+  unique_fields?: string[]
   version: number
 }): Promise<AlTypeDef> {
   const data = await request.post('/al/api/v1/admin/types/schema', input, { _silentError: true })

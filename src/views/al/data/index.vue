@@ -218,14 +218,14 @@ async function submitForm() {
     }
     if (f.type === 'int_list' || f.type === 'string_list') {
       const items = parseListLines(listText.value[f.name])
-      const itemLimit = f.max_items || 100
+      const itemLimit = f.max_list_items || 100
       if (items.length > itemLimit) {
         formError.value = `「${f.name}」共 ${items.length} 项，超上限 ${itemLimit}`
         return
       }
     }
     if (f.type === 'string_list') {
-      const limit = f.max_len || 255
+      const limit = f.max_chars || 255
       const lines = parseListLines(listText.value[f.name])
       const bad = lines.findIndex((s) => [...s].length > limit)
       if (bad >= 0) {
@@ -529,7 +529,7 @@ useTableFit(dataTable, () => list.value)
           <el-input-number v-if="f.type === 'int'" v-model="(formData[f.name] as number | undefined)" class="!w-48" />
           <el-input
             v-else-if="f.type === 'string'" v-model="(formData[f.name] as string | undefined)"
-            :maxlength="f.max_len || 255" show-word-limit clearable
+            :maxlength="f.max_chars || 255" show-word-limit clearable
           />
           <template v-else>
             <el-input
@@ -539,8 +539,8 @@ useTableFit(dataTable, () => list.value)
             <div v-if="(listText[f.name] ?? '').trim()" class="flex items-center gap-2 mt-1">
               <span
                 class="text-xs"
-                :class="parseListLines(listText[f.name]).length > (f.max_items || 100) ? 'text-red-500' : 'text-gray-400'"
-              >共 {{ parseListLines(listText[f.name]).length }} 项 / 上限 {{ f.max_items || 100 }}</span>
+                :class="parseListLines(listText[f.name]).length > (f.max_list_items || 100) ? 'text-red-500' : 'text-gray-400'"
+              >共 {{ parseListLines(listText[f.name]).length }} 项 / 上限 {{ f.max_list_items || 100 }}</span>
               <el-button link type="primary" size="small" @click="dedupList(f.name)">去重</el-button>
             </div>
           </template>

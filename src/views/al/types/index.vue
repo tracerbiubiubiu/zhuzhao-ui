@@ -55,7 +55,13 @@ const editorForm = reactive({
   type_name: '',
   version: 0, // evolve 乐观锁（create 不用）
   fields: [] as AlFieldDef[],
+  uniqueFields: [] as string[], // 唯一键（标量组合——多源汇聚整体去重，2026-10-27 拍板）
 })
+
+/** 可作唯一键的标量字段（int/string；随字段行输入实时派生） */
+const uniqueKeyOptions = computed(() =>
+  editorForm.fields.filter((f) => (f.type === 'int' || f.type === 'string') && f.name.trim()).map((f) => f.name.trim()),
+)
 const formRef = ref<FormInstance>()
 
 const editorRules = {
@@ -71,6 +77,7 @@ function openCreate() {
   editorForm.type_name = ''
   editorForm.version = 0
   editorForm.fields = [{ name: '', type: 'string', required: false }]
+  editorForm.uniqueFields = []
   editorVisible.value = true
 }
 
@@ -80,6 +87,7 @@ function openEvolve(row: AlTypeDef) {
   editorForm.type_name = row.type_name
   editorForm.version = row.version
   editorForm.fields = row.fields.map((f) => ({ ...f }))
+  editorForm.uniqueFields = [...(row.unique_fields ?? [])]
   editorVisible.value = true
 }
 
@@ -97,24 +105,27 @@ async function submitEditor() {
   const fields = editorForm.fields
     .filter((f) => f.name.trim())
     // 约束键按类型剥离（后端注册校验对语义错配 422——提交前清干净）：
-    // int/int_list 无 max_len；string/string_list 无 max_items
+    // int/int_list 无 max_chars；string/string_list 无 max_list_items
     .map((f) => {
-      if (f.type === 'int' || f.type === 'int_list') return { ...f, max_len: undefined }
-      if (f.type === 'string' || f.type === 'string_list') return { ...f, max_items: undefined }
+      if (f.type === 'int' || f.type === 'int_list') return { ...f, max_chars: undefined }
+      if (f.type === 'string' || f.type === 'string_list') return { ...f, max_list_items: undefined }
       return f
     })
   if (!fields.length) {
     editorError.value = '至少定义一个字段'
     return
   }
+  // 唯一键清选：仅保留仍存在的标量字段（删行/改类型后残留选择清干净）
+  const scalarNames = new Set(fields.filter((f) => f.type === 'int' || f.type === 'string').map((f) => f.name.trim()))
+  const uniqueFields = editorForm.uniqueFields.filter((n) => scalarNames.has(n))
   editorSaving.value = true
   editorError.value = ''
   try {
     if (editorMode.value === 'create') {
-      await registerAlTypeApi({ type_name: editorForm.type_name.trim(), fields })
+      await registerAlTypeApi({ type_name: editorForm.type_name.trim(), fields, unique_fields: uniqueFields })
       ElMessage.success(`类型「${editorForm.type_name}」已注册`)
     } else {
-      await evolveAlTypeApi({ type_name: editorForm.type_name, fields, version: editorForm.version })
+      await evolveAlTypeApi({ type_name: editorForm.type_name, fields, unique_fields: uniqueFields, version: editorForm.version })
       ElMessage.success(`类型「${editorForm.type_name}」schema 已演进（v${editorForm.version + 1}）`)
     }
     editorVisible.value = false
@@ -273,22 +284,34 @@ useTableFit(typesTable, () => rows.value)
               <!-- 约束行（随类型显隐；2026-10-27 拍板：字符上限/项数上限两级护栏） -->
               <div v-if="f.type !== 'int'" class="flex items-center gap-2 mt-1 pl-1">
                 <template v-if="f.type === 'string' || f.type === 'string_list'">
-                  <span class="text-xs text-gray-400 flex-none">上限</span>
+                  <span class="text-xs text-gray-400 flex-none">字符上限</span>
                   <el-input-number
-                    v-model="f.max_len" :min="0" :max="65535" :controls="false"
-                    placeholder="默认 255" class="!w-24" data-testid="al-field-maxlen"
+                    v-model="f.max_chars" :min="0" :max="65535" :controls="false"
+                    placeholder="默认 255" class="!w-24" data-testid="al-field-maxchars"
                     title="string/string_list 单值字符上限；留空=默认 255"
                   />
                 </template>
                 <template v-if="f.type === 'int_list' || f.type === 'string_list'">
-                  <span class="text-xs text-gray-400 flex-none">项数</span>
+                  <span class="text-xs text-gray-400 flex-none">项数上限</span>
                   <el-input-number
-                    v-model="f.max_items" :min="0" :max="65535" :controls="false"
-                    placeholder="默认 100" class="!w-24" data-testid="al-field-maxitems"
+                    v-model="f.max_list_items" :min="0" :max="65535" :controls="false"
+                    placeholder="默认 100" class="!w-24" data-testid="al-field-maxlistitems"
                     title="int_list/string_list 项数上限；留空=默认 100"
                   />
                 </template>
               </div>
+            </div>
+            <!-- 唯一键（2026-10-27 拍板）：标量组合，写路径对活跃行查重 409；
+                 选项随字段行实时派生（仅 int/string） -->
+            <div class="flex items-center gap-2 mt-1">
+              <span class="text-xs text-gray-400 flex-none">唯一键</span>
+              <el-select
+                v-model="editorForm.uniqueFields" multiple filterable collapse-tags
+                placeholder="无唯一键（可选；多源汇聚去重用）" class="!w-full"
+                data-testid="al-unique-fields"
+              >
+                <el-option v-for="n in uniqueKeyOptions" :key="n" :label="n" :value="n" />
+              </el-select>
             </div>
             <el-button size="small" @click="addFieldRow">+ 添加字段</el-button>
             <div class="text-xs text-gray-400 mt-2">
