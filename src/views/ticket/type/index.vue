@@ -69,19 +69,19 @@ const filteredTicketTypes = computed(() =>
 )
 
 // 客户端分页（2026-10-29 击穿阈值整改：51 行破「全量内滚 ≤50」线——同 al/types 批）
-const TYPE_PAGE_SIZE = 20
+const typePageSize = ref(20)
 const typePage = ref(1)
 // 模板 Tab 客户端分页（2026-10-29 同类第三实例：e2e 模板累积 84 行击穿阈值）
-const TPL_PAGE_SIZE = 20
+const tplPageSize = ref(20)
 const tplPage = ref(1)
 const pagedTplRows = computed(() =>
   ((templatesQuery.data.value ?? []) as TicketTemplateRow[])
     .slice()
     .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-    .slice((tplPage.value - 1) * TPL_PAGE_SIZE, tplPage.value * TPL_PAGE_SIZE),
+    .slice((tplPage.value - 1) * tplPageSize.value, tplPage.value * tplPageSize.value),
 )
 const pagedTypeRows = computed(() =>
-  filteredTicketTypes.value.slice((typePage.value - 1) * TYPE_PAGE_SIZE, typePage.value * TYPE_PAGE_SIZE),
+  filteredTicketTypes.value.slice((typePage.value - 1) * typePageSize.value, typePage.value * typePageSize.value),
 )
 watch([typeFilter, typeStatusFilter], () => { typePage.value = 1 })
 const typeColumns = [
@@ -614,8 +614,9 @@ useTableFit(tplTable, () => pagedTplRows.value)
           <!-- 面板型分页（钉右+total——分页统一约定；2026-10-29 击穿阈值整改） -->
           <div class="mt-3 flex justify-end">
             <el-pagination
-              v-model:current-page="typePage" :page-size="TYPE_PAGE_SIZE"
-              :total="filteredTicketTypes.length" layout="total, prev, pager, next"
+              v-model:current-page="typePage" v-model:page-size="typePageSize"
+              :page-sizes="[20, 50, 100]" :total="filteredTicketTypes.length"
+              layout="total, sizes, prev, pager, next"
             />
           </div>
         </el-tab-pane>
@@ -644,8 +645,9 @@ useTableFit(tplTable, () => pagedTplRows.value)
           <!-- 面板型分页（钉右+total——同类第三实例整改 2026-10-29） -->
           <div class="mt-3 flex justify-end">
             <el-pagination
-              v-model:current-page="tplPage" :page-size="TPL_PAGE_SIZE"
-              :total="(templatesQuery.data.value ?? []).length" layout="total, prev, pager, next"
+              v-model:current-page="tplPage" v-model:page-size="tplPageSize"
+              :page-sizes="[20, 50, 100]" :total="(templatesQuery.data.value ?? []).length"
+              layout="total, sizes, prev, pager, next"
             />
           </div>
         </el-tab-pane>

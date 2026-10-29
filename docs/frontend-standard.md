@@ -103,10 +103,10 @@ overflow-y-auto 仅为兜底——正常页面不该用到它）→ 页面根 .f
 |---|---|---|
 | **ProTable 内置** | 服务端 offset 分页主列表 | `[10,20,50,100]` 默认 20，勿覆盖 |
 | **cursor 翻页** | 无 total 端点（al 数据/死信） | 「第 N 页+上一页/下一页」，不跳页不假装 total |
-| **独立 el-pagination 面板型** | 附属视图（名册/收件箱/发送记录） | 见下三条 |
+| **独立 el-pagination 面板型** | 附属视图（名册/收件箱/发送记录/**客户端切片型**——AL 类型/工单类型/模板/情报历史） | 见下三条（客户端切片型带 sizes，2026-10-29 细分） |
 | **全量内滚（新增判定）** | 固定小量级配置/清单 | 数据行 ≤50 且预期不增长 → 全量+`height=100%` 内滚合法；超阈值必须过滤或分页（ticket/type 48 行=临界案例，本批加客户端过滤） |
 
-独立 el-pagination 面板型三规（MyOrg 名册为参照实现）：
+独立 el-pagination 面板型四规（MyOrg 名册为参照实现）：
 1. **布局钉右**：`flex justify-end`（禁居中——notification 发送记录曾 text-center，
    2026-10-28 整改）；
 2. **layout 至少 `total, prev, pager, next`**：有 total 必显 total（message/center、
@@ -114,6 +114,11 @@ overflow-y-auto 仅为兜底——正常页面不该用到它）→ 页面根 .f
 3. **禁 `page_size=100` 伪装全量**：要么真分页、要么后端全量端点；存量 system/dict
    双表（`page:1, page_size:100`）登记豁免+页头注释（字典量级小，超 100 属异常
    场景可接受静默截断——假设写明才算登记，不算违规）。
+4. **客户端切片型带 sizes（2026-10-29 细分）**：数据全量在内存的前端 slice 分页
+   （AL 类型/工单类型/工单模板/情报历史分组）——`page-sizes=[20,50,100]` +
+   `layout="total, sizes, prev, pager, next"`（大数据量翻找提速，切片零成本）；
+   **后端硬顶附属型**（MyOrg 名册等 API 固定 page_size）维持精简不带 sizes。
+   情报历史/类型页的 page size 切换重置回首页由 v-model:page-size 天然触发重算。
 
 ## 错误码前端映射纪律（2026-10-28 立，100008 双语义 bug 批）
 

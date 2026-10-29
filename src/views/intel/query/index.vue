@@ -271,10 +271,10 @@ const groupedHistory = computed<HistoryGroupRow[]>(() => {
 })
 
 // 客户端分页（组为单位，面板型 20/页——数据全量在内存）
-const GROUP_PAGE_SIZE = 20
+const groupedPageSize = ref(20)
 const groupedPage = ref(1)
 const pagedGroups = computed(() =>
-  groupedHistory.value.slice((groupedPage.value - 1) * GROUP_PAGE_SIZE, groupedPage.value * GROUP_PAGE_SIZE),
+  groupedHistory.value.slice((groupedPage.value - 1) * groupedPageSize.value, groupedPage.value * groupedPageSize.value),
 )
 
 useTableFit(historyTable, () => pagedGroups.value)
@@ -469,8 +469,9 @@ function formatIsoMin(iso: string): string {
         <!-- 分组分页（面板型：钉右+total 必显——分页统一约定） -->
         <div class="mt-3 flex justify-end">
           <el-pagination
-            v-model:current-page="groupedPage" :page-size="GROUP_PAGE_SIZE"
-            :total="groupedHistory.length" layout="total, prev, pager, next"
+            v-model:current-page="groupedPage" v-model:page-size="groupedPageSize"
+            :page-sizes="[20, 50, 100]" :total="groupedHistory.length"
+            layout="total, sizes, prev, pager, next"
           />
         </div>
         </el-tab-pane>

@@ -34,7 +34,7 @@ const typeFilter = ref('')
 const typeStatusFilter = ref<'' | 'active' | 'deprecated'>('')
 // 客户端分页（2026-10-29 击穿阈值整改：e2e 测试类型持续累积至 241 行——
 // 「全量内滚 ≤50 行」豁免失效，按规范升面板型分页；端点全量小列表零后端改动）
-const TYPE_PAGE_SIZE = 20
+const typePageSize = ref(20)
 const typePage = ref(1)
 const filteredRows = computed(() =>
   rows.value
@@ -68,7 +68,7 @@ const editorForm = reactive({
 })
 
 const pagedTypeRows = computed(() =>
-  filteredRows.value.slice((typePage.value - 1) * TYPE_PAGE_SIZE, typePage.value * TYPE_PAGE_SIZE),
+  filteredRows.value.slice((typePage.value - 1) * typePageSize.value, typePage.value * typePageSize.value),
 )
 
 // 筛选变化回首页（分页配方）
@@ -265,8 +265,9 @@ useTableFit(typesTable, () => rows.value)
       <!-- 面板型分页（钉右+total 必显——分页统一约定；2026-10-29 击穿阈值整改） -->
       <div class="mt-3 flex justify-end">
         <el-pagination
-          v-model:current-page="typePage" :page-size="TYPE_PAGE_SIZE"
-          :total="filteredRows.length" layout="total, prev, pager, next"
+          v-model:current-page="typePage" v-model:page-size="typePageSize"
+          :page-sizes="[20, 50, 100]" :total="filteredRows.length"
+          layout="total, sizes, prev, pager, next"
         />
       </div>
     </el-card>
