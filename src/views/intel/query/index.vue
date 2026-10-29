@@ -16,7 +16,7 @@ import {
   ElRadioButton, ElRadioGroup, ElSelect, ElTable, ElTableColumn, ElTag,
 ElPagination, ElTabPane, ElTabs,
 } from 'element-plus'
-import { useTableFit } from '@vea/hooks'
+import { useTableFit, useDatePresetRange} from '@vea/hooks'
 import { queryIntelApi } from '@/api/intel'
 import { useUserStore } from '@/store/modules/user'
 import IntelResult from './IntelResult.vue'
@@ -189,7 +189,8 @@ const trendSummary = computed(() => {
 
 const filterType = ref('')
 const filterKeyword = ref('')
-const filterRange = ref<[string, string] | null>(null)
+// 快捷段+自定义（2026-10-29 升格公共 composable——三页统一形态）
+const { preset: datePreset, range: filterRange, apply: applyDatePreset, reset: presetReset } = useDatePresetRange()
 
 /** 时间戳 → 本地日期 YYYY-MM-DD（与 daterange value-format 对齐比较） */
 function localDay(ts: number): string {
@@ -214,30 +215,10 @@ const filteredHistory = computed(() => {
 function resetFilters() {
   filterType.value = ''
   filterKeyword.value = ''
-  filterRange.value = null
-  datePreset.value = ''
+  presetReset()
   groupedPage.value = 1
 }
 
-// ─── 快捷日期（2026-10-28 走查批：daterange 常驻占宽 → 快捷段+自定义按需弹出）───
-const datePreset = ref<'' | '7d' | '30d' | 'custom'>('')
-function applyDatePreset(v: string | number | boolean | undefined) {
-  const p = (v ?? '') as '' | '7d' | '30d' | 'custom'
-  datePreset.value = p
-  groupedPage.value = 1
-  if (p === '7d' || p === '30d') {
-    const today = new Date()
-    const pad = (n: number) => String(n).padStart(2, '0')
-    const from = new Date(today.getTime() - (Number(p.slice(0, 1)) * 7 - 1) * 86400000)
-    filterRange.value = [
-      `${from.getFullYear()}-${pad(from.getMonth() + 1)}-${pad(from.getDate())}`,
-      `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`,
-    ]
-  } else if (p === '') {
-    filterRange.value = null
-  }
-  // custom：保留现值由 daterange 选择
-}
 
 // ─── 历史分组视图（2026-10-28 走查批：同查询值合并、组为单位分页+点开明细）───
 // 存储仍为追加式流水（统计依赖）；展示层按 类型+值 聚合——组行=汇总（次数/最近），

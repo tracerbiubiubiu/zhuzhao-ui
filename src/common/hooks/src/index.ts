@@ -27,3 +27,4 @@ export type {
 } from './useForm'
 export { useTableFit } from './useTableFit'
 export { useAutoFilterRun } from './useAutoFilterRun'
+export { useDatePresetRange, type DatePreset } from './useDatePresetRange'

@@ -9,18 +9,23 @@
  */
 import { formatDateTime } from '@/utils/datetime'
 import { reactive, ref, watch } from 'vue'
-import { ElMessage, ElAlert, ElButton, ElCard, ElDatePicker, ElDescriptions, ElDescriptionsItem, ElDrawer, ElForm, ElFormItem, ElInput, ElOption, ElPagination, ElSelect, ElTabPane, ElTable, ElTableColumn, ElTabs, ElTag } from 'element-plus'
+import { ElMessage, ElAlert, ElButton, ElCard, ElDatePicker, ElDescriptions, ElDescriptionsItem, ElDrawer, ElForm, ElFormItem, ElInput, ElOption, ElPagination, ElSelect, ElTabPane, ElTable, ElTableColumn, ElTabs, ElTag, ElRadioButton, ElRadioGroup} from 'element-plus'
 import ProTable from '@/components/ProTable/index.vue'
 import UserNameText from '@/components/UserNameText/index.vue'
 import type { ProTableColumn } from '@/components/ProTable/types'
 import { listAuditLogsApi, type AuditLogRow, listPanicsApi, reconcileAuditApi, type PanicRow } from '@/api/audit'
-import { useAutoFilterRun, useTableFit } from '@vea/hooks'
+import { useAutoFilterRun, useDatePresetRange, useTableFit } from '@vea/hooks'
 
 // keep-alive 契约：name=动态路由名（菜单 code audit_log，组件路径 audit/log/index）
 defineOptions({ name: 'audit_log_page' })
 
 const tableRef = ref<InstanceType<typeof ProTable>>()
 const search = reactive({ employee_no: '', path: '', method: [] as string[], range: [] as string[] })
+// 日期快捷段（2026-10-29 统一形态批）：preset 选择/重置驱动 search.range
+const datePreset = useDatePresetRange()
+const presetValue = datePreset.preset
+const applyPreset = datePreset.apply
+watch(datePreset.range, (r) => { search.range = (r ?? []) as string[] })
 
 // 筛选即时生效（筛选栏配方触发口径：全部控件变更即查，文本防抖 300ms 收敛）
 useAutoFilterRun(
@@ -33,6 +38,7 @@ function onReset() {
   search.path = ''
   search.method = []
   search.range = []
+  datePreset.reset()
   tableRef.value?.refresh({ resetPage: true })
 }
 
@@ -155,21 +161,34 @@ useTableFit(panicsTable, () => panics.value)
       <ProTable ref="tableRef" :columns="columns" :fetcher="fetcher" fill>
         <template #search>
           <el-form inline @submit.prevent>
-            <el-form-item label="工号">
-              <el-input v-model="search.employee_no" placeholder="如 E000001（含已删用户）" clearable class="!w-44" />
+            <!-- placeholder 式+日期快捷段（2026-10-29 统一形态批：label 式/常驻 daterange 双漂移整改） -->
+            <el-form-item>
+              <el-input v-model="search.employee_no" placeholder="工号，如 E000001" clearable class="!w-[160px]" title="可查已删除用户的审计记录" />
             </el-form-item>
-            <el-form-item label="方法">
-              <el-select v-model="search.method" multiple collapse-tags placeholder="全部" clearable class="!w-[150px]" data-testid="audit-method-filter">
+            <el-form-item>
+              <el-select v-model="search.method" multiple collapse-tags placeholder="全部方法" clearable class="!w-[150px]" data-testid="audit-method-filter">
                 <el-option v-for="m in ['GET', 'POST', 'PUT', 'DELETE', 'PATCH']" :key="m" :label="m" :value="m" />
               </el-select>
             </el-form-item>
-            <el-form-item label="路径">
-              <el-input v-model="search.path" placeholder="如 /api/v1/users" clearable class="!w-52" />
+            <el-form-item>
+              <el-input v-model="search.path" placeholder="路径，如 /api/v1/users" clearable class="!w-[190px]" />
             </el-form-item>
-            <el-form-item label="时间范围">
+            <el-form-item>
+              <el-radio-group
+                :model-value="presetValue" size="small"
+                @update:model-value="(v: string | number | boolean | undefined) => applyPreset(v)"
+              >
+                <el-radio-button value="">全部</el-radio-button>
+                <el-radio-button value="7d">近 7 天</el-radio-button>
+                <el-radio-button value="30d">近 30 天</el-radio-button>
+                <el-radio-button value="custom">自定义</el-radio-button>
+              </el-radio-group>
               <el-date-picker
-                v-model="search.range" type="daterange" value-format="YYYY-MM-DD"
-                start-placeholder="开始" end-placeholder="结束" class="!w-60"
+                v-if="presetValue === 'custom'"
+                :model-value="search.range" type="daterange" value-format="YYYY-MM-DD" format="MM-DD"
+                start-placeholder="起" end-placeholder="止" class="audit-daterange !flex-none"
+                :style="{ '--el-date-editor-width': '210px' }"
+                @update:model-value="(v: [string, string] | null) => { search.range = (v ?? []) as string[] }"
               />
             </el-form-item>
             <el-form-item class="ml-auto !mr-0">

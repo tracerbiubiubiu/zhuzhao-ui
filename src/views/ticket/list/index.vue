@@ -14,12 +14,11 @@ import { formatDateTime } from '@/utils/datetime'
 import { reactive, ref } from 'vue'
 import {
   ElButton, ElCard, ElCheckbox, ElDatePicker, ElForm, ElFormItem, ElInput, ElLink,
-  ElOption, ElSelect, ElTag,
-} from 'element-plus'
+  ElOption, ElSelect, ElTag, ElRadioButton, ElRadioGroup} from 'element-plus'
 import { ElMessage } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
 import { useQuery } from '@tanstack/vue-query'
-import { useAutoFilterRun } from '@vea/hooks'
+import { useAutoFilterRun, useDatePresetRange} from '@vea/hooks'
 import ProTable from '@/components/ProTable/index.vue'
 import UserNameText from '@/components/UserNameText/index.vue'
 import type { ProTableColumn } from '@/components/ProTable/types'
@@ -57,8 +56,8 @@ const search = reactive({
   if (typeof q.tag === 'string' && q.tag) search.tag = q.tag
 }
 
-/** 创建日期范围 [from, to]（YYYY-MM-DD，value-format 对齐端点 UTC 切日口径） */
-const dateRange = ref<[string, string] | null>(null)
+/** 创建日期范围 [from, to]（YYYY-MM-DD）——快捷段+自定义（2026-10-29 统一形态批，composable） */
+const { preset: datePreset, range: dateRange, apply: applyDatePreset, reset: presetReset } = useDatePresetRange()
 
 // 筛选即时生效（筛选栏配方触发口径：全部控件变更即查，文本防抖 300ms 收敛；
 // URL 预填已在声明期完成，不经过本 watch）
@@ -105,7 +104,7 @@ function onReset() {
   search.mineHandle = false
   search.mineCreated = false
   search.tag = ''
-  dateRange.value = null
+  presetReset()
   tableRef.value?.refresh({ resetPage: true })
 }
 
@@ -187,10 +186,21 @@ function typeLabel(code: string): string {
                 <el-option v-for="(label, val) in PRIORITY_LABELS.slice(1)" :key="val" :label="label" :value="val + 1" />
               </el-select>
             </el-form-item>
-            <el-form-item label="创建时间">
+            <el-form-item>
+              <el-radio-group
+                :model-value="datePreset" size="small"
+                @update:model-value="(v: string | number | boolean | undefined) => applyDatePreset(v)"
+              >
+                <el-radio-button value="">全部</el-radio-button>
+                <el-radio-button value="7d">近 7 天</el-radio-button>
+                <el-radio-button value="30d">近 30 天</el-radio-button>
+                <el-radio-button value="custom">自定义</el-radio-button>
+              </el-radio-group>
               <el-date-picker
-                v-model="dateRange" type="daterange" value-format="YYYY-MM-DD"
-                start-placeholder="开始" end-placeholder="结束" class="!w-[210px]"
+                v-if="datePreset === 'custom'"
+                v-model="dateRange" type="daterange" value-format="YYYY-MM-DD" format="MM-DD"
+                start-placeholder="起" end-placeholder="止" class="ticket-daterange !flex-none"
+                :style="{ '--el-date-editor-width': '210px' }"
               />
             </el-form-item>
             <el-form-item>
