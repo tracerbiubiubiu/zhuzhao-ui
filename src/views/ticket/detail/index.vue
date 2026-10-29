@@ -459,6 +459,10 @@ async function submitComposer() {
 function goTicket(id: string) {
   void router.push(`/tickets/${id}`)
 }
+/** 搜索候选「查看」：新标签打开候选单详情（当前页关联表单态保留） */
+function openInTab(id: string) {
+  window.open(`/#/tickets/${id}`, '_blank')
+}
 const relationForm = reactive({ targetId: '' })
 const relationLoading = ref(false)
 const relationError = ref('')
@@ -722,6 +726,8 @@ async function submitRelation() {
               <span class="flex items-center gap-2">
                 <span>{{ o.label }}</span>
                 <el-tag size="small" type="info">{{ STATUS_LABEL[o.status] ?? o.status }}</el-tag>
+                <!-- 查看详情：新标签打开不丢已填关联态；@click.stop 防触发选中/收起下拉 -->
+                <el-link type="primary" class="!h-auto ml-auto !align-baseline" @click.stop="openInTab(o.value)">查看</el-link>
               </span>
             </el-option>
           </el-select>
