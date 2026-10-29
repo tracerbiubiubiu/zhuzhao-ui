@@ -71,6 +71,15 @@ const filteredTicketTypes = computed(() =>
 // 客户端分页（2026-10-29 击穿阈值整改：51 行破「全量内滚 ≤50」线——同 al/types 批）
 const TYPE_PAGE_SIZE = 20
 const typePage = ref(1)
+// 模板 Tab 客户端分页（2026-10-29 同类第三实例：e2e 模板累积 84 行击穿阈值）
+const TPL_PAGE_SIZE = 20
+const tplPage = ref(1)
+const pagedTplRows = computed(() =>
+  ((templatesQuery.data.value ?? []) as TicketTemplateRow[])
+    .slice()
+    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+    .slice((tplPage.value - 1) * TPL_PAGE_SIZE, tplPage.value * TPL_PAGE_SIZE),
+)
 const pagedTypeRows = computed(() =>
   filteredTicketTypes.value.slice((typePage.value - 1) * TYPE_PAGE_SIZE, typePage.value * TYPE_PAGE_SIZE),
 )
@@ -556,7 +565,7 @@ const ttTable = ref()
 useTableFit(ttTable, () => pagedTypeRows.value)
 
 const tplTable = ref()
-useTableFit(tplTable, () => templatesQuery.data.value)
+useTableFit(tplTable, () => pagedTplRows.value)
 </script>
 
 <template>
@@ -616,7 +625,7 @@ useTableFit(tplTable, () => templatesQuery.data.value)
             <el-button v-permission="'ticket:type:manage'" type="primary" @click="openTplCreate">新建模板</el-button>
           </div>
           <div class="min-h-0 flex-initial">
-          <el-table ref="tplTable" v-loading="templatesQuery.isLoading.value" :data="templatesQuery.data.value ?? []" row-key="id" stripe height="100%">
+          <el-table ref="tplTable" v-loading="templatesQuery.isLoading.value" :data="pagedTplRows" row-key="id" stripe height="100%">
             <el-table-column prop="code" label="编码" width="160" />
             <el-table-column prop="name" label="名称" min-width="160" />
             <el-table-column prop="type_code" label="类型" width="140" />
@@ -630,6 +639,14 @@ useTableFit(tplTable, () => templatesQuery.data.value)
               </template>
             </el-table-column>
           </el-table>
+          </div>
+
+          <!-- 面板型分页（钉右+total——同类第三实例整改 2026-10-29） -->
+          <div class="mt-3 flex justify-end">
+            <el-pagination
+              v-model:current-page="tplPage" :page-size="TPL_PAGE_SIZE"
+              :total="(templatesQuery.data.value ?? []).length" layout="total, prev, pager, next"
+            />
           </div>
         </el-tab-pane>
       </el-tabs>
