@@ -12,7 +12,7 @@ import { formatDateTime } from '@/utils/datetime'
 import { computed, reactive, ref, watch} from 'vue'
 import { useTableFit } from '@vea/hooks'
 import {
-  ElButton, ElCard, ElDrawer, ElForm, ElFormItem, ElInput, ElInputNumber, ElMessage, ElMessageBox, ElPagination,
+  ElButton, ElCard, ElDrawer, ElForm, ElFormItem, ElInput, ElEmpty, ElInputNumber, ElMessage, ElMessageBox, ElPagination,
   ElSwitch, ElTable, ElTableColumn, ElTag, ElSelect, ElOption, ElAlert,
   ElDialog,
 } from 'element-plus'
@@ -231,6 +231,9 @@ useTableFit(typesTable, () => rows.value)
       </div>
       <div class="min-h-0 flex-initial">
         <el-table ref="typesTable" :data="pagedTypeRows" v-loading="typesQuery.isLoading.value" row-key="type_name" height="100%">
+        <template #empty>
+          <el-empty description="暂无活动类型——「注册类型」创建，或调整筛选" :image-size="60" />
+        </template>
         <el-table-column prop="type_name" label="类型名" min-width="160" />
         <el-table-column label="状态" width="100" align="center">
           <template #default="{ row }">
@@ -284,7 +287,7 @@ useTableFit(typesTable, () => rows.value)
           <el-input
             v-model="editorForm.type_name"
             :disabled="editorMode === 'evolve'"
-            placeholder="如 ip_blocklist（小写字母开头）"
+            placeholder="如 ip_blocklist" title="小写字母开头"
           />
         </el-form-item>
         <el-form-item label="字段定义">
@@ -332,7 +335,7 @@ useTableFit(typesTable, () => rows.value)
               <span class="text-xs text-gray-400 flex-none">唯一键</span>
               <el-select
                 v-model="editorForm.uniqueFields" multiple filterable collapse-tags
-                placeholder="无唯一键（可选；多源汇聚去重用）" class="!w-full"
+                placeholder="无唯一键" title="可选；多源汇聚去重用" class="!w-full"
                 data-testid="al-unique-fields"
               >
                 <el-option v-for="n in uniqueKeyOptions" :key="n" :label="n" :value="n" />

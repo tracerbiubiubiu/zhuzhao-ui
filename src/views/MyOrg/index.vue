@@ -195,6 +195,9 @@ useTableFit(rosterTable, () => roster.value)
       />
       <div v-else class="min-h-0 flex-initial">
         <el-table ref="rosterTable" v-loading="rosterLoading" :data="roster" row-key="user_id" stripe height="100%">
+        <template #empty>
+          <el-empty description="该组织暂无成员" :image-size="60" />
+        </template>
         <el-table-column prop="username" label="用户名" min-width="110" />
         <el-table-column prop="real_name" label="姓名" min-width="90" />
         <el-table-column prop="employee_no" label="工号" width="100" />

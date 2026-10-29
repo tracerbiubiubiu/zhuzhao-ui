@@ -631,7 +631,7 @@ useTableFit(deadTable, () => deadList.value)
               <span v-if="a.description" class="text-xs text-gray-400 ml-2">{{ a.description }}</span>
             </el-option>
           </el-select>
-          <el-input v-else v-model="submitForm.action" placeholder="服务端动作注册表内的 action_id（清单加载失败——手填回退）" />
+          <el-input v-else v-model="submitForm.action" placeholder="action_id（回退手填）" title="动作清单加载失败时的手填回退" />
         </el-form-item>
         <el-form-item label="归属标签">
           <el-input v-model="submitForm.dept" placeholder="dept（可选）" />
@@ -668,7 +668,7 @@ useTableFit(deadTable, () => deadList.value)
               <span v-if="a.description" class="text-xs text-gray-400 ml-2">{{ a.description }}</span>
             </el-option>
           </el-select>
-          <el-input v-else v-model="jobForm.action_id" placeholder="服务端动作注册表内的 action_id（清单加载失败——手填回退）" />
+          <el-input v-else v-model="jobForm.action_id" placeholder="action_id（回退手填）" title="动作清单加载失败时的手填回退" />
         </el-form-item>
         <el-form-item label="触发类型">
           <el-select v-model="jobForm.trigger_type" class="!w-40">
