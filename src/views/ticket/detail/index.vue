@@ -716,7 +716,7 @@ async function submitRelation() {
           <el-select
             v-model="relationForm.targetId" filterable remote clearable
             :remote-method="searchRelationOptions" :loading="relationSearching"
-            placeholder="搜索标题 / 工单号定位对方工单" class="!w-[340px]"
+            placeholder="搜索标题或工单号" class="!w-[340px]"
           >
             <el-option v-for="o in relationOptions" :key="o.value" :value="o.value" :label="o.label">
               <span class="flex items-center gap-2">
