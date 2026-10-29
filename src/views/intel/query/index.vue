@@ -407,8 +407,9 @@ function formatIsoMin(iso: string): string {
           </el-radio-group>
           <el-date-picker
             v-if="datePreset === 'custom'"
-            v-model="filterRange" type="daterange" value-format="YYYY-MM-DD"
-            start-placeholder="开始日期" end-placeholder="结束日期" class="!w-[210px]"
+            v-model="filterRange" type="daterange" value-format="YYYY-MM-DD" format="MM-DD"
+            start-placeholder="起" end-placeholder="止" class="intel-daterange !flex-none"
+            :style="{ '--el-date-editor-width': '210px' }"
             @change="groupedPage = 1"
           />
           <el-button class="ml-auto !mr-0" size="small" @click="resetFilters">重置</el-button>
@@ -513,6 +514,13 @@ function formatIsoMin(iso: string): string {
 /* 行点击重查——查看型列表行指针样式惯例 */
 .history-table :deep(.el-table__row) {
   cursor: pointer;
+}
+
+/* 自定义日期窄形态（2026-10-28 走查二批）：EP daterange 默认内宽 534px 覆盖宽度类——
+   强制 210px + 内嵌 input 收缩 + 短格式 MM-DD（值仍 YYYY-MM-DD，逻辑不变） */
+/* 内嵌 input 收缩（宽度本体走 --el-date-editor-width 变量注入——EP 官方覆盖路径） */
+:deep(.intel-daterange .el-range-input) {
+  min-width: 0;
 }
 
 /* 趋势柱状图配色（EP 变量，暗色自适应） */
