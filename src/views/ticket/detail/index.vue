@@ -16,7 +16,7 @@ import { computed, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   ElAlert, ElButton, ElCard, ElCheckbox, ElDescriptions, ElDescriptionsItem, ElDialog,
-  ElEmpty, ElForm, ElFormItem, ElInput, ElMessage, ElMessageBox, ElOption, ElSelect, ElTag,
+  ElEmpty, ElForm, ElFormItem, ElInput, ElLink, ElMessage, ElMessageBox, ElOption, ElSelect, ElTag,
 } from 'element-plus'
 import type { FormInstance } from 'element-plus'
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
@@ -24,7 +24,7 @@ import {
   addTicketCCApi, assignTicketApi, closeTicketApi, createTicketCommentApi, createTicketNoteApi,
   createTicketRelationApi, deleteTicketApi, getTicketApi, getTicketCommentsApi,
   getTicketRelationsApi, listAvailableTransitionsApi, listTicketCCApi, listTicketTagsApi,
-  listTicketTypesApi, addTicketTagsApi, removeTicketCCApi, removeTicketTagApi,
+  listTicketTypesApi, listTicketsApi, addTicketTagsApi, removeTicketCCApi, removeTicketTagApi,
   transitionTicketApi, STATUS_LABEL, updateTicketApi, type TagRow, type TicketCCRow,
 } from '@/api/ticket'
 import { useUserStoreWithOut } from '@/store/modules/user'
@@ -454,15 +454,47 @@ async function submitComposer() {
   }
 }
 
-// ─── 关联（ticket:relation——正反向判重 409/自关联 400 内联）───
+// ─── 关联（ticket:relation——远程搜索下拉自动补全；正反向判重 409/自关联 400 内联）───
+/** 已建关联快速跳转（#id 直达对方详情——详情路由 /tickets/:id，非缓存页新建实例） */
+function goTicket(id: string) {
+  void router.push(`/tickets/${id}`)
+}
 const relationForm = reactive({ targetId: '' })
 const relationLoading = ref(false)
 const relationError = ref('')
+const relationSearching = ref(false)
+const relationOptions = ref<Array<{ value: string; label: string; status: string }>>([])
+let relationSearchTimer: ReturnType<typeof setTimeout> | undefined
+
+/** 远程搜索（300ms 防抖同筛选栏配方）：后端 keyword 模糊、L2 可见面内。
+ * 仅排除自身（自关联 400 无意义）；已关联的保留可选——选了走后端 409 内联提示，
+ * 也是判重路径的 UI 可达形态（S10 验收点） */
+function searchRelationOptions(query: string) {
+  if (relationSearchTimer) clearTimeout(relationSearchTimer)
+  const kw = query.trim()
+  if (!kw) {
+    relationOptions.value = []
+    return
+  }
+  relationSearchTimer = setTimeout(async () => {
+    relationSearching.value = true
+    try {
+      const { list } = await listTicketsApi({ page: 1, page_size: 20, keyword: kw })
+      relationOptions.value = list
+        .filter((t) => String(t.id) !== ticketId.value)
+        .map((t) => ({ value: String(t.id), label: `#${t.id} ${t.title}`, status: t.status }))
+    } catch {
+      relationOptions.value = []
+    } finally {
+      relationSearching.value = false
+    }
+  }, 300)
+}
 
 async function submitRelation() {
-  const target = relationForm.targetId.trim()
-  if (!/^\d+$/.test(target)) {
-    relationError.value = '请填写数字工单 ID'
+  const target = relationForm.targetId
+  if (!target) {
+    relationError.value = '请先搜索并选择对方工单'
     return
   }
   if (target === ticketId.value) {
@@ -669,10 +701,10 @@ async function submitRelation() {
         <div v-for="r in relationsQuery.data.value ?? []" :key="r.id" class="flex items-center gap-2 text-sm">
           <el-tag size="small" type="info">{{ r.relation_type || 'related' }}</el-tag>
           <template v-if="r.source_ticket_id === ticketId">
-            <span>关联 → <b>#{{ r.target_ticket_id }}</b></span>
+            <span>关联 → <el-link type="primary" class="!align-baseline" @click="goTicket(r.target_ticket_id)">#{{ r.target_ticket_id }}</el-link></span>
           </template>
           <template v-else>
-            <span>被关联 ← <b>#{{ r.source_ticket_id }}</b></span>
+            <span>被关联 ← <el-link type="primary" class="!align-baseline" @click="goTicket(r.source_ticket_id)">#{{ r.source_ticket_id }}</el-link></span>
           </template>
         </div>
         <el-empty v-if="!relationsQuery.isLoading.value && !relationsQuery.data.value?.length" description="暂无关联" :image-size="60" />
@@ -680,7 +712,19 @@ async function submitRelation() {
 
       <div v-if="userStore.hasPermission('ticket:relation')" class="border-t pt-3">
         <div class="flex items-center gap-2">
-          <el-input v-model="relationForm.targetId" placeholder="对方工单 ID" class="!w-[200px]" @keyup.enter="submitRelation" />
+          <!-- 远程搜索下拉：标题/工单号 keyword 定位（后端 L2 可见面内），选项带状态 -->
+          <el-select
+            v-model="relationForm.targetId" filterable remote clearable
+            :remote-method="searchRelationOptions" :loading="relationSearching"
+            placeholder="搜索标题 / 工单号定位对方工单" class="!w-[340px]"
+          >
+            <el-option v-for="o in relationOptions" :key="o.value" :value="o.value" :label="o.label">
+              <span class="flex items-center gap-2">
+                <span>{{ o.label }}</span>
+                <el-tag size="small" type="info">{{ STATUS_LABEL[o.status] ?? o.status }}</el-tag>
+              </span>
+            </el-option>
+          </el-select>
           <el-button size="small" :loading="relationLoading" @click="submitRelation">建立关联</el-button>
         </div>
         <el-alert v-if="relationError" :title="relationError" type="error" show-icon class="mt-2" :closable="false" />

@@ -66,12 +66,19 @@ test('S10/S11：详情评论/备注分层+关联判重+分派/关闭流+viewer �
     await expect(page.locator('.el-tag', { hasText: '内部备注' }).first()).toBeVisible()
 
     // ── 关联：UI 建 t1→t2 成功；重复提交 → 409 内联 el-alert ──
+    // 2026-10-29 适配：关联入口改远程搜索下拉（keyword 支持 纯数字=工单 ID），选项名 `#<id> <标题>`
     const relationCard = page.locator('.el-card').filter({ hasText: '关联工单' })
-    await relationCard.getByPlaceholder('对方工单 ID').fill(t2)
-    await relationCard.getByRole('button', { name: '建立关联' }).click()
+    const pickRelation = async () => {
+      // EP 2.14 select 空态 placeholder 为独立 span 点不中 → 点 .el-select 容器；
+      // 选项 teleport 到 body → 页面级 :visible 下拉定位（w5 同配方）
+      await relationCard.locator('.el-select').click()
+      await page.keyboard.type(t2, { delay: 80 })
+      await page.locator('.el-select-dropdown:visible .el-select-dropdown__item').filter({ hasText: `#${t2} ` }).first().click()
+      await relationCard.getByRole('button', { name: '建立关联' }).click()
+    }
+    await pickRelation()
     await expect(relationCard.getByText(`关联 → #${t2}`)).toBeVisible()
-    await relationCard.getByPlaceholder('对方工单 ID').fill(t2)
-    await relationCard.getByRole('button', { name: '建立关联' }).click()
+    await pickRelation()
     await expect(relationCard.locator('.el-alert')).toBeVisible({ timeout: 10_000 }) // 判重 409 内联（勿纯 toast）
 
     // ── viewer 只读边界（S10）：公开评论可见/内部备注不可见/composer 不渲染 ──
@@ -84,7 +91,7 @@ test('S10/S11：详情评论/备注分层+关联判重+分派/关闭流+viewer �
     await expect(page.getByText('S10 公开评论内容')).toBeVisible({ timeout: 20_000 })
     await expect(page.getByText('S10 内部备注内容')).toHaveCount(0) // 服务端过滤（非前端隐藏）
     await expect(page.getByRole('button', { name: /发表(评论|备注)/ })).toHaveCount(0)
-    await expect(relationCard.getByPlaceholder('对方工单 ID')).toHaveCount(0) // viewer 无 ticket:relation
+    await expect(relationCard.getByRole('button', { name: '建立关联' })).toHaveCount(0) // viewer 无 ticket:relation
     await expect(relationCard.getByText(`关联 → #${t2}`)).toBeVisible() // 读侧关联可见
 
     // ── admin：分派/取消分派/关闭流（S11）——载于 t2（保持 open 态）──
