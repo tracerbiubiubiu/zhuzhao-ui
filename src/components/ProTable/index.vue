@@ -8,8 +8,8 @@
  * - 搜索区/工具栏走 slot，搜索提交由页面调 tableRef.refresh({ resetPage: true })
  * - 请求失败：全局 toast（请求层 errorToast）+ 表格空态；本组件不重复提示
  */
-import { ref } from 'vue'
-import { ElTable, ElTableColumn, ElPagination } from 'element-plus'
+import { onDeactivated, onMounted, onUnmounted, ref } from 'vue'
+import { ElButton, ElTable, ElTableColumn, ElPagination } from 'element-plus'
 import { useCrud, useTableFit } from '@vea/hooks'
 import type { ProTableColumn, ProTableFetcher } from './types'
 
@@ -44,13 +44,50 @@ const { state, actions } = useCrud<{ [key: string]: any }>({
 
 // EP 2.14 缺陷兜底：容器尺寸变化（侧栏收起/窗口面板调整/数据晚到）列宽不自动重排——
 // ResizeObserver+resize 触发 doLayout（frontend-standard.md 踩坑⑦）
-const tableEl = ref<{ doLayout: () => void; $el?: HTMLElement }>()
+const tableEl = ref<{ doLayout: () => void; setScrollTop?: (top: number) => void; $el?: HTMLElement }>()
 useTableFit(tableEl, () => state.items.value)
+
+// ─── 数据面三件（frontend-standard.md「数据密度与聚焦模式」节）——分页行左侧内置，页面零接线 ───
+
+/** 切页/每页条数变更与重查（resetPage）后内滚回顶；写操作后的原位刷新不回顶（保滚动上下文） */
+function scrollToTop() {
+  tableEl.value?.setScrollTop?.(0)
+}
+
+// 密度：紧凑档行高 ~32px（可视行数 +40%），localStorage 记忆全页共享
+const DENSITY_KEY = 'pro_table_density'
+const density = ref<'default' | 'small'>(localStorage.getItem(DENSITY_KEY) === 'small' ? 'small' : 'default')
+function toggleDensity() {
+  density.value = density.value === 'small' ? 'default' : 'small'
+  localStorage.setItem(DENSITY_KEY, density.value)
+}
+
+// 聚焦：整卡满屏盖过侧栏/顶栏（内部 flex 高度链自动撑满）；Esc/再点/路由离开退出
+const focusCard = ref<HTMLElement | null>(null)
+const focused = ref(false)
+function toggleFocus() {
+  if (!focusCard.value) return
+  focused.value = !focused.value
+  focusCard.value.classList.toggle('card-focus', focused.value)
+}
+function onEsc(e: KeyboardEvent) {
+  if (e.key === 'Escape' && focused.value) toggleFocus()
+}
+onMounted(() => {
+  focusCard.value = ((tableEl.value?.$el as HTMLElement | undefined)?.closest('.el-card') as HTMLElement | null) ?? null
+  window.addEventListener('keydown', onEsc)
+})
+onUnmounted(() => window.removeEventListener('keydown', onEsc))
+// keep-alive 页路由离开=DOM 摘除即视觉退出；显式复位防回显即满屏
+onDeactivated(() => {
+  if (focused.value) toggleFocus()
+})
 
 defineExpose({
   /** 搜索提交入口（resetPage=true 回第一页）与写操作后刷新共用 */
   refresh: (function (raw: typeof actions.refresh) {
     return function wrapped(this: unknown, ...args: Parameters<typeof raw>) {
+      if ((args[0] as { resetPage?: boolean } | undefined)?.resetPage) scrollToTop()
       void raw.apply(this, args).catch(function noop() {})
     }
   })(actions.refresh),
@@ -75,6 +112,7 @@ defineExpose({
         :data="state.items.value"
         :row-key="rowKey"
         :height="fill ? '100%' : undefined"
+        :size="density"
         stripe
       >
       <el-table-column
@@ -97,15 +135,19 @@ defineExpose({
       </el-table-column>
       </el-table>
     </div>
-    <div class="mt-4 flex justify-end">
+    <div class="mt-4 flex items-center justify-between gap-2">
+      <div class="flex items-center gap-1">
+        <el-button size="small" text bg @click="toggleDensity">密度：{{ density === 'small' ? '紧凑' : '舒适' }}</el-button>
+        <el-button v-if="focusCard" size="small" text bg @click="toggleFocus">{{ focused ? '退出聚焦' : '聚焦' }}</el-button>
+      </div>
       <el-pagination
         :total="state.total.value"
         :current-page="state.page.value"
         :page-size="state.pageSize.value"
         :page-sizes="[10, 20, 50, 100]"
         layout="total, sizes, prev, pager, next, jumper"
-        @current-change="actions.setPage"
-        @size-change="actions.setPageSize"
+        @current-change="(p: number) => { actions.setPage(p); scrollToTop() }"
+        @size-change="(s: number) => { actions.setPageSize(s); scrollToTop() }"
       />
     </div>
   </div>

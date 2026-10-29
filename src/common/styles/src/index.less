@@ -88,3 +88,13 @@
     }
   }
 }
+
+// 聚焦模式（ProTable「聚焦」钮——数据面满屏，frontend-standard「数据密度与聚焦模式」节）：
+// 卡片脱离文档流盖过侧栏/顶栏/面包屑，内部 flex 高度链全为相对值自动撑满；
+// z-index 须低于 EP 弹层(2000+)——聚焦态内开弹窗/抽屉仍在上层
+.el-card.card-focus {
+  position: fixed;
+  inset: 12px;
+  z-index: 1000;
+  box-shadow: 0 8px 32px rgb(0 0 0 / 35%);
+}
