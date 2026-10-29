@@ -9,10 +9,10 @@
  */
 import { apiErrorBody } from '@/utils/apiError'
 import { formatDateTime } from '@/utils/datetime'
-import { computed, reactive, ref } from 'vue'
+import { computed, reactive, ref, watch} from 'vue'
 import { useTableFit } from '@vea/hooks'
 import {
-  ElButton, ElCard, ElDrawer, ElForm, ElFormItem, ElInput, ElInputNumber, ElMessage, ElMessageBox,
+  ElButton, ElCard, ElDrawer, ElForm, ElFormItem, ElInput, ElInputNumber, ElMessage, ElMessageBox, ElPagination,
   ElSwitch, ElTable, ElTableColumn, ElTag, ElSelect, ElOption, ElAlert,
   ElDialog,
 } from 'element-plus'
@@ -32,14 +32,21 @@ const rows = computed(() => typesQuery.data.value?.list ?? [])
 // 类型清单客户端筛选（筛选规范：关键字匹配类型名 + 状态过滤；即时生效）
 const typeFilter = ref('')
 const typeStatusFilter = ref<'' | 'active' | 'deprecated'>('')
+// 客户端分页（2026-10-29 击穿阈值整改：e2e 测试类型持续累积至 241 行——
+// 「全量内滚 ≤50 行」豁免失效，按规范升面板型分页；端点全量小列表零后端改动）
+const TYPE_PAGE_SIZE = 20
+const typePage = ref(1)
 const filteredRows = computed(() =>
-  rows.value.filter((t) => {
-    const kw = typeFilter.value.trim().toLowerCase()
-    if (kw && !t.type_name.toLowerCase().includes(kw)) return false
-    if (typeStatusFilter.value === 'active' && t.status !== 'active') return false
-    if (typeStatusFilter.value === 'deprecated' && t.status !== 'deprecated') return false
-    return true
-  }),
+  rows.value
+    .filter((t) => {
+      const kw = typeFilter.value.trim().toLowerCase()
+      if (kw && !t.type_name.toLowerCase().includes(kw)) return false
+      if (typeStatusFilter.value === 'active' && t.status !== 'active') return false
+      if (typeStatusFilter.value === 'deprecated' && t.status !== 'deprecated') return false
+      return true
+    })
+    // created_at 降序（新建在前——分页后新建项必在首页可见，E2E/用户同理）
+    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()),
 )
 
 function refresh() {
@@ -59,6 +66,13 @@ const editorForm = reactive({
   fields: [] as AlFieldDef[],
   uniqueFields: [] as string[], // 唯一键（标量组合——多源汇聚整体去重，2026-10-27 拍板）
 })
+
+const pagedTypeRows = computed(() =>
+  filteredRows.value.slice((typePage.value - 1) * TYPE_PAGE_SIZE, typePage.value * TYPE_PAGE_SIZE),
+)
+
+// 筛选变化回首页（分页配方）
+watch([typeFilter, typeStatusFilter], () => { typePage.value = 1 })
 
 /** 可作唯一键的标量字段（int/string；随字段行输入实时派生） */
 const uniqueKeyOptions = computed(() =>
@@ -216,7 +230,7 @@ useTableFit(typesTable, () => rows.value)
         <span class="text-xs text-gray-400">筛选即时生效</span>
       </div>
       <div class="min-h-0 flex-initial">
-        <el-table ref="typesTable" :data="filteredRows" v-loading="typesQuery.isLoading.value" row-key="type_name" height="100%">
+        <el-table ref="typesTable" :data="pagedTypeRows" v-loading="typesQuery.isLoading.value" row-key="type_name" height="100%">
         <el-table-column prop="type_name" label="类型名" min-width="160" />
         <el-table-column label="状态" width="100" align="center">
           <template #default="{ row }">
@@ -246,6 +260,14 @@ useTableFit(typesTable, () => rows.value)
           </template>
         </el-table-column>
       </el-table>
+      </div>
+
+      <!-- 面板型分页（钉右+total 必显——分页统一约定；2026-10-29 击穿阈值整改） -->
+      <div class="mt-3 flex justify-end">
+        <el-pagination
+          v-model:current-page="typePage" :page-size="TYPE_PAGE_SIZE"
+          :total="filteredRows.length" layout="total, prev, pager, next"
+        />
       </div>
     </el-card>
 

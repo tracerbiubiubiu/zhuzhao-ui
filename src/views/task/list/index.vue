@@ -461,22 +461,23 @@ useTableFit(deadTable, () => deadList.value)
             </template>
             <template #search>
               <el-form inline @submit.prevent>
-                <el-form-item label="序号">
-                  <el-input v-model="runsSearch.seq" placeholder="任务序号，如 135" clearable class="!w-28" />
+                <!-- placeholder 式（筛选规范 v2 ⑧：禁 label 前缀敬语式，全仓形态统一 2026-10-29） -->
+                <el-form-item>
+                  <el-input v-model="runsSearch.seq" placeholder="任务序号，如 135" clearable class="!w-[140px]" />
                 </el-form-item>
-                <el-form-item label="链路追踪">
-                  <el-input v-model="runsSearch.request_id" placeholder="request_id 精确查（排障用）" clearable class="!w-52" />
+                <el-form-item>
+                  <el-input v-model="runsSearch.request_id" placeholder="request_id（排障）" clearable class="!w-[180px]" />
                 </el-form-item>
-                <el-form-item label="动作">
-                  <el-input v-model="runsSearch.action" placeholder="action" clearable class="!w-36" />
+                <el-form-item>
+                  <el-input v-model="runsSearch.action" placeholder="action" clearable class="!w-[120px]" />
                 </el-form-item>
-                <el-form-item label="状态">
-                  <el-select v-model="runsSearch.status" placeholder="全部" clearable class="!w-32">
+                <el-form-item>
+                  <el-select v-model="runsSearch.status" placeholder="全部状态" clearable class="!w-[110px]">
                     <el-option v-for="(v, k) in RUN_STATUS" :key="k" :label="v.label" :value="k" />
                   </el-select>
                 </el-form-item>
-                <el-form-item label="只看我提交的">
-                  <el-switch v-model="runsSearch.mine" />
+                <el-form-item>
+                  <el-switch v-model="runsSearch.mine" active-text="只看我提交的" />
                 </el-form-item>
                 <el-form-item class="ml-auto !mr-0">
                   <el-button @click="onResetRuns">重置</el-button>

@@ -14,11 +14,11 @@
  *   三态经 API 不可达（03 S11），防管理员以为画了就能点
  * - 乐观锁：类型/模板 version 回传 CAS（可省略——管理页应带上），10006 → 关框刷新范式
  */
-import { computed, nextTick, reactive, ref } from 'vue'
+import { computed, nextTick, reactive, ref, watch} from 'vue'
 import { useTableFit } from '@vea/hooks'
 import {
   ElAlert, ElButton, ElCard, ElCheckbox, ElDialog, ElForm, ElFormItem, ElInput, ElInputNumber,
-  ElMessage, ElMessageBox, ElOption, ElRadioButton, ElRadioGroup, ElSelect, ElSwitch, ElTable, ElTableColumn, ElTabPane, ElTabs, ElTag,
+  ElMessage, ElPagination, ElMessageBox, ElOption, ElRadioButton, ElRadioGroup, ElSelect, ElSwitch, ElTable, ElTableColumn, ElTabPane, ElTabs, ElTag,
   ElEmpty,
 } from 'element-plus'
 import type { FormInstance } from 'element-plus'
@@ -58,14 +58,23 @@ const typesQuery = useQuery({ queryKey: ['ticket', 'types'], queryFn: listTicket
 const typeFilter = ref('')
 const typeStatusFilter = ref<'' | 'on' | 'off'>('')
 const filteredTicketTypes = computed(() =>
-  ((typesQuery.data.value ?? []) as TicketTypeFullRow[]).filter((t) => {
+  (((typesQuery.data.value ?? []) as TicketTypeFullRow[]).filter((t) => {
     const kw = typeFilter.value.trim().toLowerCase()
     if (kw && !t.name.toLowerCase().includes(kw) && !t.code.toLowerCase().includes(kw)) return false
     if (typeStatusFilter.value === 'on' && !t.is_active) return false
     if (typeStatusFilter.value === 'off' && t.is_active) return false
     return true
-  }),
+  // id 降序（新建在前——分页后新建项必在首页可见，E2E/用户同理）
+  })).sort((a, b) => Number(b.id) - Number(a.id)),
 )
+
+// 客户端分页（2026-10-29 击穿阈值整改：51 行破「全量内滚 ≤50」线——同 al/types 批）
+const TYPE_PAGE_SIZE = 20
+const typePage = ref(1)
+const pagedTypeRows = computed(() =>
+  filteredTicketTypes.value.slice((typePage.value - 1) * TYPE_PAGE_SIZE, typePage.value * TYPE_PAGE_SIZE),
+)
+watch([typeFilter, typeStatusFilter], () => { typePage.value = 1 })
 const typeColumns = [
   { prop: 'code', label: '编码', width: 160 },
   { prop: 'name', label: '名称', minWidth: 140 },
@@ -544,7 +553,7 @@ async function onDeleteTpl(row: TicketTemplateRow) {
 }
 
 const ttTable = ref()
-useTableFit(ttTable, () => typesQuery.data.value)
+useTableFit(ttTable, () => pagedTypeRows.value)
 
 const tplTable = ref()
 useTableFit(tplTable, () => templatesQuery.data.value)
@@ -565,7 +574,7 @@ useTableFit(tplTable, () => templatesQuery.data.value)
             <el-button v-permission="'ticket:type:manage'" type="primary" @click="openTypeCreate">新建类型</el-button>
           </div>
           <div class="min-h-0 flex-initial">
-          <el-table ref="ttTable" v-loading="typesQuery.isLoading.value" :data="filteredTicketTypes" row-key="id" stripe height="100%">
+          <el-table ref="ttTable" v-loading="typesQuery.isLoading.value" :data="pagedTypeRows" row-key="id" stripe height="100%">
             <template #empty>
               <el-empty description="暂无类型——新建后在此管理" :image-size="60">
                 <el-button v-permission="'ticket:type:manage'" type="primary" @click="openTypeCreate">新建首个类型</el-button>
@@ -591,6 +600,14 @@ useTableFit(tplTable, () => templatesQuery.data.value)
               </template>
             </el-table-column>
           </el-table>
+          </div>
+
+          <!-- 面板型分页（钉右+total——分页统一约定；2026-10-29 击穿阈值整改） -->
+          <div class="mt-3 flex justify-end">
+            <el-pagination
+              v-model:current-page="typePage" :page-size="TYPE_PAGE_SIZE"
+              :total="filteredTicketTypes.length" layout="total, prev, pager, next"
+            />
           </div>
         </el-tab-pane>
 
