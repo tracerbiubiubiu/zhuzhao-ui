@@ -106,8 +106,9 @@
       </aside>
 
       <aside v-if="layout === 'dual'" class="v-layout__rail">
-        <!-- 图标+竖排系统名（2026-10-30 修复：compact 只有图标，品牌名不可见） -->
-        <Logo stack />
+        <!-- 纯图标品牌（2026-10-30 所有者拍板：窄栏不带文字——竖排小字形态弃用；
+             图标即品牌入口，悬停/首页可辨识，rail 宽度全给菜单） -->
+        <Logo compact />
         <ElScrollbar>
           <PrimaryNav
             mode="rail"
@@ -256,21 +257,6 @@
         justify-content: center;
         width: var(--layout-rail-width);
         padding: 0;
-      }
-
-      /* 竖排品牌（2026-10-30）：图标缩至 30px + 系统名 10px 竖排其下，
-         72px 窄栏品牌两可见；名字单行省略（title 属性悬停全名） */
-      :deep(.v-logo--stack) {
-        flex-direction: column;
-        gap: 2px;
-        padding-top: 10px;
-        padding-bottom: 8px;
-        height: auto;
-
-        img {
-          width: 30px;
-          height: 30px;
-        }
       }
     }
 
