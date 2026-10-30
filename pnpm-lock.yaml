@@ -131,6 +131,9 @@ importers:
       axios:
         specifier: ^1.20.0
         version: 1.20.0(debug@4.4.3(supports-color@10.2.2))(supports-color@10.2.2)
+      cropperjs:
+        specifier: ^1.7.0
+        version: 1.7.0
       echarts:
         specifier: ^6.1.0
         version: 6.1.0
@@ -1843,6 +1846,9 @@ packages:
 
   crelt@1.0.7:
     resolution: {integrity: sha512-aK6BbWfhf4U/wCcLHKPJl/xa6VkVstRaPywWtMKGwuOLc/wZTyQYuoxgvZnNsBvv7Kg3YTBQYYBCggcviQczuA==}
+
+  cropperjs@1.7.0:
+    resolution: {integrity: sha512-AkGnZxr7xAJBa63ObXq5ZKLkh9c8wisC+Ym8VzIDn3KZ+6qRTbBnOl2w2dFOTMzLP5IcfOpEK9PICDywNXhncg==}
 
   cross-spawn@7.0.6:
     resolution: {integrity: sha512-uV2QOWP2nWzsy2aMp8aRibhi9dlzF5Hgh5SHaB9OiTGEyDTiJJyx0uy51QXdyWbtAHNua4XJzUKca3OzKUd3vA==}
@@ -5162,6 +5168,8 @@ snapshots:
       is-what: 4.1.16
 
   crelt@1.0.7: {}
+
+  cropperjs@1.7.0: {}
 
   cross-spawn@7.0.6:
     dependencies:

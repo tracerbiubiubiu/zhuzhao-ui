@@ -33,6 +33,7 @@
     "@tanstack/vue-query": "^5.104.0",
     "@vueuse/core": "^14.4.0",
     "axios": "^1.20.0",
+    "cropperjs": "^1.7.0",
     "echarts": "^6.1.0",
     "element-plus": "2.14.4",
     "md-editor-rt": "^7.1.0",

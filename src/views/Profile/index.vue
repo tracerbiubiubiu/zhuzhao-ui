@@ -2,8 +2,9 @@
 /**
  * 个人中心（profile 自服务，01 §8-W2→W3 首批补交付）
  *
- * - 资料展示（用户名/工号只读——后端自服务不可改）+ 四字段编辑
- *   （real_name/email/phone/avatar——patch 语义，对应 UpdateProfileRequest）
+ * - 资料展示（用户名/工号只读——后端自服务不可改）+ 三字段编辑
+ *   （real_name/email/phone——patch 语义，对应 UpdateProfileRequest）；头像不经表单，
+ *   唯一写入口=上传组件 bind 端点（2026-10-29 保存抹头像修复）
  * - 自愿改密入口 → 强制改密页（共用同一页面流程：旧密码验证+轮换）
  * - 编辑成功后重拉 /user/profile 刷新 store（侧栏头像等消费点同步）
  */
@@ -37,7 +38,6 @@ const form = reactive({
   real_name: userStore.profile?.real_name ?? '',
   email: userStore.profile?.email ?? '',
   phone: userStore.profile?.phone ?? '',
-  avatar: userStore.profile?.avatar ?? '',
 })
 
 const rules: FormRules = {
@@ -58,9 +58,10 @@ async function handleSubmit() {
     // *string + omitempty,email 对「非 nil 空串指针」不跳过校验,显式空串会 400
     // (空邮箱用户无法保存任何资料——2026-10-15 头像保存实测)。后端语义修复(B2-3
     // 空串显式清空)落地前,先在前端省略空字段。
+    // avatar 不在表单提交面（2026-10-29 保存抹头像修复）：头像唯一合法写入口=
+    // 头像上传组件的 bind 端点；表单曾把 setup 时的旧值（常为空串）patch 回去覆盖它
     await updateProfileApi({
       real_name: form.real_name,
-      avatar: form.avatar,
       ...(form.email.trim() ? { email: form.email.trim() } : {}),
       ...(form.phone.trim() ? { phone: form.phone.trim() } : {}),
     })
@@ -214,9 +215,6 @@ function formatTime(iso?: string | null): string {
         </el-form-item>
         <el-form-item label="手机号" prop="phone">
           <el-input v-model="form.phone" placeholder="手机号" maxlength="20" />
-        </el-form-item>
-        <el-form-item label="头像" prop="avatar">
-          <el-input v-model="form.avatar" placeholder="头像图片 URL" />
         </el-form-item>
         <el-form-item>
           <el-button type="primary" :loading="loading" :disabled="!canSubmit" @click="handleSubmit">
