@@ -344,10 +344,11 @@ async function onDelete(node: OrgTreeNode) {
 <template>
   <div class="fill-page">
     <el-card shadow="never" class="org-card">
-      <template #header>
+      <!-- 工具行+层级面包屑（卡片头收敛批 2026-10-30：原 #header 整块挪卡体顶部——
+           树在自身容器内滚，本条仍在卡体顶部不随树滚，滚动联动语义不变） -->
+      <div class="mb-2">
         <div class="flex items-center justify-between">
-          <div class="flex items-center gap-3">
-            <span class="font-semibold">组织管理</span>
+        <div class="flex items-center gap-3">
             <el-dropdown @command="onExpandCommand">
               <el-button link type="primary" size="small">展开至 ▾</el-button>
               <template #dropdown>
@@ -379,7 +380,7 @@ async function onDelete(node: OrgTreeNode) {
           </template>
           <span v-else class="text-gray-300">—</span>
         </div>
-      </template>
+      </div>
       <div ref="scrollWrap" class="h-full overflow-y-auto">
         <el-tree
           v-loading="treeQuery.isLoading.value"

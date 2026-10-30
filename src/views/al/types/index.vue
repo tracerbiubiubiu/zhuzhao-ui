@@ -214,13 +214,7 @@ useTableFit(typesTable, () => rows.value)
 <template>
   <div class="fill-page p-4">
     <el-card shadow="never">
-      <template #header>
-        <div class="flex items-center justify-between">
-          <span class="font-semibold">活动类型</span>
-          <el-button v-permission="'activelist:type:manage'" type="primary" @click="openCreate">注册类型</el-button>
-        </div>
-      </template>
-
+      <!-- 工具行（卡片头收敛批 2026-10-30：按钮入工具行右——筛选栏「动作钉右」同款） -->
       <div class="mb-2 flex items-center gap-2 flex-none">
         <el-input v-model="typeFilter" placeholder="按类型名过滤" clearable size="small" class="!w-[200px]" />
         <el-select v-model="typeStatusFilter" placeholder="全部状态" clearable size="small" class="!w-[110px]">
@@ -228,6 +222,7 @@ useTableFit(typesTable, () => rows.value)
           <el-option label="已废弃" value="deprecated" />
         </el-select>
         <span class="text-xs text-gray-400">筛选即时生效</span>
+        <el-button v-permission="'activelist:type:manage'" type="primary" size="small" class="ml-auto !mr-0" @click="openCreate">注册类型</el-button>
       </div>
       <div class="min-h-0 flex-initial">
         <el-table ref="typesTable" :data="pagedTypeRows" v-loading="typesQuery.isLoading.value" row-key="type_name" height="100%">

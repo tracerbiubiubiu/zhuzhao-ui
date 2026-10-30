@@ -1,7 +1,6 @@
 <template>
   <div class="p-4">
     <el-card shadow="hover">
-      <template #header><span class="font-semibold">消息管理（S6 通知中心）</span></template>
       <el-tabs v-model="activeTab">
         <!-- 模板管理（2026-10-26 通知面收口批：只读首版 → 编辑面） -->
         <el-tab-pane label="消息模板" name="templates">

@@ -319,7 +319,6 @@ function formatIsoMin(iso: string): string {
 <template>
   <div class="fill-page">
     <el-card shadow="never">
-      <template #header><span class="font-semibold">威胁情报查询（缓存代理——先本地缓存后上游）</span></template>
       <el-tabs v-model="activeTab" class="fill-tabs">
         <el-tab-pane label="查询" name="query">
         <div class="flex items-center gap-2 mb-3">

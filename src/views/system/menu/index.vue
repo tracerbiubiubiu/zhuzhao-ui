@@ -26,12 +26,11 @@ function toAssign() {
   <div class="fill-page p-4">
     <div class="min-h-0 flex-1 overflow-y-auto">
     <el-card shadow="never">
-      <template #header>
-        <div class="flex items-center justify-between">
-          <span class="font-semibold">菜单词表（只读）</span>
-          <el-button type="primary" link @click="toAssign">去角色页分配菜单 →</el-button>
-        </div>
-      </template>
+      <!-- 工具行（卡片头收敛批 2026-10-30）：只读提示左、跳转钉右 -->
+      <div class="flex items-center justify-between mb-2">
+        <span class="text-xs text-gray-400">只读词表——菜单随主仓迁移维护</span>
+        <el-button type="primary" link size="small" @click="toAssign">去角色页分配菜单 →</el-button>
+      </div>
       <el-tree
         v-loading="treeQuery.isLoading.value"
         :data="treeQuery.data.value ?? []"

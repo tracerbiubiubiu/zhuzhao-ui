@@ -47,5 +47,6 @@ test('W4 冒烟：工单列表渲染+关键字筛选+标题链接进详情', asy
 
   // 发起页占位可达
   await page.goto('/#/tickets/new')
-  await expect(page.locator('.font-semibold').filter({ hasText: '发起工单' })).toBeVisible()
+  // 2026-10-30 卡片头收敛批适配：卡头已删——以表单挂载为可达断言
+  await expect(page.getByRole('button', { name: '提交' })).toBeVisible()
 })

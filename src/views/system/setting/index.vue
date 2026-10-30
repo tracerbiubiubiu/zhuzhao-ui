@@ -1,7 +1,6 @@
 <template>
   <div class="fill-page p-4">
     <el-card shadow="hover">
-      <template #header><span class="font-semibold">系统设置</span></template>
       <el-table ref="settingsTable" :data="settings" v-loading="loading" border>
         <el-table-column prop="key" label="设置键" width="280" />
         <el-table-column label="当前值" min-width="200">

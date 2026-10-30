@@ -108,14 +108,12 @@ async function onToggle(row: AssignmentRuleRow) {
 <template>
   <div class="fill-page p-4">
     <el-card shadow="never">
-      <template #header>
-        <div class="flex items-center justify-between">
-          <span class="font-semibold">自动分派规则（{{ rulesQuery.data.value?.length ?? 0 }} 条）</span>
-          <el-button v-permission="'ticket:type:manage'" type="primary" data-testid="add-rule" @click="openCreate">新建规则</el-button>
-        </div>
-      </template>
-      <div class="text-xs text-gray-400 mb-2">
-        工单创建后按 priority 升序遍历——首个 keyword 命中的规则自动分派到 target_user（须属 target_org）；无命中保持 open。
+      <!-- 工具行（卡片头收敛批 2026-10-30）：说明+计数左、新建钉右 -->
+      <div class="flex flex-wrap items-center gap-2 mb-2">
+        <span class="text-xs text-gray-400">
+          共 {{ rulesQuery.data.value?.length ?? 0 }} 条 · 工单创建后按 priority 升序遍历——首个 keyword 命中的规则自动分派到 target_user（须属 target_org）；无命中保持 open
+        </span>
+        <el-button v-permission="'ticket:type:manage'" type="primary" size="small" class="ml-auto !mr-0" data-testid="add-rule" @click="openCreate">新建规则</el-button>
       </div>
       <el-table ref="ruleTable" v-loading="rulesQuery.isLoading.value" :data="rulesQuery.data.value ?? []" stripe>
         <template #empty>
