@@ -9,9 +9,9 @@
  * - 请求失败：全局 toast（请求层 errorToast）+ 表格空态；本组件不重复提示
  */
 import { onDeactivated, onMounted, onUnmounted, ref } from 'vue'
-import { ElButton, ElTable, ElTableColumn, ElPagination, ElTooltip } from 'element-plus'
-import { Icon } from '@iconify/vue'
+import { ElTable, ElTableColumn, ElPagination } from 'element-plus'
 import { useCrud, useTableFit } from '@vea/hooks'
+import Tools from './Tools.vue'
 import type { ProTableColumn, ProTableFetcher } from './types'
 
 // 动态具名列 slot（名=column.slot??prop）：行类型由消费页面自行收窄（封装不做行泛型，
@@ -101,27 +101,33 @@ defineExpose({
 
 <template>
   <div class="pro-table" :class="{ 'pro-table--fill': fill }">
-    <div v-if="$slots.search" class="mb-4">
+    <!-- 数据面工具组落位（Tools 恰渲染一份）：无 toolbar 槽页并入筛选行右端（不设孤行
+         ——审计页式两枚小钮独占一行已废）；有 toolbar 槽页与 toolbar 同行右端；
+         两槽皆无才独占行兜底（仓内暂无此页型）。search 无论何分支恰渲染一次 -->
+    <div v-if="$slots.search && !$slots.toolbar" class="mb-4 flex items-start justify-between gap-2">
+      <div class="min-w-0 flex-1">
+        <slot name="search" />
+      </div>
+      <Tools
+        :density="density" :focused="focused" :show-focus="!!focusCard"
+        @toggle-density="toggleDensity" @toggle-focus="toggleFocus"
+      />
+    </div>
+    <div v-else-if="$slots.search" class="mb-4">
       <slot name="search" />
     </div>
-    <div class="mb-2 flex items-center justify-between gap-2">
+    <div v-if="$slots.toolbar" class="mb-2 flex items-center justify-between gap-2">
       <slot name="toolbar" />
-      <!-- 密度/聚焦=列表右上角（表格上方工具栏行右端，与页面 toolbar 槽同行）：
-           密度=图标钮显目标形态（tooltip 动作全称），聚焦=方框图标——
-           @element-plus/icons-vue 本仓解析失败（CI 实证，Collapse 同因），走离线 mdi 字形 -->
-      <div class="flex items-center gap-1">
-        <el-tooltip :content="density === 'small' ? '切换为舒适' : '切换为紧凑'" placement="top">
-          <el-button size="small" text bg :data-testid="`pt-density-${density}`" @click="toggleDensity">
-            <Icon icon="mdi:format-line-spacing" :height="14" class="mr-1" />
-            {{ density === 'small' ? '舒适' : '紧凑' }}
-          </el-button>
-        </el-tooltip>
-        <el-tooltip v-if="focusCard" content="聚焦模式（整卡满屏，Esc 退出）" placement="top">
-          <el-button size="small" text bg :data-testid="`pt-focus-${focused}`" @click="toggleFocus">
-            <Icon :icon="focused ? 'mdi:fullscreen-exit' : 'mdi:fullscreen'" :height="16" />
-          </el-button>
-        </el-tooltip>
-      </div>
+      <Tools
+        :density="density" :focused="focused" :show-focus="!!focusCard"
+        @toggle-density="toggleDensity" @toggle-focus="toggleFocus"
+      />
+    </div>
+    <div v-else-if="!$slots.search" class="mb-2 flex items-center justify-end gap-2">
+      <Tools
+        :density="density" :focused="focused" :show-focus="!!focusCard"
+        @toggle-density="toggleDensity" @toggle-focus="toggleFocus"
+      />
     </div>
     <div class="pro-table__table" :class="{ 'pro-table__table--fill': fill }">
       <el-table
