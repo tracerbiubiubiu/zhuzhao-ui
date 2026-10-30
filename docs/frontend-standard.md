@@ -278,14 +278,42 @@ rules「新建规则」参照实现；org 页层级面包屑随工具行挪卡�
 6. 数据面三件（切页回顶/密度切换/聚焦）ProTable 自带零接线，**勿自建同义控件**；
    普通 el-table 面板型小表不接密度/聚焦（「数据密度与聚焦模式」节）。
 
-## 现状清单（2026-10-08 立，10-09 增补，10-12 修订）
+## 现状清单（2026-10-08 立，10-30 修订）
 
 | 页面 | 形态 | 状态 |
 |---|---|---|
-| system/user · role · ticket/list · audit/log · task/list · al/types · system/ticket-type | 列表页（单表/tabs） | ✅ 表格内滚 |
-| al/data | 双栏列表（类型清单+数据区） | ✅ 左清单右数据各自内滚（2026-10-12 两栏改版，下拉弃用） |
-| system/dict | 双栏列表 | ✅ 双栏等高各自内滚 |
+| system/user · role · ticket/list · audit/log · task/list · al/types · system/ticket-type | 列表页（单表/tabs） | ✅ 表格内滚；列表页均无页面级卡头（2026-10-30 收敛批） |
+| ticket/list · task/list · audit/log | 列表页（FilterBar 折叠筛选） | ✅ 2026-10-30 三页首批 |
+| al/data | 双栏列表（类型清单+数据区） | ✅ 左清单右数据各自内滚（10-12 两栏改版）+搜索筛选（10-28 服务端 q/field/value） |
+| intel/query | 双 Tab（查询/查询历史） | ✅ 查询=表单+结果双视图；历史=分组树+客户端分页+趋势抽屉（10-28/29） |
+| system/notification | 三 Tab（模板/规则/发送记录） | ✅ 发送记录排障筛选（status/biz_id——主仓 cf01b7c） |
+| system/dict | 双栏列表 | ✅ 双栏等高各自内滚；搜索即时化（10-28） |
 | MyOrg | 复合页（组织卡+名册） | ✅ 名册内滚、组织卡 flex-none |
-| system/org · menu | 内容页（树） | ✅ 内容区内滚（漏网补齐批 2026-10-08） |
-| ticket/detail · ticket/create · Profile · Home | 内容页 | ✅ 内容区内滚（本批；Profile PAT 表 useTableFit 补挂 2026-10-09） |
-| 登录/改密/403/404 | 独立布局 | ➖ 不适用 |
+| system/org · menu | 内容页（树） | ✅ 内容区内滚；org 层级面包屑滚动联动（10-29） |
+| ticket/detail · ticket/create · Profile · Home | 内容页 | ✅ 内容区内滚（Profile 头像链路三修+裁剪 10-29） |
+| 登录/改密/403/404 | 独立布局 | ➖ 不适用（404 catch-all 注册 10-29） |
+
+## 前端资产地图（2026-10-30 立——spec coding 速查：找组件/工具先查此表）
+
+| 资产 | 位置 | 用途一句话 |
+|---|---|---|
+| ProTable | `@/components/ProTable` | 列表主组件（分页/空态/loading/useTableFit 内置） |
+| FilterBar | `@/components/FilterBar` | 筛选栏折叠（默认 4 控件+展开切换） |
+| UserPicker | `@/components/UserPicker` | 用户选择器（姓名+工号搜索——分派/抄送/催办） |
+| UserNameText | `@/components/UserNameText` | 人名(工号)三态降级展示（禁手拼） |
+| IntelResult | `views/intel/query/IntelResult.vue` | 任意 JSON 递归键值树（多列网格+点击复制） |
+| CronBuilder / FormDesigner / FlowGraphDesigner | `@/components/*` | cron 构造/动态表单/流程画布 |
+| useTableFit / useAutoFilterRun / useDatePresetRange | `@vea/hooks` | 列宽重排兜底/筛选即时触发/日期快捷段 |
+| datetime / apiError / avatar | `@/utils/*` | 时间格式化单点/信封错误抽取/头像 URL 归一 |
+| cursorPager | `views/al/data/cursorPager.ts` | 游标分页页栈（push/pop/reset） |
+
+## 防漂移哨兵矩阵（2026-10-30 汇总——六扫描全在单测内，`pnpm test` 即跑）
+
+| 哨兵 | 文件 | 拦截什么 |
+|---|---|---|
+| EP 导入完整性 | `src/epImports.test.ts` | 模板 el-* 缺 import（运行时静默失效）+字符串 prefix-icon 死图标 |
+| useTableFit 挂接 | `src/epImports.test.ts` 第二用例 | 手动 el-table 漏挂（列宽不随容器重排） |
+| 分页覆盖 | `src/paginationCoverage.test.ts` | 含 el-table 页面无任何分页设施（数据增长型缺口——247/51/84 三例事故后立） |
+| UI 惯例 | `src/uiConventions.test.ts` | 主列表缺 #empty 空态引导/placeholder 超宽截断 |
+| 图标注册 | `src/icons.test.ts` | 视图直写未注册图标（死图标） |
+| apiPaths 前缀 | `src/api/apiPaths.test.ts` | API 路径漏网关前缀 |

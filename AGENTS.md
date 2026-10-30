@@ -19,7 +19,7 @@
 ```bash
 pnpm lint          # ESLint（纯检查；自动修复用 pnpm lint:fix，修复后重跑 lint）
 pnpm typecheck     # vue-tsc --noEmit（codegen 类型**部分接线**：入参仅 4/14 api 文件引 __generated__（user/role/profile/selfService）、出参全手写——漂移仅接线面编译期报错，勿视为全量守卫；改 API 形状后先 pnpm codegen，补接线随域渐进）
-pnpm test          # Vitest（动态路由解析/请求层单飞刷新/keep-alive 防漂移断言等——24 文件 / 192 用例，含 apiPaths 路径前缀门禁/viewNames 双向守卫）
+pnpm test          # Vitest（动态路由解析/请求层单飞刷新/keep-alive 防漂移断言等——24 文件 / 192 用例，含六哨兵矩阵：apiPaths 前缀/viewNames/epImports 导入/tableFit/分页覆盖/uiConventions——全表见 frontend-standard「防漂移哨兵矩阵」）
 pnpm audit --prod  # npm 供应链（对称 Go 侧 govulncheck；镜像源无 audit 端点时加 --registry=https://registry.npmjs.org）
 pnpm build         # 产物构建
 pnpm test:e2e      # Playwright（S1–S8/S10/S12/S16/FE3·FE4/W4·W5/P4/P5 穿插池——27 spec / 34 用例；打真实栈不用 stub——W5 需 activelist/taskrunner 上游，前提见下）
