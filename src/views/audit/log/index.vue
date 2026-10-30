@@ -322,11 +322,11 @@ async function copyPanicStack() {
          body 上下内边距（EP 默认 20px 上下各留一大截——2026-10-30 走查反馈） -->
     <el-drawer v-model="panicDrawer" size="620px" class="panic-drawer">
       <template #header>
-        <div class="flex items-center gap-2">
-          <span class="font-semibold">Panic #{{ panicDetail?.id ?? '' }} 详情</span>
-          <el-button link type="primary" size="small" data-testid="audit-copy-stack" :disabled="!panicDetail?.stack" @click="copyPanicStack">复制恢复栈</el-button>
-        </div>
+        <span class="font-semibold">Panic #{{ panicDetail?.id ?? '' }} 详情</span>
       </template>
+      <!-- 恢复栈独立于 descriptions 做弹性区块（flex-1 吃满抽屉剩余高度）：全屏高+
+           栈面板撑满下部，短内容无死空白、长内容抽屉内滚动——fit-content（悬空）与
+           默认（底部大空白）两形态的合并解（2026-10-30 三轮走查拍板） -->
       <el-descriptions v-if="panicDetail" :column="2" border size="small">
         <el-descriptions-item label="消息" :span="2">
           <span class="text-[var(--el-color-danger)] font-medium">{{ panicDetail.message }}</span>
@@ -335,36 +335,40 @@ async function copyPanicStack() {
         <el-descriptions-item label="次数">{{ panicDetail.count }}</el-descriptions-item>
         <el-descriptions-item label="最近发生">{{ formatTime(panicDetail.last_at) }}</el-descriptions-item>
         <el-descriptions-item label="首次发生" :span="2">{{ panicDetail.first_at ? formatTime(panicDetail.first_at) : '—' }}</el-descriptions-item>
-        <el-descriptions-item :span="2">
-          <template #label>
-            <div>恢复栈</div>
-            <div class="text-xs font-normal">（最近一次）</div>
-          </template>
-          <div class="mb-1 text-xs text-gray-400">recovery 中间件捕获 · debug.Stack()</div>
-          <!-- pre-wrap+break-all：长路径帧就地折行，横向只差一点的微滚动条不出现 -->
-          <pre class="whitespace-pre-wrap break-all text-xs bg-gray-50 dark:bg-gray-800 p-3 rounded max-h-[420px] overflow-y-auto m-0 font-mono">{{ panicDetail.stack || '（无栈记录）' }}</pre>
-        </el-descriptions-item>
       </el-descriptions>
+      <div v-if="panicDetail" class="flex flex-col flex-1 min-h-0 mt-3">
+        <div class="flex items-center gap-2 mb-1">
+          <span class="text-sm font-medium">恢复栈</span>
+          <span class="text-xs text-gray-400">（最近一次）recovery 中间件捕获 · debug.Stack()</span>
+          <!-- 复制钉栈标题行右缘（所有者拍板：随栈区走比挂抽屉头语义更顺，名即「复制」） -->
+          <el-button
+            link type="primary" size="small" class="!ml-auto"
+            data-testid="audit-copy-stack" :disabled="!panicDetail.stack" @click="copyPanicStack"
+          >复制</el-button>
+        </div>
+        <!-- pre-wrap+break-all：长路径帧就地折行，横向只差一点的微滚动条不出现 -->
+        <pre
+          class="whitespace-pre-wrap break-all text-xs bg-gray-50 dark:bg-gray-800 p-3 rounded overflow-y-auto m-0 font-mono"
+          :class="panicDetail.stack ? 'flex-1 min-h-0' : ''"
+        >{{ panicDetail.stack || '（无栈记录）' }}</pre>
+      </div>
     </el-drawer>
   </div>
 </template>
 
 <!-- 抽屉 teleport 到 body，scoped 不可达——全局窄名空间 .panic-drawer 仅此一处使用。
-     header margin-bottom EP 默认 32px（标题→表格 44px 的主凶）收到 10px；抽屉高度
-     fit-content+bottom:auto 消弹性余白（默认拉满视口高，表格距底 56px——2026-10-30 二轮走查） -->
+     header margin-bottom EP 默认 32px（标题→表格 44px 的主凶）收到 10px；抽屉保持
+     EP 默认全视口高（fit-content 悬空已否——2026-10-30 三轮），body 转 flex 列让
+     恢复栈区块吃满剩余高度（消底部死空白，见模板内注释） -->
 <style>
-.panic-drawer.el-drawer,
-.panic-drawer .el-drawer {
-  height: fit-content;
-  bottom: auto;
-}
-
 .panic-drawer .el-drawer__header {
   margin-bottom: 10px;
   padding: 16px 20px 0;
 }
 
 .panic-drawer .el-drawer__body {
+  display: flex;
+  flex-direction: column;
   padding: 10px 20px 14px;
 }
 </style>
