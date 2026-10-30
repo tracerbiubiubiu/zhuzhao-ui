@@ -266,6 +266,32 @@ rules「新建规则」参照实现；org 页层级面包屑随工具行挪卡�
    生效，CI 全新安装复现）——EP 图标字形一律走 `src/icons.ts` 在册 MDI 字形+`<Icon>`
    包装；Fold/Expand 形态待工具链修复后再对齐（Collapse 组件注释留痕）。
 
+## 页面配方决策树（2026-10-30 立——spec coding 动线：新建列表页按序走）
+
+> 十一节规则的**执行序**形态——AI/新人新建或大改一个列表页从此节按序走，
+> 每步给「去哪节看细则」锚。跑完 = 六件门禁绿 + 哨兵全绿。
+
+```
+① 定形态（§页面骨架三形态）
+   主列表一张表→列表页；表单/详情流→内容页；列表+其他区块→复合页
+② 骨架（§页面骨架）——fill-page 根 + 形态对应滚动配方 + tabs 叠 fill-tabs
+③ 分页选型（§分页统一约定四形态表）
+   服务端 offset→ProTable；无 total 端点→cursor；内存全量≤50→内滚；
+   客户端 slice→面板型带 sizes（哨兵：无分页设施=paginationCoverage 红）
+④ 筛选栏（§筛选栏配方+§筛选栏折叠）
+   控件≤4 直排；多则 FilterBar 包裹；日期范围一律 useDatePresetRange
+   快捷段（禁常驻 daterange）；下拉变更即查/文本防抖 300ms/重置钉右
+⑤ 表格列（§表格规范）——内容列 minWidth/枚举固定宽/操作列 fixed right
+   + wrap；行点击进详情给 cursor-pointer（.stop 防冒泡）
+⑥ 空态（§空态与加载）——#empty 槽+行动出口 CTA（首个X 专名防 strict；
+   文案不含 Tab 名子目——uiConventions 哨兵）
+⑦ 卡片头（§卡片头纪律）——一屏一卡不加头；按钮进工具行 ml-auto 钉右
+⑧ 数据展示——时间 formatDateTime（禁手写 toLocaleString）；人名
+   UserNameText；错误处理 apiErrorBody/apiErrorMessage（禁手写抽取）
+⑨ 验收——pnpm gate 六件 + 哨兵（pnpm test 内）；视口探针 section
+   滚动=0；双档自测 900/1440 高
+```
+
 ## 新增页面 checklist
 
 1. 根节点 `fill-page`（**无需再叠 p-4**——根层 padding 已全局归零，写了也被覆盖；
@@ -306,6 +332,25 @@ rules「新建规则」参照实现；org 页层级面包屑随工具行挪卡�
 | useTableFit / useAutoFilterRun / useDatePresetRange | `@vea/hooks` | 列宽重排兜底/筛选即时触发/日期快捷段 |
 | datetime / apiError / avatar | `@/utils/*` | 时间格式化单点/信封错误抽取/头像 URL 归一 |
 | cursorPager | `views/al/data/cursorPager.ts` | 游标分页页栈（push/pop/reset） |
+
+## 组件 props 契约速查（2026-10-30 立——省去读源码；完整签名以组件 types 为准）
+
+**ProTable**（列表主组件）：
+```ts
+columns: ProTableColumn[]  // { prop, label, width?, minWidth?, align?, fixed?, slot?, showOverflowTooltip?, wrap? }
+fetcher: (p: { page, page_size, ...筛选透传 }) => Promise<{ list: Row[], total: number }>
+// slots：#search（筛选区）/ #toolbar（工具栏）/ 具名 slot = column.slot ?? prop（拿 { row }）
+// expose：refresh({ resetPage?: boolean })；分页 [10,20,50,100] 默认 20 勿覆盖
+```
+**FilterBar**（筛选折叠）：`visible?: number`（默认 4）；槽内控件直挂；动作钮加
+`data-ignore`（收起态仍可见）。注意：form-item 已 div 化——E2E 按 placeholder/文本定位。
+**UserPicker**：`v-model` = 用户 ID（string）；远程搜索姓名/工号/用户名，回填 ID。
+**UserNameText**：`{ name, no, fallback }`——三态降级（人名(工号)→其一→fallback）。
+**useDatePresetRange**（@vea/hooks）：`{ preset, range, apply(v), reset() }`——
+radio 快捷段四态 + range=[from,to]（YYYY-MM-DD）驱动服务端/客户端过滤。
+**apiError**（@/utils）：`apiErrorBody(err)`（信封抽取）/ `apiErrorMessage(err, fallback?)` /
+`isConflictCode(err)`（10006/100008 冲突族）。
+**datetime**（@/utils）：`formatDateTime(v)`（完整）/ `formatDateTimeShort(v)`（M/D HH:mm）。
 
 ## 防漂移哨兵矩阵（2026-10-30 汇总——六扫描全在单测内，`pnpm test` 即跑）
 

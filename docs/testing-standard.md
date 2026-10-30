@@ -53,3 +53,41 @@ FE4 断言的 4xx 白名单必须显式登记在 spec 内并注明语义，禁�
 
 - **视觉回归**（Playwright screenshot/Chromatic）：触发=UI 改版开始出现无人发现的回归；
 - **a11y 测试**（axe-core）：触发=无障碍合规要求出现。
+
+
+## E2E 编写指南（2026-10-30 立——27 spec 实战沉淀；spec 注释里的坑收拢成篇）
+
+**新建 spec 骨架**（打真实栈，不用 stub——分层见上表）：
+```ts
+import { test, expect } from '@playwright/test'
+import { loadState, api, apiLogin, psql, pgAvailable } from './helpers'
+import { uiLogin } from './ui'
+
+test.setTimeout(120_000)  // 三栈链路（app+上游）给足
+test('场景描述', async ({ page }) => {
+  const state = loadState()                  // globalSetup 建好的凭据（admin/operator/viewer）
+  await uiLogin(page, state.admin.employeeNo, state.admin.password)
+  await expect(page.getByRole('menuitem', { name: 'XX' })).toBeVisible({ timeout: 15_000 })
+  await page.goto('/#/xx')
+  // ...断言
+})
+```
+
+**定位纪律**（踩坑浓缩）：
+- 登录锚点一律 `e2e/ui.ts`（26 spec 依赖——改登录页先改锚点）；
+- **禁 `.el-form-item` 过滤定位**（FilterBar 批后 form-item 已 div 化）——按
+  placeholder（`getByPlaceholder('工号，如 E000001')`）/ data-testid / 控件文本
+  （`.filter-bar` scope）/ 列锚（`columnheader`）定位；
+- el-dropdown 菜单 teleport 到 body——`page.getByRole('option', { name })` +
+  visible 过滤；getByText/ByRole name 均**子串匹配**——空态文案勿含 Tab 名子串；
+- 动态路由页面 `goto` 后 `reload()` 一次（冷启动保险）。
+
+**造数/清理**：
+- API 造数用 `api()` + admin token；幂等后缀 `Date.now().toString(36)`；
+- 无 API 触发面的表（如 panic_logs）→ `psql()` 直插 + `finally` 清理 +
+  `pgAvailable()` 优雅降级（无 DB 环境跳过不 fail）；
+- 跨 spec 状态互踩防：临时类型/规则 finally 删除；不依赖其他 spec 残留。
+
+**运行前提**：五栈在位（app@33333/activelist@8080/taskrunner@8081/PG/Redis）+
+vite webServer 自动拉起（Playwright 探测 127.0.0.1:4000——strictPort 已启，
+端口被占会显式失败不静默漂移）。串行 workers=1（共享 dev 栈 DB 防互踩）。
