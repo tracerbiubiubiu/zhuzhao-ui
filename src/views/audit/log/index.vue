@@ -151,6 +151,23 @@ async function runReconcile() {
 
 const panicsTable = ref()
 useTableFit(panicsTable, () => panics.value)
+
+// panic 详情抽屉（聚合行点「详情」——stack 为该指纹最近一次的完整恢复栈）
+const panicDrawer = ref(false)
+const panicDetail = ref<PanicRow | null>(null)
+function openPanicDetail(row: PanicRow) {
+  panicDetail.value = row
+  panicDrawer.value = true
+}
+async function copyPanicStack() {
+  if (!panicDetail.value?.stack) return
+  try {
+    await navigator.clipboard.writeText(panicDetail.value.stack)
+    ElMessage.success('已复制恢复栈')
+  } catch {
+    ElMessage.error('复制失败（浏览器剪贴板权限）')
+  }
+}
 </script>
 
 <template>
@@ -228,6 +245,11 @@ useTableFit(panicsTable, () => panics.value)
               <el-table-column prop="last_at" label="最近发生" width="170">
                 <template #default="{ row }">{{ formatTime((row as { last_at: string }).last_at) }}</template>
               </el-table-column>
+              <el-table-column label="操作" width="80" fixed="right">
+                <template #default="{ row }">
+                  <el-button link type="primary" size="small" @click="openPanicDetail(row as PanicRow)">详情</el-button>
+                </template>
+              </el-table-column>
             </el-table>
           </div>
           <div class="mt-3 flex items-center justify-between">
@@ -290,6 +312,26 @@ useTableFit(panicsTable, () => panics.value)
         <el-descriptions-item label="User-Agent" :span="2">{{ payloadRow.user_agent || '—' }}</el-descriptions-item>
         <el-descriptions-item label="请求体" :span="2">
           <pre class="whitespace-pre-wrap text-xs bg-gray-50 dark:bg-gray-800 p-3 rounded max-h-[280px] overflow-auto m-0">{{ prettyBody(payloadRow) }}</pre>
+        </el-descriptions-item>
+      </el-descriptions>
+    </el-drawer>
+
+    <!-- panic 详情抽屉（聚合行「详情」——恢复栈为该指纹最近一次） -->
+    <el-drawer v-model="panicDrawer" :title="`Panic #${panicDetail?.id ?? ''} 详情`" size="620px">
+      <el-descriptions v-if="panicDetail" :column="2" border size="small">
+        <el-descriptions-item label="消息" :span="2">
+          <span class="text-[var(--el-color-danger)] font-medium">{{ panicDetail.message }}</span>
+        </el-descriptions-item>
+        <el-descriptions-item label="路径" :span="2">{{ panicDetail.path }}</el-descriptions-item>
+        <el-descriptions-item label="次数">{{ panicDetail.count }}</el-descriptions-item>
+        <el-descriptions-item label="最近发生">{{ formatTime(panicDetail.last_at) }}</el-descriptions-item>
+        <el-descriptions-item label="首次发生" :span="2">{{ panicDetail.first_at ? formatTime(panicDetail.first_at) : '—' }}</el-descriptions-item>
+        <el-descriptions-item label="恢复栈（最近一次）" :span="2">
+          <div class="flex items-center justify-between mb-1">
+            <span class="text-xs text-gray-400">recovery 中间件捕获 · debug.Stack()</span>
+            <el-button link type="primary" size="small" :disabled="!panicDetail.stack" @click="copyPanicStack">复制</el-button>
+          </div>
+          <pre class="whitespace-pre text-xs bg-gray-50 dark:bg-gray-800 p-3 rounded max-h-[420px] overflow-auto m-0 font-mono">{{ panicDetail.stack || '（无栈记录）' }}</pre>
         </el-descriptions-item>
       </el-descriptions>
     </el-drawer>

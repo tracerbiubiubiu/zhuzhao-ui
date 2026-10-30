@@ -42,13 +42,15 @@ export async function listAuditLogsApi(
 
 // ===== P4-8：panic 聚合 + 路由对账（P2-9：视图直连 request 收归 API 层） =====
 
-/** panic 聚合行（同指纹计数——最近优先） */
+/** panic 聚合行（同指纹计数——最近优先；stack 为该指纹最近一次的完整恢复栈） */
 export interface PanicRow {
   id: string
   message: string
   path: string
   count: number
   last_at: string
+  first_at?: string
+  stack?: string
 }
 
 export interface PanicPage {
