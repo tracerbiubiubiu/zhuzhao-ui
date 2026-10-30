@@ -317,7 +317,13 @@ async function copyPanicStack() {
     </el-drawer>
 
     <!-- panic 详情抽屉（聚合行「详情」——恢复栈为该指纹最近一次） -->
-    <el-drawer v-model="panicDrawer" :title="`Panic #${panicDetail?.id ?? ''} 详情`" size="620px">
+    <el-drawer v-model="panicDrawer" size="620px">
+      <template #header>
+        <div class="flex items-center gap-2">
+          <span class="font-semibold">Panic #{{ panicDetail?.id ?? '' }} 详情</span>
+          <el-button link type="primary" size="small" data-testid="audit-copy-stack" :disabled="!panicDetail?.stack" @click="copyPanicStack">复制恢复栈</el-button>
+        </div>
+      </template>
       <el-descriptions v-if="panicDetail" :column="2" border size="small">
         <el-descriptions-item label="消息" :span="2">
           <span class="text-[var(--el-color-danger)] font-medium">{{ panicDetail.message }}</span>
@@ -327,11 +333,9 @@ async function copyPanicStack() {
         <el-descriptions-item label="最近发生">{{ formatTime(panicDetail.last_at) }}</el-descriptions-item>
         <el-descriptions-item label="首次发生" :span="2">{{ panicDetail.first_at ? formatTime(panicDetail.first_at) : '—' }}</el-descriptions-item>
         <el-descriptions-item label="恢复栈（最近一次）" :span="2">
-          <div class="flex items-center justify-between mb-1">
-            <span class="text-xs text-gray-400">recovery 中间件捕获 · debug.Stack()</span>
-            <el-button link type="primary" size="small" :disabled="!panicDetail.stack" @click="copyPanicStack">复制</el-button>
-          </div>
-          <pre class="whitespace-pre text-xs bg-gray-50 dark:bg-gray-800 p-3 rounded max-h-[420px] overflow-auto m-0 font-mono">{{ panicDetail.stack || '（无栈记录）' }}</pre>
+          <div class="mb-1 text-xs text-gray-400">recovery 中间件捕获 · debug.Stack()</div>
+          <!-- pre-wrap+break-all：长路径帧就地折行，横向只差一点的微滚动条不出现 -->
+          <pre class="whitespace-pre-wrap break-all text-xs bg-gray-50 dark:bg-gray-800 p-3 rounded max-h-[420px] overflow-y-auto m-0 font-mono">{{ panicDetail.stack || '（无栈记录）' }}</pre>
         </el-descriptions-item>
       </el-descriptions>
     </el-drawer>
