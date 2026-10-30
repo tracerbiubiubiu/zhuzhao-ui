@@ -349,10 +349,22 @@ async function copyPanicStack() {
   </div>
 </template>
 
-<!-- 抽屉 teleport 到 body，scoped 不可达——全局窄名空间 .panic-drawer 仅此一处使用 -->
+<!-- 抽屉 teleport 到 body，scoped 不可达——全局窄名空间 .panic-drawer 仅此一处使用。
+     header margin-bottom EP 默认 32px（标题→表格 44px 的主凶）收到 10px；抽屉高度
+     fit-content+bottom:auto 消弹性余白（默认拉满视口高，表格距底 56px——2026-10-30 二轮走查） -->
 <style>
+.panic-drawer.el-drawer,
+.panic-drawer .el-drawer {
+  height: fit-content;
+  bottom: auto;
+}
+
+.panic-drawer .el-drawer__header {
+  margin-bottom: 10px;
+  padding: 16px 20px 0;
+}
+
 .panic-drawer .el-drawer__body {
-  padding-top: 12px;
-  padding-bottom: 12px;
+  padding: 10px 20px 14px;
 }
 </style>
