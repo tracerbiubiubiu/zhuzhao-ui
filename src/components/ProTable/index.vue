@@ -104,8 +104,24 @@ defineExpose({
     <div v-if="$slots.search" class="mb-4">
       <slot name="search" />
     </div>
-    <div v-if="$slots.toolbar" class="mb-2 flex items-center justify-between">
+    <div class="mb-2 flex items-center justify-between gap-2">
       <slot name="toolbar" />
+      <!-- 密度/聚焦=列表右上角（表格上方工具栏行右端，与页面 toolbar 槽同行）：
+           密度=图标钮显目标形态（tooltip 动作全称），聚焦=方框图标——
+           @element-plus/icons-vue 本仓解析失败（CI 实证，Collapse 同因），走离线 mdi 字形 -->
+      <div class="flex items-center gap-1">
+        <el-tooltip :content="density === 'small' ? '切换为舒适' : '切换为紧凑'" placement="top">
+          <el-button size="small" text bg :data-testid="`pt-density-${density}`" @click="toggleDensity">
+            <Icon icon="mdi:format-line-spacing" :height="14" class="mr-1" />
+            {{ density === 'small' ? '舒适' : '紧凑' }}
+          </el-button>
+        </el-tooltip>
+        <el-tooltip v-if="focusCard" content="聚焦模式（整卡满屏，Esc 退出）" placement="top">
+          <el-button size="small" text bg :data-testid="`pt-focus-${focused}`" @click="toggleFocus">
+            <Icon :icon="focused ? 'mdi:fullscreen-exit' : 'mdi:fullscreen'" :height="16" />
+          </el-button>
+        </el-tooltip>
+      </div>
     </div>
     <div class="pro-table__table" :class="{ 'pro-table__table--fill': fill }">
       <el-table
@@ -137,11 +153,7 @@ defineExpose({
       </el-table-column>
       </el-table>
     </div>
-    <div class="mt-4 flex items-center justify-between gap-2">
-      <!-- 密度/聚焦在分页右侧（Geeker-Admin 同位）：
-           密度=可点击图标钮（tooltip 说明目标形态——按钮图标/文案均显示「点击后到达的状态」，
-           与聚焦钮同向），聚焦=方框图标（mdi:fullscreen/fullscreen-exit）——
-           @element-plus/icons-vue 本仓解析失败（CI 实证，Collapse 同因），走离线 mdi 字形 -->
+    <div class="mt-4 flex items-center justify-end">
       <el-pagination
         :total="state.total.value"
         :current-page="state.page.value"
@@ -151,19 +163,6 @@ defineExpose({
         @current-change="(p: number) => { actions.setPage(p); scrollToTop() }"
         @size-change="(s: number) => { actions.setPageSize(s); scrollToTop() }"
       />
-      <div class="flex items-center gap-1">
-        <el-tooltip :content="density === 'small' ? '切换为舒适' : '切换为紧凑'" placement="top">
-          <el-button size="small" text bg :data-testid="`pt-density-${density}`" @click="toggleDensity">
-            <Icon icon="mdi:format-line-spacing" :height="14" class="mr-1" />
-            {{ density === 'small' ? '舒适' : '紧凑' }}
-          </el-button>
-        </el-tooltip>
-        <el-tooltip v-if="focusCard" content="聚焦模式（整卡满屏，Esc 退出）" placement="top">
-          <el-button size="small" text bg :data-testid="`pt-focus-${focused}`" @click="toggleFocus">
-            <Icon :icon="focused ? 'mdi:fullscreen-exit' : 'mdi:fullscreen'" :height="16" />
-          </el-button>
-        </el-tooltip>
-      </div>
     </div>
   </div>
 </template>
