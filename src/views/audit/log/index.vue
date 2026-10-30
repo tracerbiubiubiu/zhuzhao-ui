@@ -234,11 +234,13 @@ async function copyPanicStack() {
     </el-card>
       </el-tab-pane>
 
-      <!-- P4-8 panic 聚合 -->
+      <!-- P4-8 panic 聚合：卡片高度随内容（fill-tabs 的 flex:1 拉伸下短内容时 footer 下方
+           ~300px 死空间——2026-10-30 走查收口，flex-none 退 grow）；表格 max-height 兜
+           多指纹内滚（视口铁律：溢出不出 pane） -->
       <el-tab-pane label="Panic 聚合" name="panics">
-        <el-card shadow="never">
+        <el-card shadow="never" class="!flex-none">
           <div class="min-h-0 flex-initial">
-            <el-table ref="panicsTable" :data="panics" v-loading="panicsLoading" row-key="id" height="100%">
+            <el-table ref="panicsTable" :data="panics" v-loading="panicsLoading" row-key="id" max-height="calc(100vh - 325px)">
               <el-table-column prop="count" label="次数" width="80" align="center" />
               <el-table-column prop="path" label="路径" min-width="200" />
               <el-table-column prop="message" label="消息" min-width="260" show-overflow-tooltip />
@@ -316,8 +318,9 @@ async function copyPanicStack() {
       </el-descriptions>
     </el-drawer>
 
-    <!-- panic 详情抽屉（聚合行「详情」——恢复栈为该指纹最近一次） -->
-    <el-drawer v-model="panicDrawer" size="620px">
+    <!-- panic 详情抽屉（聚合行「详情」——恢复栈为该指纹最近一次）；panic-drawer 收紧
+         body 上下内边距（EP 默认 20px 上下各留一大截——2026-10-30 走查反馈） -->
+    <el-drawer v-model="panicDrawer" size="620px" class="panic-drawer">
       <template #header>
         <div class="flex items-center gap-2">
           <span class="font-semibold">Panic #{{ panicDetail?.id ?? '' }} 详情</span>
@@ -332,7 +335,11 @@ async function copyPanicStack() {
         <el-descriptions-item label="次数">{{ panicDetail.count }}</el-descriptions-item>
         <el-descriptions-item label="最近发生">{{ formatTime(panicDetail.last_at) }}</el-descriptions-item>
         <el-descriptions-item label="首次发生" :span="2">{{ panicDetail.first_at ? formatTime(panicDetail.first_at) : '—' }}</el-descriptions-item>
-        <el-descriptions-item label="恢复栈（最近一次）" :span="2">
+        <el-descriptions-item :span="2">
+          <template #label>
+            <div>恢复栈</div>
+            <div class="text-xs font-normal">（最近一次）</div>
+          </template>
           <div class="mb-1 text-xs text-gray-400">recovery 中间件捕获 · debug.Stack()</div>
           <!-- pre-wrap+break-all：长路径帧就地折行，横向只差一点的微滚动条不出现 -->
           <pre class="whitespace-pre-wrap break-all text-xs bg-gray-50 dark:bg-gray-800 p-3 rounded max-h-[420px] overflow-y-auto m-0 font-mono">{{ panicDetail.stack || '（无栈记录）' }}</pre>
@@ -341,3 +348,11 @@ async function copyPanicStack() {
     </el-drawer>
   </div>
 </template>
+
+<!-- 抽屉 teleport 到 body，scoped 不可达——全局窄名空间 .panic-drawer 仅此一处使用 -->
+<style>
+.panic-drawer .el-drawer__body {
+  padding-top: 12px;
+  padding-bottom: 12px;
+}
+</style>
