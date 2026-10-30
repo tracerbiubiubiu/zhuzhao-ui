@@ -8,9 +8,12 @@
   const props = withDefaults(
     defineProps<{
       compact?: boolean
+      /** 竖排形态（dual rail 专用）：图标上、系统名小字下——窄栏品牌两可见 */
+      stack?: boolean
     }>(),
     {
-      compact: false
+      compact: false,
+      stack: false
     }
   )
 
@@ -22,7 +25,8 @@
 
   const showTitle = computed(
     () =>
-      !props.compact && (layout.value === 'top' || layout.value === 'mixed' || !appStore.collapse)
+      props.stack ||
+      (!props.compact && (layout.value === 'top' || layout.value === 'mixed' || !appStore.collapse))
   )
 </script>
 
@@ -32,6 +36,7 @@
       :class="[
         prefixCls,
         layout === 'top' || layout === 'mixed' ? `${prefixCls}--header` : '',
+        props.stack ? `${prefixCls}--stack` : '',
         'flex !h-[var(--logo-height)] items-center cursor-pointer px-10px relative decoration-none overflow-hidden'
       ]"
       to="/"
@@ -41,6 +46,7 @@
       <div
         :class="[
           'ml-10px text-15px font-600 tracking-[-0.01em] whitespace-nowrap transition-opacity duration-200',
+          props.stack ? '!ml-0 !mt-1px !text-10px max-w-full' : '',
           {
             'text-[var(--logo-title-text-color)]': layout === 'sidebar' || layout === 'dual',
             'text-[var(--top-header-text-color)]': layout === 'top' || layout === 'mixed',

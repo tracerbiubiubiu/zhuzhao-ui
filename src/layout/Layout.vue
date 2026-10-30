@@ -8,6 +8,7 @@
   import Menu from '@/components/Menu/index.vue'
   import TagsView from '@/components/TagsView/index.vue'
   import Logo from '@/components/Logo/index.vue'
+  import Collapse from '@/components/Collapse/index.vue'
   import Backtop from '@/components/Backtop/index.vue'
   import AppView from './components/AppView.vue'
   import ToolHeader from './components/ToolHeader.vue'
@@ -74,6 +75,9 @@
 <template>
   <section :class="['v-layout', `v-layout--${layout}`]">
     <header v-if="layout === 'top' || layout === 'mixed'" class="v-layout__topbar">
+      <!-- 混合导航展开钮钉顶栏最左（2026-10-30 修复：原在右端 ToolHeader 里——
+           控制对象是下方次级栏，就近原则应贴左；与 dual 工具栏左位一致） -->
+      <Collapse v-if="layout === 'mixed'" class="pl-10px" color="var(--top-header-text-color)" />
       <Logo />
       <Menu v-if="layout === 'top'" mode="horizontal" />
       <PrimaryNav
@@ -83,7 +87,7 @@
         @select="selectPrimary"
       />
       <ToolHeader
-        :show-collapse="layout === 'mixed'"
+        :show-collapse="false"
         :show-breadcrumb="false"
         class="v-layout__top-tools"
       />
@@ -102,7 +106,8 @@
       </aside>
 
       <aside v-if="layout === 'dual'" class="v-layout__rail">
-        <Logo compact />
+        <!-- 图标+竖排系统名（2026-10-30 修复：compact 只有图标，品牌名不可见） -->
+        <Logo stack />
         <ElScrollbar>
           <PrimaryNav
             mode="rail"
@@ -251,6 +256,21 @@
         justify-content: center;
         width: var(--layout-rail-width);
         padding: 0;
+      }
+
+      /* 竖排品牌（2026-10-30）：图标缩至 30px + 系统名 10px 竖排其下，
+         72px 窄栏品牌两可见；名字单行省略（title 属性悬停全名） */
+      :deep(.v-logo--stack) {
+        flex-direction: column;
+        gap: 2px;
+        padding-top: 10px;
+        padding-bottom: 8px;
+        height: auto;
+
+        img {
+          width: 30px;
+          height: 30px;
+        }
       }
     }
 
