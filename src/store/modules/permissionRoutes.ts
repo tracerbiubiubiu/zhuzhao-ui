@@ -108,7 +108,10 @@ function buildTopLevelPage(menu: RouteMenuNode, component: ViewComponent): Built
         path: '',
         name: `${menu.code}_page`,
         component,
-        meta: {},
+        // meta 继承父级（2026-10-29 修复）：空 meta 子路由在 mixed/dual 次级栏被当顶层项
+        // 渲染成「Please set title」（useRenderMenuTitle 兜底文案），面包屑亦拖空尾项；
+        // 经典侧栏单子折叠走 {...父,...子} 合并——同名继承无行为变化
+        meta: toMeta(menu),
       },
     ],
   }

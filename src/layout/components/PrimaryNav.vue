@@ -1,5 +1,6 @@
 <script setup lang="ts">
   import { useI18n } from 'vue-i18n'
+  import { hasOneShowingChild } from '@/components/Menu/helper'
 
   withDefaults(
     defineProps<{
@@ -18,6 +19,18 @@
   }>()
 
   const { t } = useI18n()
+
+  /**
+   * 一级导航标题（2026-10-29 修复）：与侧栏 Menu 的单子折叠同语义——目录只有一个
+   * 可见子级时显示子级标题（任务管理→任务中心），避免同一菜单两种布局两个名字
+   */
+  const primaryTitle = (route: AppRouteRecordRaw): string => {
+    const { oneShowingChild, onlyOneChild } = hasOneShowingChild(route.children, route)
+    if (oneShowingChild && onlyOneChild && !onlyOneChild.noShowingChildren) {
+      return String(onlyOneChild.meta?.title ?? route.meta?.title ?? '')
+    }
+    return String(route.meta?.title ?? '')
+  }
 </script>
 
 <template>
@@ -27,11 +40,11 @@
       :key="route.path"
       type="button"
       :class="['primary-nav__item', { 'is-active': activePath === route.path }]"
-      :title="t(route.meta?.title || '')"
+      :title="t(primaryTitle(route))"
       @click="emit('select', route)"
     >
       <Icon v-if="route.meta?.icon" :icon="route.meta.icon" :size="mode === 'rail' ? 22 : 18" />
-      <span>{{ t(route.meta?.title || '') }}</span>
+      <span>{{ t(primaryTitle(route)) }}</span>
     </button>
   </nav>
 </template>

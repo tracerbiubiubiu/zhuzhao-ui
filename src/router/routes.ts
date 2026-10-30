@@ -32,7 +32,11 @@ const constantRoutes: RouteRecordRaw[] = [
   { path: '/tickets/new', name: 'TicketCreate', component: () => import('@/views/ticket/create/index.vue'), meta: { title: '发起工单', hidden: true } },
   { path: '/tickets/:id', name: 'TicketDetail', component: () => import('@/views/ticket/detail/index.vue'), meta: { title: '工单详情', hidden: true } },
   // Redirect 中转（挂在 Layout 下供 TagsView 刷新——见 router/index.ts）
-  { path: '/redirect/:path(.*)', name: 'Redirect', component: () => import('@/views/Redirect/Redirect.vue'), meta: { hidden: true, noTagsView: true } } // noTagsView 防刷新幽灵标签（种子原版有——裁剪时丢失）,
+  { path: '/redirect/:path(.*)', name: 'Redirect', component: () => import('@/views/Redirect/Redirect.vue'), meta: { hidden: true, noTagsView: true } }, // noTagsView 防刷新幽灵标签（种子原版有——裁剪时丢失）
+  // 404 兜底（catch-all——本条曾在 routePermission.isExemptRoute/本注释中"预告"却从未注册：
+  // 未匹配 URL 整页空白，2026-10-29 手输 /audit/log 失效路径实证）。全屏独立页与 /403 同款；
+  // noTagsView 防 404 幽灵标签；豁免由 routePermission NOT_FOUND_ROUTE_NAME 配套
+  { path: '/:pathMatch(.*)*', name: 'NotFound', component: () => import('@/views/Error/404.vue'), meta: { title: '404', hidden: true, noTagsView: true } },
 ]
 
 export default constantRoutes

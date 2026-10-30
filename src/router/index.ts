@@ -36,6 +36,8 @@ export const constantRouterMap: RouteRecordRaw[] = [
     meta: { hidden: true },
     children: [redirectRoute, profileRoute, myOrgRoute, ticketCreateRoute, ticketDetailRoute, messageCenterRoute],
   },
+  // NotFound（catch-all 404）留在顶层整表展开：绝对 pathMatch 子路径会被 vue-router
+  // 视为根级路由嵌不进根容器，且全屏 404 与 /403 独立页同款（2026-10-29 注册）
   ...constantRoutes.filter((route) => !['Redirect', 'Profile', 'MyOrg', 'TicketCreate', 'TicketDetail', 'message_center_page'].includes(route.name as string)),
 ]
 
