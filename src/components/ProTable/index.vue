@@ -9,7 +9,8 @@
  * - 请求失败：全局 toast（请求层 errorToast）+ 表格空态；本组件不重复提示
  */
 import { onDeactivated, onMounted, onUnmounted, ref } from 'vue'
-import { ElButton, ElTable, ElTableColumn, ElPagination } from 'element-plus'
+import { ElButton, ElTable, ElTableColumn, ElPagination, ElTooltip } from 'element-plus'
+import { Icon } from '@iconify/vue'
 import { useCrud, useTableFit } from '@vea/hooks'
 import type { ProTableColumn, ProTableFetcher } from './types'
 
@@ -54,7 +55,8 @@ function scrollToTop() {
   tableEl.value?.setScrollTop?.(0)
 }
 
-// 密度：紧凑档行高 ~32px（可视行数 +40%），localStorage 记忆全页共享
+// 密度：紧凑档行高 ~32px（可视行数 +40%），localStorage 记忆全页共享；
+// 图标钮显示目标形态（tooltip 全称说明——按钮文案与聚焦钮同向=点击后到达的状态）
 const DENSITY_KEY = 'pro_table_density'
 const density = ref<'default' | 'small'>(localStorage.getItem(DENSITY_KEY) === 'small' ? 'small' : 'default')
 function toggleDensity() {
@@ -136,10 +138,10 @@ defineExpose({
       </el-table>
     </div>
     <div class="mt-4 flex items-center justify-between gap-2">
-      <div class="flex items-center gap-1">
-        <el-button size="small" text bg @click="toggleDensity">密度：{{ density === 'small' ? '紧凑' : '舒适' }}</el-button>
-        <el-button v-if="focusCard" size="small" text bg @click="toggleFocus">{{ focused ? '退出聚焦' : '聚焦' }}</el-button>
-      </div>
+      <!-- 密度/聚焦在分页右侧（Geeker-Admin 同位）：
+           密度=可点击图标钮（tooltip 说明目标形态——按钮图标/文案均显示「点击后到达的状态」，
+           与聚焦钮同向），聚焦=方框图标（mdi:fullscreen/fullscreen-exit）——
+           @element-plus/icons-vue 本仓解析失败（CI 实证，Collapse 同因），走离线 mdi 字形 -->
       <el-pagination
         :total="state.total.value"
         :current-page="state.page.value"
@@ -149,6 +151,19 @@ defineExpose({
         @current-change="(p: number) => { actions.setPage(p); scrollToTop() }"
         @size-change="(s: number) => { actions.setPageSize(s); scrollToTop() }"
       />
+      <div class="flex items-center gap-1">
+        <el-tooltip :content="density === 'small' ? '切换为舒适' : '切换为紧凑'" placement="top">
+          <el-button size="small" text bg :data-testid="`pt-density-${density}`" @click="toggleDensity">
+            <Icon icon="mdi:format-line-spacing" :height="14" class="mr-1" />
+            {{ density === 'small' ? '舒适' : '紧凑' }}
+          </el-button>
+        </el-tooltip>
+        <el-tooltip v-if="focusCard" content="聚焦模式（整卡满屏，Esc 退出）" placement="top">
+          <el-button size="small" text bg :data-testid="`pt-focus-${focused}`" @click="toggleFocus">
+            <Icon :icon="focused ? 'mdi:fullscreen-exit' : 'mdi:fullscreen'" :height="16" />
+          </el-button>
+        </el-tooltip>
+      </div>
     </div>
   </div>
 </template>

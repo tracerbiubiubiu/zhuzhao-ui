@@ -157,7 +157,10 @@ useTableFit(panicsTable, () => panics.value)
     <el-tabs v-model="activeTab" class="fill-tabs">
       <el-tab-pane label="审计日志" name="logs">
     <el-card shadow="never">
-      <template #header><span class="font-semibold">审计日志</span></template>
+      <!-- 卡头不重复 Tab 名（Tab=审计日志）——卡头让位给页内筛选说明 -->
+      <template #header>
+        <span class="text-xs text-gray-400">平台操作审计——登录、API 调用与导出行为记录（只读，可查已删除用户）</span>
+      </template>
       <ProTable ref="tableRef" :columns="columns" :fetcher="fetcher" fill>
         <template #search>
           <el-form inline @submit.prevent>

@@ -20,6 +20,9 @@ import fileTree from '@iconify-icons/mdi/file-tree'
 import folderOpenOutline from '@iconify-icons/mdi/folder-open-outline'
 import folderOutline from '@iconify-icons/mdi/folder-outline'
 import formatListBulleted from '@iconify-icons/mdi/format-list-bulleted'
+import formatLineSpacing from '@iconify-icons/mdi/format-line-spacing'
+import fullscreen from '@iconify-icons/mdi/fullscreen'
+import fullscreenExit from '@iconify-icons/mdi/fullscreen-exit'
 import helpCircle from '@iconify-icons/mdi/help-circle'
 import home from '@iconify-icons/mdi/home'
 import keyOutline from '@iconify-icons/mdi/key-outline'
@@ -66,6 +69,9 @@ export const icons = {
   'mdi:folder-open-outline': folderOpenOutline,
   'mdi:folder-outline': folderOutline,
   'mdi:format-list-bulleted': formatListBulleted,
+  'mdi:format-line-spacing': formatLineSpacing,
+  'mdi:fullscreen': fullscreen,
+  'mdi:fullscreen-exit': fullscreenExit,
   'mdi:help-circle': helpCircle,
   'mdi:home': home,
   'mdi:key-outline': keyOutline,
