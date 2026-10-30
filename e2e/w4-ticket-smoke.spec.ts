@@ -23,6 +23,8 @@ test('W4 冒烟：工单列表渲染+关键字筛选+标题链接进详情', asy
   await page.keyboard.press('Escape')
   await expect(page.locator('.filter-bar .el-select').nth(2)).toBeVisible()  // 优先级下拉
   await expect(page.getByPlaceholder('标题 / 工单号')).toBeVisible()
+  // 2026-10-30 FilterBar 批适配：勾选组在折叠阈值外——先展开（顺带覆盖切换钮）
+  await page.locator('.filter-collapse-toggle').click()
   await expect(page.locator('.el-checkbox').filter({ hasText: '只看我处理的' })).toBeVisible()
   await expect(page.locator('.el-checkbox').filter({ hasText: '我发起的' })).toBeVisible()
 
