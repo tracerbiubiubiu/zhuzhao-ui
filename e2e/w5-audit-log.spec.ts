@@ -53,11 +53,13 @@ test('W5 冒烟：审计日志页渲染+工号过滤+请求详情弹窗', async 
   }
   try {
     await page.getByRole('tab', { name: 'Panic 聚合' }).click()
-    await expect(page.getByText('Panic 聚合（同指纹计数——最近优先）')).toBeVisible({ timeout: 10_000 })
+    // 2026-10-30 卡片头收敛批适配：卡头已删——以表头挂载为可达断言
+    await expect(page.getByRole('columnheader', { name: '最近发生' })).toBeVisible({ timeout: 10_000 })
 
     if (canSeed) {
       // 有数据态：行渲染 + 路径列非空 + 翻页（P2-8 真闭合——25 行 > pageSize 20）
-      const panicPane = page.locator('.el-tab-pane').filter({ hasText: 'Panic 聚合' })
+      // 2026-10-30 卡片头收敛批适配：卡头删除后 pane 内无「Panic 聚合」文本——按列锚定位
+      const panicPane = page.locator('.el-tab-pane').filter({ hasText: '最近发生' })
       const panicRows = panicPane.locator('.el-table__row')
       await expect(panicRows.first()).toBeVisible({ timeout: 10_000 })
       const firstPageCount = await panicRows.count()

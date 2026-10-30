@@ -16,6 +16,7 @@
  */
 import { formatDateTime } from '@/utils/datetime'
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
+import FilterBar from '@/components/FilterBar/index.vue'
 import { useAutoFilterRun, useTableFit } from '@vea/hooks'
 import { usePermission } from '@/common/auth'
 import {
@@ -460,30 +461,30 @@ useTableFit(deadTable, () => deadList.value)
               <div />
             </template>
             <template #search>
-              <el-form inline @submit.prevent>
+              <FilterBar :visible="4">
                 <!-- placeholder 式（筛选规范 v2 ⑧：禁 label 前缀敬语式，全仓形态统一 2026-10-29） -->
-                <el-form-item>
+                <div>
                   <el-input v-model="runsSearch.seq" placeholder="任务序号，如 135" clearable class="!w-[140px]" />
-                </el-form-item>
-                <el-form-item>
+                </div>
+                <div>
                   <el-input v-model="runsSearch.request_id" placeholder="request_id（排障）" clearable class="!w-[180px]" />
-                </el-form-item>
-                <el-form-item>
+                </div>
+                <div>
                   <el-input v-model="runsSearch.action" placeholder="action" clearable class="!w-[120px]" />
-                </el-form-item>
-                <el-form-item>
+                </div>
+                <div>
                   <el-select v-model="runsSearch.status" placeholder="全部状态" clearable class="!w-[110px]">
                     <el-option v-for="(v, k) in RUN_STATUS" :key="k" :label="v.label" :value="k" />
                   </el-select>
-                </el-form-item>
-                <el-form-item>
+                </div>
+                <div>
                   <el-switch v-model="runsSearch.mine" active-text="只看我提交的" />
-                </el-form-item>
-                <el-form-item class="ml-auto !mr-0">
+                </div>
+                <div class="ml-auto !mr-0" data-ignore>
                   <el-button @click="onResetRuns">重置</el-button>
-                </el-form-item>
+                </div>
 
-              </el-form>
+              </FilterBar>
             </template>
 
             <template #status="{ row }">

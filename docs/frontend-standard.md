@@ -83,6 +83,15 @@ overflow-y-auto 仅为兜底——正常页面不该用到它）→ 页面根 .f
    竞态守卫照旧；服务端 `q/field/value` 形态参照 al/data（activelist 同批端点）；
    切类型清空筛选。
 
+### 筛选栏折叠（2026-10-30 立，FilterBar 组件）
+
+控件多到一行放不下的页（工单列表 7 控件/任务 5+/审计 4+）：`FilterBar` 组件
+（`@/components/FilterBar`）——默认只显示前 `visible`（默认 4，页可覆盖）个
+控件，超阈值出现「展开/收起」切换；动作钮（重置/导出）`data-ignore` 标记
+**收起态仍可见**。折叠经 JS 直控子元素 display（nth-child+calc 非标准且
+lightningcss 拒绝编译——实证）。E2E 定位注意：form-item 已 div 化，按
+placeholder/testid/控件文本定位，禁 `.el-form-item` 过滤。
+
 ### 筛选配方 v2 补则（2026-10-28 筛选规范收敛批）
 
 7. **客户端过滤豁免清单（登记制）**：数据全量在内存且量级 ≤ 数百行 → 客户端

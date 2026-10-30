@@ -70,7 +70,8 @@ test('W5 冒烟：任务中心三 Tab（提交对话框/runs 过滤/死信/jobs�
   const opSetup = await apiLogin(state.operator.employeeNo, state.operator.password, 'w5-op')
   const opH = { token: opSetup.env!.data.access_token } as const
   await api('/api/v1/tasks', { ...opH, method: 'POST', body: { action: `${action}_other` } })
-  await page.locator('.el-form-item').filter({ hasText: '只看我提交的' }).locator('.el-switch').click()
+  // 2026-10-30 FilterBar 批适配：form-item div 化——按 switch 文本定位
+  await page.locator('.filter-bar').getByText('只看我提交的').click()
   await expect(page.locator('.el-table__row:visible').filter({ hasText: 'audit_archive' }).first()).toBeVisible({ timeout: 15_000 })
   await expect(page.locator('.el-table__row:visible').filter({ hasText: 'audit_archive_other' })).toHaveCount(0, { timeout: 5_000 })
 

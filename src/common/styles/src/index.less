@@ -51,6 +51,12 @@
   }
 }
 
+// 卡片头收敛批后续（2026-10-30）：tabs 为卡体首子时上提收窄与卡顶的间距
+// （EP 卡体 padding 20px + tabs 头 margin —— 视觉顶部过空，负 margin 上提 10px）
+.el-card__body > .el-tabs:first-child {
+  margin-top: -10px;
+}
+
 // tabs 型列表页（audit/task）：页签头 flex:none，签内容吃满，每签独立成填充链
 .fill-tabs {
   display: flex;

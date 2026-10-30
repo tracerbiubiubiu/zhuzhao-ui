@@ -9,11 +9,12 @@
  */
 import { formatDateTime } from '@/utils/datetime'
 import { reactive, ref, watch } from 'vue'
-import { ElMessage, ElAlert, ElButton, ElCard, ElDatePicker, ElDescriptions, ElDescriptionsItem, ElDrawer, ElForm, ElFormItem, ElInput, ElOption, ElPagination, ElSelect, ElTabPane, ElTable, ElTableColumn, ElTabs, ElTag, ElRadioButton, ElRadioGroup} from 'element-plus'
+import { ElMessage, ElAlert, ElButton, ElCard, ElDatePicker, ElDescriptions, ElDescriptionsItem, ElDrawer, ElInput, ElOption, ElPagination, ElSelect, ElTabPane, ElTable, ElTableColumn, ElTabs, ElTag, ElRadioButton, ElRadioGroup} from 'element-plus'
 import ProTable from '@/components/ProTable/index.vue'
 import UserNameText from '@/components/UserNameText/index.vue'
 import type { ProTableColumn } from '@/components/ProTable/types'
 import { listAuditLogsApi, type AuditLogRow, listPanicsApi, reconcileAuditApi, type PanicRow } from '@/api/audit'
+import FilterBar from '@/components/FilterBar/index.vue'
 import { useAutoFilterRun, useDatePresetRange, useTableFit } from '@vea/hooks'
 
 // keep-alive 契约：name=动态路由名（菜单 code audit_log，组件路径 audit/log/index）
@@ -159,20 +160,20 @@ useTableFit(panicsTable, () => panics.value)
     <el-card shadow="never">
       <ProTable ref="tableRef" :columns="columns" :fetcher="fetcher" fill>
         <template #search>
-          <el-form inline @submit.prevent>
+          <FilterBar :visible="4">
             <!-- placeholder 式+日期快捷段（2026-10-29 统一形态批：label 式/常驻 daterange 双漂移整改） -->
-            <el-form-item>
+            <div>
               <el-input v-model="search.employee_no" placeholder="工号，如 E000001" clearable class="!w-[160px]" title="可查已删除用户的审计记录" />
-            </el-form-item>
-            <el-form-item>
+            </div>
+            <div>
               <el-select v-model="search.method" multiple collapse-tags placeholder="全部方法" clearable class="!w-[150px]" data-testid="audit-method-filter">
                 <el-option v-for="m in ['GET', 'POST', 'PUT', 'DELETE', 'PATCH']" :key="m" :label="m" :value="m" />
               </el-select>
-            </el-form-item>
-            <el-form-item>
+            </div>
+            <div>
               <el-input v-model="search.path" placeholder="路径，如 /api/v1/users" clearable class="!w-[190px]" />
-            </el-form-item>
-            <el-form-item>
+            </div>
+            <div>
               <el-radio-group
                 :model-value="presetValue" size="small"
                 @update:model-value="(v: string | number | boolean | undefined) => applyPreset(v)"
@@ -189,11 +190,11 @@ useTableFit(panicsTable, () => panics.value)
                 :style="{ '--el-date-editor-width': '210px' }"
                 @update:model-value="(v: [string, string] | null) => { search.range = (v ?? []) as string[] }"
               />
-            </el-form-item>
-            <el-form-item class="ml-auto !mr-0">
+            </div>
+            <div class="ml-auto !mr-0" data-ignore>
               <el-button @click="onReset">重置</el-button>
-            </el-form-item>
-          </el-form>
+            </div>
+          </FilterBar>
         </template>
 
         <template #operator="{ row }">
@@ -219,7 +220,6 @@ useTableFit(panicsTable, () => panics.value)
       <!-- P4-8 panic 聚合 -->
       <el-tab-pane label="Panic 聚合" name="panics">
         <el-card shadow="never">
-          <template #header><span class="font-semibold">Panic 聚合（同指纹计数——最近优先）</span></template>
           <div class="min-h-0 flex-initial">
             <el-table ref="panicsTable" :data="panics" v-loading="panicsLoading" row-key="id" height="100%">
               <el-table-column prop="count" label="次数" width="80" align="center" />

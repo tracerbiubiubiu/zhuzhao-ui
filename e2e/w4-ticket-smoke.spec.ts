@@ -18,11 +18,11 @@ test('W4 冒烟：工单列表渲染+关键字筛选+标题链接进详情', asy
   await expect(page.getByRole('columnheader', { name: '状态' })).toBeVisible()
 
   // 状态筛选控件在位（六态下拉）+ 新批筛选控件在位（优先级/关键字）
-  await page.locator('.el-form-item').filter({ hasText: '状态' }).locator('.el-select').click()
+  await page.locator('.filter-bar .el-select').nth(1).click()  // 状态下拉（2026-10-30 FilterBar 批：form-item div 化，按序定位）
   await expect(page.getByRole('option', { name: '已关闭' })).toBeVisible()
   await page.keyboard.press('Escape')
-  await expect(page.locator('.el-form-item').filter({ hasText: '优先级' }).locator('.el-select')).toBeVisible()
-  await expect(page.locator('.el-form-item').filter({ hasText: '关键字' }).locator('input')).toBeVisible()
+  await expect(page.locator('.filter-bar .el-select').nth(2)).toBeVisible()  // 优先级下拉
+  await expect(page.getByPlaceholder('标题 / 工单号')).toBeVisible()
   await expect(page.locator('.el-checkbox').filter({ hasText: '只看我处理的' })).toBeVisible()
   await expect(page.locator('.el-checkbox').filter({ hasText: '我发起的' })).toBeVisible()
 
@@ -38,7 +38,7 @@ test('W4 冒烟：工单列表渲染+关键字筛选+标题链接进详情', asy
 
   // 2026-10-08 批：关键字筛选真数据命中 + 标题链接进详情（操作列已删，标题=靶点）
   await page.goto('/#/tickets')
-  await page.locator('.el-form-item').filter({ hasText: '关键字' }).locator('input').fill('冒烟单据')
+  await page.getByPlaceholder('标题 / 工单号').fill('冒烟单据')
   const row = page.locator('tr', { hasText: 'W4 冒烟单据' }).first()
   await expect(row).toBeVisible()
   await row.locator('.el-link').click()

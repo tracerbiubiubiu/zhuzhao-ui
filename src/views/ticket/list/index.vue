@@ -13,12 +13,13 @@
 import { formatDateTime } from '@/utils/datetime'
 import { reactive, ref } from 'vue'
 import {
-  ElButton, ElCard, ElCheckbox, ElDatePicker, ElForm, ElFormItem, ElInput, ElLink,
+  ElButton, ElCard, ElCheckbox, ElDatePicker, ElInput, ElLink,
   ElOption, ElSelect, ElTag, ElRadioButton, ElRadioGroup} from 'element-plus'
 import { ElMessage } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
 import { useQuery } from '@tanstack/vue-query'
 import { useAutoFilterRun, useDatePresetRange} from '@vea/hooks'
+import FilterBar from '@/components/FilterBar/index.vue'
 import ProTable from '@/components/ProTable/index.vue'
 import UserNameText from '@/components/UserNameText/index.vue'
 import type { ProTableColumn } from '@/components/ProTable/types'
@@ -161,32 +162,33 @@ function typeLabel(code: string): string {
     <el-card shadow="never">
       <ProTable ref="tableRef" :columns="columns" :fetcher="fetcher" fill>
         <template #search>
-          <el-form inline class="ticket-filter" @submit.prevent>
-            <el-form-item label="关键字">
+        <FilterBar :visible="5">
+
+            <div>
               <el-input
                 v-model="search.keyword" placeholder="标题 / 工单号" clearable maxlength="50"
                 class="!w-[160px]"
               />
-            </el-form-item>
-            <el-form-item label="类型">
+            </div>
+            <div>
               <el-select v-model="search.type_code" placeholder="全部" clearable class="!w-[120px]">
                 <el-option v-for="t in typesQuery.data.value ?? []" :key="t.code" :label="t.name" :value="t.code" />
               </el-select>
-            </el-form-item>
-            <el-form-item label="状态">
+            </div>
+            <div>
               <el-select v-model="search.status" placeholder="全部" clearable class="!w-[110px]">
                 <el-option v-for="s in TICKET_STATUSES" :key="s.value" :label="s.label" :value="s.value" />
               </el-select>
-            </el-form-item>
-            <el-form-item label="标签">
+            </div>
+            <div>
               <el-input v-model="search.tag" placeholder="标签精确匹配" clearable maxlength="50" class="!w-[130px]" />
-            </el-form-item>
-            <el-form-item label="优先级">
+            </div>
+            <div>
               <el-select v-model="search.priority" placeholder="全部" clearable class="!w-[100px]">
                 <el-option v-for="(label, val) in PRIORITY_LABELS.slice(1)" :key="val" :label="label" :value="val + 1" />
               </el-select>
-            </el-form-item>
-            <el-form-item>
+            </div>
+            <div>
               <el-radio-group
                 :model-value="datePreset" size="small"
                 @update:model-value="(v: string | number | boolean | undefined) => applyDatePreset(v)"
@@ -202,17 +204,18 @@ function typeLabel(code: string): string {
                 start-placeholder="起" end-placeholder="止" class="ticket-daterange !flex-none"
                 :style="{ '--el-date-editor-width': '210px' }"
               />
-            </el-form-item>
-            <el-form-item>
+            </div>
+            <div>
               <el-checkbox v-model="search.mineHandle">只看我处理的</el-checkbox>
               <el-checkbox v-model="search.mineCreated">我发起的</el-checkbox>
-            </el-form-item>
-            <el-form-item class="ml-auto !mr-0">
+            </div>
+            <div class="ml-auto !mr-0" data-ignore>
               <el-button @click="onReset">重置</el-button>
               <el-button :loading="exporting" data-testid="btn-export" @click="onExport">导出</el-button>
-            </el-form-item>
-          </el-form>
-        </template>
+            </div>
+          
+        </FilterBar>
+      </template>
 
         <template #toolbar>
           <div>
