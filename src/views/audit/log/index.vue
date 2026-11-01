@@ -234,13 +234,13 @@ async function copyPanicStack() {
     </el-card>
       </el-tab-pane>
 
-      <!-- P4-8 panic 聚合：卡片高度随内容（fill-tabs 的 flex:1 拉伸下短内容时 footer 下方
-           ~300px 死空间——2026-10-30 走查收口，flex-none 退 grow）；表格 max-height 兜
-           多指纹内滚（视口铁律：溢出不出 pane） -->
+      <!-- P4-8 panic 聚合：紧凑卡+max-height 魔数形态历经走查后（2026-10-30）被治理
+           批点名为视口锁定违例（100vh-325px 不随侧栏折叠/视口自愈）——改标准 fill 列表
+           面板：卡拉伸/表内滚/分页钉底，与同页主日志 tab（ProTable fill）同款 -->
       <el-tab-pane label="Panic 聚合" name="panics">
-        <el-card shadow="never" class="!flex-none">
-          <div class="min-h-0 flex-initial">
-            <el-table ref="panicsTable" :data="panics" v-loading="panicsLoading" row-key="id" max-height="calc(100vh - 325px)">
+        <el-card shadow="never" class="panics-card">
+          <div class="min-h-0 flex-1">
+            <el-table ref="panicsTable" :data="panics" v-loading="panicsLoading" row-key="id" height="100%">
               <el-table-column prop="count" label="次数" width="80" align="center" />
               <el-table-column prop="path" label="路径" min-width="200" />
               <el-table-column prop="message" label="消息" min-width="260" show-overflow-tooltip />
@@ -254,7 +254,7 @@ async function copyPanicStack() {
               </el-table-column>
             </el-table>
           </div>
-          <div class="mt-3 flex items-center justify-between">
+          <div class="mt-3 flex flex-none items-center justify-between">
             <span class="text-xs text-gray-400">共 {{ panicsTotal }} 个聚合指纹</span>
             <el-pagination
               :total="panicsTotal"
@@ -361,6 +361,14 @@ async function copyPanicStack() {
      EP 默认全视口高（fit-content 悬空已否——2026-10-30 三轮），body 转 flex 列让
      恢复栈区块吃满剩余高度（消底部死空白，见模板内注释） -->
 <style>
+/* panics 卡：标准 fill 链——卡体 flex 列，表格区 flex:1 内滚（height=100% 解析到定高），
+   分页 flex-none 钉底；EP 内 body scoped 管不到，:deep 打通 */
+.panics-card :deep(.el-card__body) {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
 .panic-drawer .el-drawer__header {
   margin-bottom: 10px;
   padding: 16px 20px 0;

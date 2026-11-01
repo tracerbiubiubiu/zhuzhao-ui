@@ -30,6 +30,7 @@ import { ElAlert, ElButton } from 'element-plus'
 import { MdEditor } from 'md-editor-rt'
 import 'md-editor-rt/lib/style.css'
 import { uploadAndConfirm } from '@/api/storage'
+import { formatDateTime } from '@/utils/datetime'
 
 const props = defineProps<{
   modelValue: string
@@ -94,7 +95,7 @@ onMounted(() => {
         const draft = JSON.parse(raw)
         if (draft.content && draft.content.trim() && draft.content !== props.modelValue) {
           content.value = draft.content
-          draftTime.value = new Date(draft.ts).toLocaleString('zh-CN')
+          draftTime.value = formatDateTime(draft.ts)
           draftRestored.value = true
         }
       } catch {

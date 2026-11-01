@@ -111,6 +111,8 @@ const formatCustomValue = (f: TicketTypeFieldDef): string => {
   if (v === undefined || v === null) return '—'
   if (f.field_type === 'tips') return f.field_label
   if (typeof v === 'boolean') return v ? '是' : '否'
+  // 空数组兜底（file 未传等）：String([]) 得空串会渲染成空白单元格
+  if (Array.isArray(v) && !v.length) return '—'
   return String(v)
 }
 
@@ -599,6 +601,17 @@ async function submitRelation() {
           <span v-else-if="f.field_type === 'select' && customValue(f.field_key) != null">{{
             labelOf(f, String(customValue(f.field_key)))
           }}</span>
+          <!-- B1-6 批3 file 字段闭环（2026-10-30 审计补）：create 端 object_key 数组入
+               custom_data，详情此前落 String() 裸 key 兜底——渲染代理下载链接（同附件面）。
+               注：后端建单时会把 file 字段 key 自动绑附件区（file_name 友好名在彼处），
+               此处链接文本用「附件 N」避免与附件卡重复裸 uuid -->
+          <span v-else-if="f.field_type === 'file' && Array.isArray(customValue(f.field_key)) && (customValue(f.field_key) as string[]).length">
+            <a
+              v-for="(k, i) in customValue(f.field_key) as string[]"
+              :key="k" :href="`/api/v1/files/${k}`" target="_blank" rel="noopener"
+              :title="k" class="mr-2 text-[var(--el-color-primary)] hover:underline"
+            >{{ `附件 ${i + 1}` }}</a>
+          </span>
           <span v-else>{{ formatCustomValue(f) }}</span>
         </el-descriptions-item>
       </el-descriptions>

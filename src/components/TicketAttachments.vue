@@ -53,6 +53,7 @@ import {
   uploadAndConfirm,
   type AttachmentView,
 } from '@/api/storage'
+import { formatDateTime } from '@/utils/datetime'
 
 const props = defineProps<{
   ticketId: string
@@ -122,7 +123,7 @@ function formatSize(bytes?: string): string {
 }
 
 function formatTime(iso: string): string {
-  return new Date(iso).toLocaleString('zh-CN', { hour12: false })
+  return formatDateTime(iso)
 }
 
 onMounted(refresh)
