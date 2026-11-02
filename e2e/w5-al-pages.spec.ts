@@ -5,7 +5,7 @@
  *
  * 运行前提（宿主形态）：activelist 本地起（ACTIVELIST_PG_PORT=15432 +
  * ACTIVELIST_CALLER_ZHUZHAO_SK=dev-gateway-sk go run ./cmd/apiserver）+
- * zhuzhao gateway target 指向 127.0.0.1:8080（compose 形态天然可达）。
+ * zhuzhao gateway target 指向 127.0.0.1:18081（分配表迁移后）（compose 形态天然可达）。
  */
 import { test, expect } from '@playwright/test'
 import { api, apiLogin, loadState } from './helpers'
