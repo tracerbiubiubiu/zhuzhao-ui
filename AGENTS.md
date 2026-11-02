@@ -18,7 +18,7 @@
 
 ```bash
 pnpm lint          # ESLint（纯检查；自动修复用 pnpm lint:fix，修复后重跑 lint）
-pnpm typecheck     # vue-tsc --noEmit（codegen 类型**部分接线**：入参仅 4/14 api 文件引 __generated__（user/role/profile/selfService）、出参全手写——漂移仅接线面编译期报错，勿视为全量守卫；改 API 形状后先 pnpm codegen，补接线随域渐进）
+pnpm typecheck     # vue-tsc --noEmit（codegen 类型**部分接线**：入参仅 4/16 api 文件引 __generated__（user/role/profile/selfService；2026-11-02 实测调 request.* 的 api 文件 16 个）、出参全手写——漂移仅接线面编译期报错，勿视为全量守卫；改 API 形状后先 pnpm codegen，补接线随域渐进）
 pnpm test          # Vitest（动态路由解析/请求层单飞刷新/keep-alive 防漂移断言等——24 文件 / 192 用例，含六哨兵矩阵：apiPaths 前缀/viewNames/epImports 导入/tableFit/分页覆盖/uiConventions——全表见 frontend-standard「防漂移哨兵矩阵」）
 pnpm audit --prod  # npm 供应链（对称 Go 侧 govulncheck；镜像源无 audit 端点时加 --registry=https://registry.npmjs.org）
 pnpm build         # 产物构建
@@ -38,7 +38,7 @@ pnpm gate          # 六件门禁一键串行（lint → typecheck → test → 
 
 ## 提交规范
 
-- 中文提交信息，描述改动+原因+验证证据
+- 中文提交信息，描述改动+原因+验证证据；**主题行 `type(scope): ` 后 ≤50 字**（对齐 zhuzhao `docs/standards.md` §12-9——2026-10-30 放宽口径；本仓机械 lint 随兄弟仓对齐批落地，2026-11-02 登记）
 - 分支：Phase 4 收官后小批直提 main（门禁绿+推送后核实 CI；2026-10-08 口径更新——收官后 40+ 笔既成实践）；大批量/风险改动恢复建设期 Wave 短分支制（p4-w2-shell…，合入即删）——本仓 main 即集成分支（**对主仓 02 §5.1 phase4 拓扑的显式豁免**，2026-09-28 注记；主仓侧同日已注记）
 
 ## 变更评审三节（前端适配）
