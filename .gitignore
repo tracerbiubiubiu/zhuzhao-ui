@@ -37,3 +37,8 @@ test-results/
 
 # E2E 运行态（globalSetup 产物，含本地测试口令——不入库）
 e2e/.state.json
+
+# Go 后端错位实例运行产物（2026-11-02 taskrunner 孤儿库事故——从本仓 cwd 启动的
+# 后端会把 data/*.db、logs/ 撒在这里；*.log 挡不住 .db 二进制，故根锚定整目录）
+/data/
+/logs/
