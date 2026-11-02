@@ -16,7 +16,7 @@ import {
   listNotificationsApi, markAllNotificationsReadApi, markNotificationReadApi,
   type NotificationRow,
 } from '@/api/message'
-import { listTicketsApi, STATUS_LABEL } from '@/api/ticket'
+import { listTicketsApi, STATUS_LABEL, type TicketListQuery, type TicketRow } from '@/api/ticket'
 
 // keep-alive 契约：name=动态路由名（菜单 code message_center）
 defineOptions({ name: 'message_center_page' })
@@ -32,10 +32,43 @@ const inboxQuery = useQuery({
   queryFn: () => listNotificationsApi({ page: page.current, page_size: page.size, unread: onlyUnread.value || undefined }),
 })
 
-// 待办 tab：assignee=me 未关闭（状态派生——无已读概念）
+// 待办 tab：assignee=me 未关闭（状态派生——无已读概念）。
+// 2026-10-31 M-4 修复：原 page_size:50 单查询混入已关闭单且超 50 静默截断（total 与
+// 列表不一致）——对齐首页待办口径（assigned+in_progress）。分页=「按后端排序键
+// （id DESC）多页拉取的 top-K 归并」：page_size 超 100 后端会重置为 20（非截断），
+// fetchTop 多页兜住上限；归并键与后端排序键一致（int64 string→数值比较）保证切片正确
+const todoPage = ref(1)
+const TODO_PAGE_SIZE = 20
+
+/** 按给定筛选拉取后端序（id DESC）前 n 条及总数——page_size 超 100 后端重置为 20，多页兜住。
+ * size 必须逐页固定：后端 OFFSET=(page-1)*page_size，页间变 size 会使 offset 交错重复
+ * （2026-10-31 二轮复审实证——末页收尾用小 size 会把 20-39 段重复拉一遍） */
+async function fetchTop(q: TicketListQuery, n: number): Promise<{ rows: TicketRow[]; total: number }> {
+  const size = Math.min(100, n) // 逐页固定——offset 连续不重不漏
+  const rows: TicketRow[] = []
+  let total = 0
+  for (let page = 1; rows.length < n; page++) {
+    const r = await listTicketsApi({ ...q, page, page_size: size })
+    total = r.total
+    rows.push(...r.list)
+    if (r.list.length < size) break // 不足页=源耗尽
+  }
+  return { rows: rows.slice(0, n), total }
+}
+
 const todosQuery = useQuery({
-  queryKey: ['message', 'todos'],
-  queryFn: () => listTicketsApi({ page: 1, page_size: 50, assignee: 'me' }),
+  queryKey: computed(() => ['message', 'todos', todoPage.value]),
+  queryFn: async () => {
+    const budget = todoPage.value * TODO_PAGE_SIZE
+    const [{ rows: assigned, total: assignedTotal }, { rows: inProgress, total: inProgressTotal }] = await Promise.all([
+      fetchTop({ status: 'assigned', assignee: 'me' }, budget),
+      fetchTop({ status: 'in_progress', assignee: 'me' }, budget),
+    ])
+    // 严格弱序比较器（相等返回 0）；归并键=后端排序键 id DESC
+    const merged = [...assigned, ...inProgress].sort((a, b) => Number(b.id) - Number(a.id))
+    const start = (todoPage.value - 1) * TODO_PAGE_SIZE
+    return { list: merged.slice(start, start + TODO_PAGE_SIZE), total: assignedTotal + inProgressTotal }
+  },
   enabled: computed(() => activeTab.value === 'todos'),
 })
 
@@ -105,6 +138,15 @@ const timeText = (t: string) => formatDateTime(t)
               <span class="text-xs text-gray-400">{{ timeText(t.created_at) }}</span>
             </div>
             <el-empty v-if="!todosQuery.isLoading.value && !(todosQuery.data.value?.list ?? []).length" description="暂无待办" />
+            <el-pagination
+              v-if="(todosQuery.data.value?.total ?? 0) > TODO_PAGE_SIZE"
+              class="mt-2 justify-end"
+              layout="prev, pager, next"
+              :total="todosQuery.data.value?.total ?? 0"
+              :page-size="TODO_PAGE_SIZE"
+              :current-page="todoPage"
+              @current-change="(p: number) => (todoPage = p)"
+            />
           </div>
         </el-tab-pane>
       </el-tabs>

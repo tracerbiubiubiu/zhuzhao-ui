@@ -26,8 +26,8 @@
             </el-table-column>
             <el-table-column label="操作" width="130" fixed="right">
               <template #default="{ row }">
-                <el-button v-permission="'notification:manage'" link type="primary" size="small" :disabled="row.is_system" @click="openTplEdit(row as TemplateRow)">编辑</el-button>
-                <el-button v-permission="'notification:manage'" link type="danger" size="small" :disabled="row.is_system" @click="onTplDelete(row as TemplateRow)">删除</el-button>
+                <el-button v-permission="'notification:manage'" link type="primary" size="small" :disabled="row.is_system" @click="openTplEdit(row as MessageTemplateRow)">编辑</el-button>
+                <el-button v-permission="'notification:manage'" link type="danger" size="small" :disabled="row.is_system" @click="onTplDelete(row as MessageTemplateRow)">删除</el-button>
               </template>
             </el-table-column>
           </el-table>
@@ -55,8 +55,8 @@
             </el-table-column>
             <el-table-column label="操作" width="130" fixed="right">
               <template #default="{ row }">
-                <el-button v-permission="'notification:manage'" link type="primary" size="small" @click="openRuleEdit(row as RuleRow)">编辑</el-button>
-                <el-button v-permission="'notification:manage'" link type="danger" size="small" @click="onRuleDelete(row as RuleRow)">删除</el-button>
+                <el-button v-permission="'notification:manage'" link type="primary" size="small" @click="openRuleEdit(row as MessageRuleRow)">编辑</el-button>
+                <el-button v-permission="'notification:manage'" link type="danger" size="small" @click="onRuleDelete(row as MessageRuleRow)">删除</el-button>
               </template>
             </el-table-column>
           </el-table>
@@ -191,34 +191,18 @@ import {
   ElTabPane, ElTable, ElTableColumn, ElTabs, ElTag,
   ElEmpty,
 } from 'element-plus'
-import request from '@/common/request'
+import {
+  listMessageTemplatesApi, createMessageTemplateApi, updateMessageTemplateApi, deleteMessageTemplateApi,
+  listMessageRulesApi, upsertMessageRuleApi, deleteMessageRuleApi, listMessageLogsApi,
+  type MessageTemplateRow, type MessageRuleRow,
+} from '@/api/message'
 
 // 顶层菜单页路由名=`${code}_page`（permissionRoutes）；原 'SystemNotification' 与路由名不符致 keep-alive 恒不命中
 defineOptions({ name: 'system_notification_page' })
 
-interface TemplateRow {
-  code: string
-  name: string
-  channel: string
-  biz_type: string
-  subject: string
-  body: string
-  enabled: boolean
-  is_system?: boolean
-  version?: number
-}
-interface RuleRow {
-  id: string
-  biz_type: string
-  event_action: string
-  template_code: string
-  recipient_type: string
-  fixed_recipients?: string
-  enabled: boolean
-  version?: number
-}
-
-/** 事件词表——与后端 message_admin_service.validEventActions 同源（手工同步，改一头改两头） */
+/** 事件词表——与后端 message_admin_service.validEventActions 同源（手工同步，改一头改两头）。
+ * ⚠ 后端无词表端点（GET /message-events 缺）——无法拉取消除手工同步（外部审计 m-2），
+ * 后端补端点后本数组切换为拉取式；登记见 07 号 §3.4 件 18 同批追记 */
 const EVENT_OPTIONS: Array<{ value: string; label: string }> = [
   { value: 'ticket.created', label: '工单创建' },
   { value: 'ticket.assigned', label: '工单分派' },
@@ -236,8 +220,8 @@ const EVENT_OPTIONS: Array<{ value: string; label: string }> = [
 ]
 
 const activeTab = ref('templates')
-const templates = ref<TemplateRow[]>([])
-const rules = ref<RuleRow[]>([])
+const templates = ref<MessageTemplateRow[]>([])
+const rules = ref<MessageRuleRow[]>([])
 const logs = ref<Record<string, unknown>[]>([])
 const tplLoading = ref(false)
 const ruleLoading = ref(false)
@@ -271,31 +255,27 @@ useTableFit(logTable, () => logs.value)
 async function fetchTemplates() {
   tplLoading.value = true
   try {
-    const data = await request.get('/api/v1/message-templates', { params: { page: 1, page_size: 100 } })
-    templates.value = ((data as unknown as { list?: TemplateRow[] })?.list ?? [])
+    // page_size:100 拉全豁免（frontend-standard 分页口径）：管理面配置数据量小且近乎不增长
+    templates.value = (await listMessageTemplatesApi({ page: 1, page_size: 100 })).list
   } catch { /* 403=无权限 */ } finally { tplLoading.value = false }
 }
 
 async function fetchRules() {
   ruleLoading.value = true
   try {
-    const data = await request.get('/api/v1/message-rules')
-    rules.value = (data as unknown as RuleRow[]) ?? []
+    rules.value = await listMessageRulesApi()
   } catch { /* 403=无权限 */ } finally { ruleLoading.value = false }
 }
 
 async function fetchLogs() {
   logLoading.value = true
   try {
-    const data = await request.get('/api/v1/message-logs', {
-      params: {
-        page: logPage.value, page_size: logPageSize,
-        ...(logFilter.template_code ? { template_code: logFilter.template_code } : {}),
-        ...(logFilter.status ? { status: logFilter.status } : {}),
-        ...(logFilter.biz_id.trim() ? { biz_id: logFilter.biz_id.trim() } : {}),
-      },
+    const resp = await listMessageLogsApi({
+      page: logPage.value, page_size: logPageSize,
+      ...(logFilter.template_code ? { template_code: logFilter.template_code } : {}),
+      ...(logFilter.status ? { status: logFilter.status } : {}),
+      ...(logFilter.biz_id.trim() ? { biz_id: logFilter.biz_id.trim() } : {}),
     })
-    const resp = data as unknown as { list?: Record<string, unknown>[]; total?: number }
     logs.value = resp?.list ?? []
     logTotal.value = resp?.total ?? 0
   } catch { /* 403=无权限 */ } finally { logLoading.value = false }
@@ -303,7 +283,7 @@ async function fetchLogs() {
 
 // ─── 模板编辑 ───
 const tplDialog = reactive({ visible: false, loading: false, error: '', isCreate: true })
-const tplForm = reactive<TemplateRow>({ code: '', name: '', channel: 'uip', biz_type: 'ticket', subject: '', body: '', enabled: true })
+const tplForm = reactive<MessageTemplateRow>({ code: '', name: '', channel: 'uip', biz_type: 'ticket', subject: '', body: '', enabled: true })
 
 function openTplCreate() {
   Object.assign(tplForm, { code: '', name: '', channel: 'uip', biz_type: 'ticket', subject: '', body: '', enabled: true })
@@ -311,7 +291,7 @@ function openTplCreate() {
   tplDialog.isCreate = true
   tplDialog.visible = true
 }
-function openTplEdit(row: TemplateRow) {
+function openTplEdit(row: MessageTemplateRow) {
   Object.assign(tplForm, row)
   tplDialog.error = ''
   tplDialog.isCreate = false
@@ -326,12 +306,12 @@ async function submitTpl() {
   tplDialog.error = ''
   try {
     // 同规则：model.ID 为 json:",string"——payload 不带 id（create 无、update 按 code 定位）
-    const { ...body } = tplForm
-    delete (body as Record<string, unknown>).id
+    const body = { ...tplForm }
+    delete (body as Partial<MessageTemplateRow>).id
     if (tplDialog.isCreate) {
-      await request.post('/api/v1/message-templates', body, { _silentError: true })
+      await createMessageTemplateApi(body)
     } else {
-      await request.post('/api/v1/message-templates/update', body, { _silentError: true })
+      await updateMessageTemplateApi(body)
     }
     tplDialog.visible = false
     ElMessage.success(tplDialog.isCreate ? '模板已创建' : '模板已保存')
@@ -340,13 +320,13 @@ async function submitTpl() {
     tplDialog.error = (e as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '保存失败'
   } finally { tplDialog.loading = false }
 }
-async function onTplDelete(row: TemplateRow) {
+async function onTplDelete(row: MessageTemplateRow) {
   try {
     await ElMessageBox.confirm(`确认删除模板「${row.name}（${row.code}）」？引用它的规则将拒发并 Warn。`, '危险操作',
       { type: 'warning', confirmButtonText: '删除', confirmButtonClass: 'el-button--danger' })
   } catch { return }
   try {
-    await request.post('/api/v1/message-templates/delete', { code: row.code }, { _silentError: true })
+    await deleteMessageTemplateApi(row.code)
     ElMessage.success('已删除')
     await fetchTemplates()
   } catch (e: unknown) {
@@ -356,7 +336,7 @@ async function onTplDelete(row: TemplateRow) {
 
 // ─── 规则编辑（upsert：同 biz_type+event_action 保存=改绑） ───
 const ruleDialog = reactive({ visible: false, loading: false, error: '', isCreate: true })
-const ruleForm = reactive<RuleRow>({ id: '', biz_type: 'ticket', event_action: '', template_code: '', recipient_type: 'assignee', fixed_recipients: '', enabled: true })
+const ruleForm = reactive<MessageRuleRow>({ id: '', biz_type: 'ticket', event_action: '', template_code: '', recipient_type: 'assignee', fixed_recipients: '', enabled: true })
 
 function openRuleCreate() {
   Object.assign(ruleForm, { id: '', biz_type: 'ticket', event_action: '', template_code: '', recipient_type: 'assignee', fixed_recipients: '', enabled: true, version: undefined })
@@ -364,7 +344,7 @@ function openRuleCreate() {
   ruleDialog.isCreate = true
   ruleDialog.visible = true
 }
-function openRuleEdit(row: RuleRow) {
+function openRuleEdit(row: MessageRuleRow) {
   Object.assign(ruleForm, row)
   ruleDialog.error = ''
   ruleDialog.isCreate = false
@@ -380,9 +360,9 @@ async function submitRule() {
   try {
     // upsert 按 biz_type+event_action 定位（同键保存=改绑）——id 不参与；且 model.ID 为 json:",string"，
     // 空串会 ShouldBindJSON 失败落「参数错误」，故载荷剔 id
-    const body: Record<string, unknown> = { ...ruleForm }
-    delete body.id
-    await request.post('/api/v1/message-rules', body, { _silentError: true })
+    const body: Omit<MessageRuleRow, 'id'> = { ...ruleForm }
+    delete (body as Record<string, unknown>).id
+    await upsertMessageRuleApi(body)
     ruleDialog.visible = false
     ElMessage.success(ruleDialog.isCreate ? '规则已创建' : '规则已保存')
     await fetchRules()
@@ -390,13 +370,13 @@ async function submitRule() {
     ruleDialog.error = (e as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '保存失败'
   } finally { ruleDialog.loading = false }
 }
-async function onRuleDelete(row: RuleRow) {
+async function onRuleDelete(row: MessageRuleRow) {
   try {
     await ElMessageBox.confirm(`确认删除规则 ${row.biz_type}:${row.event_action}？删除后该事件不再发通知。`, '危险操作',
       { type: 'warning', confirmButtonText: '删除', confirmButtonClass: 'el-button--danger' })
   } catch { return }
   try {
-    await request.post('/api/v1/message-rules/delete', { id: row.id }, { _silentError: true })
+    await deleteMessageRuleApi(row.id)
     ElMessage.success('已删除')
     await fetchRules()
   } catch (e: unknown) {

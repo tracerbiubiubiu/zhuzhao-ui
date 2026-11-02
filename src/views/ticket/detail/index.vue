@@ -87,7 +87,10 @@ const typeFieldsQuery = useQuery({
 const customFields = computed(() => typeFieldsQuery.data.value ?? [])
 
 // F-E-1 修复：richtext 字段经服务端 render 端点消毒出站 HTML——不直接注入 MD 源
-const renderedHtml = ref<Record<string, string>>({})
+// 缓存记 {src, html} 指纹：同单内字段内容变更（转换采集更新 custom_data）即重渲染，
+// 只按 key 判重会命中旧缓存显示陈旧内容（2026-10-31 审计降级项修复；跨单无泄漏——
+// AppView :key=fullPath 按单分实例）
+const renderedHtml = ref<Record<string, { src: string; html: string }>>({})
 watch(
   () => customFields.value.filter((f) => f.field_type === 'richtext').map((f) => ({
     key: f.field_key,
@@ -95,9 +98,9 @@ watch(
   })).filter((x) => x.src),
   async (items: Array<{ key: string; src: string }>) => {
     for (const { key, src } of items) {
-      if (renderedHtml.value[key] !== undefined) continue
-      renderedHtml.value[key] = '' // 占位防重复请求
-      renderedHtml.value[key] = await renderRichtextApi(src).catch(() => '')
+      if (renderedHtml.value[key]?.src === src) continue
+      renderedHtml.value[key] = { src, html: '' } // 占位防重复请求
+      renderedHtml.value[key] = { src, html: await renderRichtextApi(src).catch(() => '') }
     }
   },
   { immediate: true },
@@ -593,7 +596,7 @@ async function submitRelation() {
         >
           <!-- richtext=服务端渲染 HTML（goldmark+bluemonday 消毒 SSOT——非前端自渲染） -->
           <!-- eslint-disable-next-line vue/no-v-html -- XSS SSOT：服务端 goldmark+bluemonday 消毒出站 HTML（F-E-1 修复 2026-10-22——不直接注入 MD 源文本） -->
-          <div v-if="f.field_type === 'richtext' && renderedHtml[f.field_key]" class="richtext-view" v-html="renderedHtml[f.field_key]" />
+          <div v-if="f.field_type === 'richtext' && renderedHtml[f.field_key]?.html" class="richtext-view" v-html="renderedHtml[f.field_key]?.html" />
           <span v-else-if="f.field_type === 'multi_select' && Array.isArray(customValue(f.field_key))">
             <!-- B1-7 批3（三路F-E-4）：字典项显示 label 而非 code -->
             <el-tag v-for="v in customValue(f.field_key) as string[]" :key="v" size="small" class="mr-1">{{ labelOf(f, v) }}</el-tag>
