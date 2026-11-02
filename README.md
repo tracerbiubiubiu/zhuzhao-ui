@@ -52,14 +52,14 @@ cd ../zhuzhao && bash scripts/dev-stack.sh up
 INTERNAL_JOBS_SK=dev-e2e-callback-sk make dev        # app @33333
 # ② activelist 上游（W5 al 场景需四栈）：PG + 服务（验签 SK 须与主仓 gateway.sk 一致）
 cd ../activelist && docker compose -f deploy/compose.dev.yaml up -d
-ACTIVELIST_PG_PORT=15432 ACTIVELIST_CALLER_ZHUZHAO_SK=dev-gateway-sk go run ./cmd/apiserver  # @8080
-#    + 主仓 configs/config.yaml 的 gateway target 需指向 127.0.0.1:8080（默认 activelist:8080
+ACTIVELIST_PG_PORT=15432 ACTIVELIST_CALLER_ZHUZHAO_SK=dev-gateway-sk go run ./cmd/apiserver  # @18081（自身 config 默认，11-02 迁移后）
+#    + 主仓 configs/config.yaml 的 gateway target 需指向 127.0.0.1:18081（默认 activelist:18081
 #    为 compose 网络主机名——宿主形态改后跑，勿提交；compose 形态天然可达免改）
 # ③ taskrunner 上游（W5 task 场景需五栈；Redis 复用 dev 栈 6379、SQLite 零依赖）
-cd ../taskrunner && TASKRUNNER_HTTP_ADDR=:8081 TASKRUNNER_REDIS_PASSWORD=zhuzhao_dev \
-  TASKRUNNER_CALLER_ZHUZHAO_SK=<sk> TASKRUNNER_SELF_SK=<sk> \
+cd ../taskrunner && TASKRUNNER_HTTP_ADDR=:18080 TASKRUNNER_REDIS_PASSWORD=zhuzhao_dev \
+  TASKRUNNER_CALLER_ZHUZHAO_SK=dev-taskrunner-sk TASKRUNNER_SELF_SK=dev-callback-sk \
   TASKRUNNER_CALLBACK_TARGET_URL=http://127.0.0.1:33333/internal/jobs/callback go run ./cmd/taskrunner
-#    + ① 的 make dev 带 env：TASKRUNNER_BASE_URL=http://127.0.0.1:8081 TASKRUNNER_SK=<同上 sk>
+#    + ① 的 make dev 带 env：TASKRUNNER_BASE_URL=http://127.0.0.1:18080 TASKRUNNER_SK=dev-taskrunner-sk
 # ④ 前端 dev server（vite @4000，/api、/al 反代 33333）由 Playwright webServer 自动拉起
 cd ../zhuzhao-ui && pnpm test:e2e
 ```

@@ -88,6 +88,6 @@ test('场景描述', async ({ page }) => {
   `pgAvailable()` 优雅降级（无 DB 环境跳过不 fail）；
 - 跨 spec 状态互踩防：临时类型/规则 finally 删除；不依赖其他 spec 残留。
 
-**运行前提**：五栈在位（app@33333/activelist@8080/taskrunner@8081/PG/Redis）+
+**运行前提**：五栈在位（app@33333/activelist@18081/taskrunner@18080/PG/Redis）+
 vite webServer 自动拉起（Playwright 探测 127.0.0.1:4000——strictPort 已启，
 端口被占会显式失败不静默漂移）。串行 workers=1（共享 dev 栈 DB 防互踩）。
