@@ -20,13 +20,13 @@
         </el-select>
       </template>
       <template v-if="cfg.kind === 'monthly'">
-        <el-input-number v-model="cfg.day" size="small" :min="1" :max="31" controls-position="right" class="!w-[90px]" @change="emitSpec" />
+        <el-input-number v-model="cfg.day" size="small" :min="1" :max="31" :controls="false" class="!w-[90px]" @change="emitSpec" />
         <span class="text-xs text-gray-400">号</span>
       </template>
 
       <template v-if="cfg.kind === 'hourly'">
         <span class="text-xs text-gray-400">间隔</span>
-        <el-input-number v-model="cfg.hour" size="small" :min="1" :max="23" controls-position="right" class="!w-[90px]" @change="emitSpec" />
+        <el-input-number v-model="cfg.hour" size="small" :min="1" :max="23" :controls="false" class="!w-[90px]" @change="emitSpec" />
         <span class="text-xs text-gray-400">小时（整点起）</span>
       </template>
 

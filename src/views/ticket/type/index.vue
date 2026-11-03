@@ -702,7 +702,7 @@ useTableFit(tplTable, () => pagedTplRows.value)
                 </el-table-column>
                 <el-table-column label="超时(分钟)" width="110" align="center">
                   <template #default="{ row }">
-                    <el-input-number v-model="row.timeout" size="small" :min="1" :max="525600" controls-position="right" style="width: 88px" />
+                    <el-input-number v-model="row.timeout" size="small" :min="1" :max="525600" :controls="false" style="width: 88px" />
                   </template>
                 </el-table-column>
                 <el-table-column label="催办对象" width="150">
@@ -713,12 +713,12 @@ useTableFit(tplTable, () => pagedTplRows.value)
                 </el-table-column>
                 <el-table-column label="间隔(分钟)" width="110" align="center">
                   <template #default="{ row }">
-                    <el-input-number v-model="row.interval" size="small" :min="5" :max="525600" controls-position="right" style="width: 88px" placeholder="缺省 240" />
+                    <el-input-number v-model="row.interval" size="small" :min="5" :max="525600" :controls="false" style="width: 88px" placeholder="缺省 240" />
                   </template>
                 </el-table-column>
                 <el-table-column label="次数上限" width="100" align="center">
                   <template #default="{ row }">
-                    <el-input-number v-model="row.max" size="small" :min="0" :max="99" controls-position="right" style="width: 78px" placeholder="缺省 3" />
+                    <el-input-number v-model="row.max" size="small" :min="0" :max="99" :controls="false" style="width: 78px" placeholder="缺省 3" />
                   </template>
                 </el-table-column>
                 <el-table-column label="操作" width="60" align="center">
@@ -787,7 +787,7 @@ useTableFit(tplTable, () => pagedTplRows.value)
           <template #default="{ row }"><el-input v-model="row.validate_regex" size="small" placeholder="可选" maxlength="200" /></template>
         </el-table-column>
         <el-table-column label="排序" width="90" align="center">
-          <template #default="{ row }"><el-input-number v-model="row.sort_order" size="small" :min="0" controls-position="right" style="width: 70px" /></template>
+          <template #default="{ row }"><el-input-number v-model="row.sort_order" size="small" :min="0" :controls="false" style="width: 70px" /></template>
         </el-table-column>
         <el-table-column label="操作" width="70" align="center">
           <template #default="{ $index }">
@@ -832,7 +832,7 @@ useTableFit(tplTable, () => pagedTplRows.value)
           </el-select>
         </el-form-item>
         <el-form-item label="默认 SLA(分钟)">
-          <el-input-number v-model="tplForm.default_sla_minutes" :min="1" controls-position="right" />
+          <el-input-number v-model="tplForm.default_sla_minutes" :min="1" :controls="false" />
         </el-form-item>
         <el-form-item label="默认字段(JSON)">
           <el-input v-model="tplForm.default_fields_text" type="textarea" :rows="3" placeholder='{"env":"生产"}（可选）' />

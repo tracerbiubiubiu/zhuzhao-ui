@@ -279,7 +279,7 @@ async function onDelete(row: RoleRow) {
           <el-input v-model="editForm.name" />
         </el-form-item>
         <el-form-item label="优先级" prop="priority">
-          <el-input-number v-model="editForm.priority" :min="1" :max="99" />
+          <el-input-number v-model="editForm.priority" :min="1" :max="99" :controls="false" />
           <span class="text-xs text-gray-400 ml-2">数值越小优先级越高（子 ≤ 父）</span>
         </el-form-item>
         <el-form-item label="继承父角色">

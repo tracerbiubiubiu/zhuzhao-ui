@@ -574,7 +574,7 @@ useTableFit(dataTable, () => list.value)
       <el-alert v-if="formError" :title="formError" type="error" show-icon class="mb-4" :closable="false" />
       <el-form label-width="120px">
         <el-form-item v-for="f in schema" :key="f.name" :label="f.name" :required="f.required">
-          <el-input-number v-if="f.type === 'int'" v-model="(formData[f.name] as number | undefined)" class="!w-48" />
+          <el-input-number v-if="f.type === 'int'" v-model="(formData[f.name] as number | undefined)" :controls="false" class="!w-48" />
           <el-input
             v-else-if="f.type === 'string'" v-model="(formData[f.name] as string | undefined)"
             :maxlength="f.max_chars || 255" show-word-limit clearable

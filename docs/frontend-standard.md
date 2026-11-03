@@ -211,6 +211,21 @@ rules「新建规则」参照实现；org 页层级面包屑随工具行挪卡�
    表单易误报——先规范+review 把关，攒一次事故再进 uiConventions 扫描
    （哨兵准入纪律：静态可判+零误报+事故出处）。
 
+## 数字输入形态纪律（2026-11-03 立，设置页走查 ec2c702f + 全仓统一批）
+
+**el-input-number 一律显式 `:controls="false"`（纯输入框形态），全仓零例外**：
+
+1. **为什么**：步进钮（双侧箭头/right 单侧）是高频微调场景的控件形态
+   （Vercel/Stripe/GitHub 设置数字项均纯输入框）；本系统数字项全是低频
+   精确输入（超时秒数/SLA 分钟/优先级/有效期天数），用户键入精确值，
+   ±1 步进无意义，箭头纯视觉噪音+挤占窄框宽度。
+2. **微调能力不丢**：`controls=false` 只隐藏按钮，键盘 ↑↓ 步进与
+   min/max 钳制完整保留。
+3. **形态之外**：数字语义（min/max/数字键盘）仍用 el-input-number，
+   勿退化成 el-input+手写校验。
+4. **哨兵**：uiConventions ③ 层静态扫描（引号感知提取标签体），
+   漏写 `:controls="false"` 直接红——零豁免。
+
 ## 菜单迁移联动清单（主仓迁移批随行——2026-10-28 补）
 
 新增菜单行迁移批除主仓自身验收外，UI 仓两项联动**必须随批**：
@@ -343,6 +358,7 @@ rules「新建规则」参照实现；org 页层级面包屑随工具行挪卡�
    普通 el-table 面板型小表不接密度/聚焦（「数据密度与聚焦模式」节）。
 7. 弹层选型（§弹层形态纪律）：详情查看→右抽屉（键值 560/长文 620，抽屉内滚+
    长文配复制钮）；提交/编辑/确认→对话框。**详情类禁开 dialog**。
+8. 数字输入（§数字输入形态纪律）：el-input-number 必带 `:controls="false"`。
 
 ## 现状清单（2026-10-08 立，10-30 修订）
 
@@ -399,6 +415,6 @@ radio 快捷段四态 + range=[from,to]（YYYY-MM-DD）驱动服务端/客户端
 | EP 导入完整性 | `src/epImports.test.ts` | 模板 el-* 缺 import（运行时静默失效）+字符串 prefix-icon 死图标 |
 | useTableFit 挂接 | `src/epImports.test.ts` 第二用例 | 手动 el-table 漏挂（列宽不随容器重排） |
 | 分页覆盖 | `src/paginationCoverage.test.ts` | 含 el-table 页面无任何分页设施（数据增长型缺口——247/51/84 三例事故后立） |
-| UI 惯例 | `src/uiConventions.test.ts` | 主列表缺 #empty 空态引导/placeholder 超宽截断 |
+| UI 惯例 | `src/uiConventions.test.ts` | 主列表缺 #empty 空态引导/placeholder 超宽截断/el-input-number 漏 `:controls="false"` |
 | 图标注册 | `src/icons.test.ts` | 视图直写未注册图标（死图标） |
 | apiPaths 前缀 | `src/api/apiPaths.test.ts` | API 路径漏网关前缀 |

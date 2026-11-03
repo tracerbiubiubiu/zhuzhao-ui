@@ -268,7 +268,7 @@ function formatTime(iso?: string | null): string {
           <el-input v-model="patForm.name" placeholder="凭据名称（如 CI 部署脚本）" class="mb-3" />
           <div class="flex items-center gap-2 mb-3">
             <span class="text-sm text-gray-500">有效期（天）</span>
-            <el-input-number v-model="patForm.expires_days" :min="0" :max="3650" />
+            <el-input-number v-model="patForm.expires_days" :min="0" :max="3650" :controls="false" />
             <span class="text-xs text-gray-400">0=永不过期</span>
           </div>
           <el-alert v-if="patError" :title="patError" type="error" show-icon :closable="false" />

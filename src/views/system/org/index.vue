@@ -442,7 +442,7 @@ async function onDelete(node: OrgTreeNode) {
           <el-switch v-model="editForm.status" active-text="启用" inactive-text="禁用" />
         </el-form-item>
         <el-form-item label="排序">
-          <el-input-number v-model="editForm.sort_order" :min="0" :max="999" />
+          <el-input-number v-model="editForm.sort_order" :min="0" :max="999" :controls="false" />
         </el-form-item>
         <el-form-item label="描述">
           <el-input v-model="editForm.description" type="textarea" :rows="2" />

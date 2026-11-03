@@ -293,7 +293,7 @@ useTableFit(itemsTable, () => items.value)
     <el-dialog v-model="itemVisible" :title="`新增字典项（${selectedType?.code ?? ''}）`" width="440px">
       <el-input v-model="itemForm.code" placeholder="code" class="mb-3" />
       <el-input v-model="itemForm.label" placeholder="标签（业务表单显示）" class="mb-3" />
-      <el-input-number v-model="itemForm.sort_order" :min="0" class="mb-3" />
+      <el-input-number v-model="itemForm.sort_order" :min="0" :controls="false" class="mb-3" />
       <el-input v-model="itemForm.remark" placeholder="备注（可选）" />
       <el-alert v-if="itemError" :title="itemError" type="error" show-icon class="mt-3" :closable="false" />
       <template #footer>

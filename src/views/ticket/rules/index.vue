@@ -160,7 +160,7 @@ async function onToggle(row: AssignmentRuleRow) {
           <el-input v-model="form.keyword" placeholder="标题包含匹配（可选）" maxlength="100" />
         </el-form-item>
         <el-form-item label="优先级">
-          <el-input-number v-model="form.priority" :min="1" :max="9999" controls-position="right" />
+          <el-input-number v-model="form.priority" :min="1" :max="9999" :controls="false" />
           <span class="text-xs text-gray-400 ml-2">值越小越先匹配</span>
         </el-form-item>
         <el-form-item label="目标组织" required>

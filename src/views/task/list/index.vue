@@ -839,7 +839,7 @@ useTableFit(deadTable, () => deadList.value)
           <el-input v-model="submitForm.dept" placeholder="dept（可选）" />
         </el-form-item>
         <el-form-item label="超时（秒）">
-          <el-input-number v-model="submitForm.timeout_secs" :min="0" :max="86400" />
+          <el-input-number v-model="submitForm.timeout_secs" :min="0" :max="86400" :controls="false" />
           <span class="text-xs text-gray-400 ml-2">0=默认 30s</span>
         </el-form-item>
         <el-form-item v-if="showSubmitParams" label="params">
@@ -886,7 +886,7 @@ useTableFit(deadTable, () => deadList.value)
           <el-input v-model="jobForm.dept" placeholder="dept（可选）" />
         </el-form-item>
         <el-form-item label="超时（秒）">
-          <el-input-number v-model="jobForm.timeout_secs" :min="0" :max="86400" />
+          <el-input-number v-model="jobForm.timeout_secs" :min="0" :max="86400" :controls="false" />
         </el-form-item>
         <el-form-item label="说明">
           <el-input v-model="jobForm.description" />
@@ -926,7 +926,7 @@ useTableFit(deadTable, () => deadList.value)
           <el-input v-model="jobEditForm.dept" placeholder="dept（可选）" />
         </el-form-item>
         <el-form-item label="超时（秒）">
-          <el-input-number v-model="jobEditForm.timeout_secs" :min="0" :max="86400" />
+          <el-input-number v-model="jobEditForm.timeout_secs" :min="0" :max="86400" :controls="false" />
           <span class="text-xs text-gray-400 ml-2">0=不修改</span>
         </el-form-item>
         <el-form-item label="说明">

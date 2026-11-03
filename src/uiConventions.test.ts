@@ -1,9 +1,9 @@
 /**
  * UI 惯例哨兵矩阵（2026-10-29 立——「同样的问题不要出现多次」纪律的结构化落地）
  *
- * 两个静态扫描（与 epImports / tableFitScan 同型的自动捕获层——分页缺失类缺陷
+ * 三个静态扫描（与 epImports / tableFitScan 同型的自动捕获层——分页缺失类缺陷
  * 静态门禁零捕获、数据增长后才显形，al/types 241 行 / ticket/type 51 / 模板 84
- * 三例同型事故的拦截层）：
+ * 三例同型事故的拦截层；③ 为形态纪律层，同型于六哨兵矩阵的防漂移定位）：
  *
  * ① 空态引导覆盖：主列表页 <el-table> 必须挂 #empty 槽（空态引导三件——行动
  *    出口 CTA/指引文案），默认「暂无数据」裸空态违反 frontend-standard §空态与加载。
@@ -11,6 +11,10 @@
  *    （审计工号「如 E000001（含已删用户）」17 字符挤 176px 实测；规范 §筛选 v2
  *    控件细节③——≤8 中文字符，附注挪 title）。动态表达式（${}）豁免——
  *    运行时形态静态不可判。
+ * ③ 数字输入形态：el-input-number 必须显式 :controls="false"（纯输入框纪律，
+ *    2026-11-03 全仓统一拍板——步进钮属视觉噪音、低频精确输入靠键入，微调走
+ *    键盘 ↑↓（controls=false 不减键盘步进）；事故出处=设置页走查 ec2c702f
+ *    双侧箭头四项，本批全仓清偿 19 处。规范 §数字输入形态）。
  *
  * 新增哨兵的纪律：只收「静态可判 + 零误报 + 有事故出处」的规则——语义类
  * （按钮命名/文案语气）不进哨兵，走 code review。
@@ -39,6 +43,24 @@ const rel = (f: string) => f.slice(ROOT.length + 1)
 /** 去 HTML 注释（注释里的示例标签不算宿主/不算违规） */
 function stripComments(src: string): string {
   return src.replace(/<!--[\s\S]*?-->/g, '')
+}
+
+/** 提取自 start 起的完整开标签（引号感知——属性值内的 > 不误判为标签结束） */
+function extractTag(src: string, start: number): string {
+  let inQuote: string | null = null
+  for (let i = start; i < src.length; i++) {
+    const c = src[i]
+    if (inQuote) {
+      if (c === inQuote) inQuote = null
+      continue
+    }
+    if (c === '"' || c === "'") {
+      inQuote = c
+      continue
+    }
+    if (c === '>') return src.slice(start, i + 1)
+  }
+  return src.slice(start, start + 600)
 }
 
 /** 主列表页豁免（①空态扫描）：非主列表语义/有页级兜底的宿主，登记须附理由 */
@@ -97,5 +119,25 @@ describe('UI 惯例哨兵矩阵', () => {
       }
     }
     expect(violations.join('\n'), 'placeholder 超长（控件宽度内显示不全）').toBe('')
+  })
+
+  it('③ el-input-number 均显式 :controls="false"（纯输入框形态）', () => {
+    const files = [...walkVue(join(ROOT, 'src', 'views')), ...walkVue(join(ROOT, 'src', 'components'))]
+    let checked = 0
+    const violations: string[] = []
+    for (const f of files) {
+      const src = stripComments(readFileSync(f, 'utf-8'))
+      const re = /<el-input-number[\s>]/g
+      let m: RegExpExecArray | null
+      while ((m = re.exec(src)) !== null) {
+        checked++
+        const tag = extractTag(src, m.index)
+        if (!tag.includes(':controls="false"')) {
+          violations.push(`${rel(f)}: el-input-number 未显式 :controls="false"（frontend-standard §数字输入形态——微调走键盘 ↑↓）`)
+        }
+      }
+    }
+    expect(checked, '受检数字输入框数').toBeGreaterThanOrEqual(20)
+    expect(violations.join('\n'), '数字输入框步进钮未关').toBe('')
   })
 })

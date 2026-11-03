@@ -320,10 +320,11 @@ async function handleSubmit() {
             />
             <el-input-number
               v-else-if="f.field_type === 'number' && !isFormulaField(f)" v-model="form.custom[f.field_key] as number | undefined"
+              :controls="false"
             />
             <el-input-number
               v-else-if="f.field_type === 'number' && isFormulaField(f)" :model-value="(form.custom[f.field_key] as number | undefined)"
-              disabled
+              :controls="false" disabled
             />
             <!-- 后端 validateFieldValue 严格校验 YYYY-MM-DD——value-format 直出字符串，
                  防 Date 对象被序列化成 ISO datetime 而吃 400 -->
@@ -357,7 +358,7 @@ async function handleSubmit() {
             />
             <el-input-number
               v-else-if="f.field_type === 'rating' && isFormulaField(f)"
-              :model-value="Number(form.custom[f.field_key] ?? 0)" disabled
+              :model-value="Number(form.custom[f.field_key] ?? 0)" :controls="false" disabled
             />
             <!-- B1-6 批3 file：上传字段（presign→confirm 直传→object_key 数组） -->
             <div v-else-if="f.field_type === 'file'" class="file-upload-field">
