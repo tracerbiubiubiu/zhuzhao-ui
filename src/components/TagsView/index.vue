@@ -1,5 +1,5 @@
 <script setup lang="ts">
-  import { computed, nextTick, ref, watch } from 'vue'
+  import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
   import { ElScrollbar, type ScrollbarInstance } from 'element-plus'
   import { useRouter } from 'vue-router'
   import { useI18n } from 'vue-i18n'
@@ -38,6 +38,21 @@
 
   const scrollTags = (left: number) => {
     scrollbarRef.value?.wrapRef?.scrollBy({ left, behavior: 'smooth' })
+  }
+
+  // 溢出导航（2026-11-03 业界对齐——Chrome/VS Code 形态）：箭头仅溢出时渲染，
+  // 页签区滚轮横滚（活动页签自动滚入为既有 moveActiveIntoView）
+  const tagsOverflow = ref(false)
+  const updateOverflow = () => {
+    const wrap = scrollbarRef.value?.wrapRef
+    tagsOverflow.value = !!wrap && wrap.scrollWidth > wrap.clientWidth + 1
+  }
+  const onTagsWheel = (e: WheelEvent) => {
+    // 纵向滚轮转横向滚动（页签条无纵向内容）
+    if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
+      scrollbarRef.value?.wrapRef?.scrollBy({ left: e.deltaY })
+      e.preventDefault()
+    }
   }
 
   const navigateTo = (view?: TagView) => push(view?.fullPath || defaultPath.value)
@@ -152,11 +167,35 @@
     },
     { immediate: true, flush: 'post' }
   )
+
+  // 溢出状态联动：页签数量/宽度变化（ResizeObserver）与滚动位置（scroll 事件）双路更新
+  watch(visitedViews, () => nextTick(updateOverflow))
+  let overflowObserver: ResizeObserver | undefined
+  onMounted(() => {
+    const wrap = scrollbarRef.value?.wrapRef
+    if (wrap) {
+      overflowObserver = new ResizeObserver(updateOverflow)
+      overflowObserver.observe(wrap)
+      wrap.addEventListener('scroll', updateOverflow, { passive: true })
+      // wheel 需非被动监听（preventDefault）——直接挂 wrap，绕过 EP 内部绑定
+      wrap.addEventListener('wheel', onTagsWheel, { passive: false })
+    }
+    updateOverflow()
+  })
+  onBeforeUnmount(() => {
+    overflowObserver?.disconnect()
+    const wrap = scrollbarRef.value?.wrapRef
+    if (wrap) {
+      wrap.removeEventListener('scroll', updateOverflow)
+      wrap.removeEventListener('wheel', onTagsWheel)
+    }
+  })
 </script>
 
 <template>
   <div ref="tagsViewRef" :id="prefixCls" :class="prefixCls">
     <button
+      v-if="tagsOverflow"
       :class="[`${prefixCls}__tool`, `${prefixCls}__tool--first`]"
       type="button"
       :title="t('common.scrollTagsLeft')"
@@ -167,7 +206,7 @@
     </button>
 
     <div :class="`${prefixCls}__viewport`">
-      <ElScrollbar ref="scrollbarRef" :class="`${prefixCls}__scrollbar`">
+      <ElScrollbar ref="scrollbarRef" :class="`${prefixCls}__scrollbar`" @wheel="onTagsWheel">
         <div :class="`${prefixCls}__list`">
           <ContextMenu
             v-for="item in visitedViews"
@@ -199,6 +238,7 @@
     </div>
 
     <button
+      v-if="tagsOverflow"
       :class="`${prefixCls}__tool`"
       type="button"
       :title="t('common.scrollTagsRight')"
