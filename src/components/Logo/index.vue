@@ -22,8 +22,7 @@
 
   const showTitle = computed(
     () => !props.compact && (layout.value === 'top' || layout.value === 'mixed' || !appStore.collapse)
-  )
-</script>
+  )</script>
 
 <template>
   <div>
@@ -43,7 +42,10 @@
           {
             'text-[var(--logo-title-text-color)]': layout === 'sidebar' || layout === 'dual',
             'text-[var(--top-header-text-color)]': layout === 'top' || layout === 'mixed',
-            'opacity-0': !showTitle
+            'opacity-0': !showTitle,
+            // compact（dual rail 72px 窄栏）：标题从布局流移除——仅 opacity-0 仍占 ~130px 宽，
+            // flex 居中会把 38px 图标推出视口左侧被 overflow-hidden 裁掉（2026-10-31 走查实拍）
+            'hidden': props.compact
           }
         ]"
       >

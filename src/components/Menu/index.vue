@@ -34,7 +34,7 @@
         const { meta, path } = unref(currentRoute)
         return (meta.activeMenu as string) || path
       })
-      const { renderMenuItem } = useRenderMenuItem(menuMode)
+      const { renderMenuItem } = useRenderMenuItem(menuMode, isCollapsed)
 
       const handleSelect = (index: string) => {
         if (isUrl(index)) {
@@ -176,13 +176,14 @@
     :deep(.el-menu--collapse) {
       width: var(--left-menu-min-width);
 
+      /* 收起态项与 rail 项同韵律（56px 块/8px 边距）——2026-11-02 双列收起态走查对齐 */
       > .el-menu-item,
       > .el-sub-menu > .el-sub-menu__title {
         justify-content: center;
-        width: 48px;
+        width: 56px;
         padding: 0 !important;
-        margin-right: 12px;
-        margin-left: 12px;
+        margin-right: 8px;
+        margin-left: 8px;
       }
 
       .v-icon {
@@ -288,6 +289,37 @@
     }
   }
 
+  /* 水平子菜单弹层（popperClass 由 useRenderMenuItem 的水平 ElSubMenu 透传——
+     2026-11-02 实证：此前水平分支传空串导致本块样式整体失活，EP 默认 min-width
+     200px 弹层比一级项（102px）宽近一倍）；宽度随内容收紧对齐一级项尺度 */
+  .v-submenu-popper--horizontal {
+    overflow: hidden;
+    border: 1px solid var(--layout-border-color) !important;
+    border-radius: 12px !important;
+    box-shadow: var(--layout-shadow) !important;
+
+    .el-menu--popup {
+      min-width: 0;
+      padding: 6px;
+      background-color: var(--top-header-bg-color) !important;
+    }
+
+    .el-sub-menu__title,
+    .el-menu-item {
+      height: 36px;
+      padding: 0 12px !important;
+      margin: 2px 0;
+      line-height: 36px;
+      color: var(--top-header-text-color) !important;
+      border-radius: 8px;
+
+      &:hover {
+        color: var(--el-color-primary) !important;
+        background-color: var(--top-header-hover-color) !important;
+      }
+    }
+  }
+
   .v-menu-popper--horizontal {
     overflow: hidden;
     border: 1px solid var(--layout-border-color) !important;
@@ -295,7 +327,7 @@
     box-shadow: var(--layout-shadow) !important;
 
     .el-menu {
-      min-width: 180px;
+      min-width: 0;
       padding: 6px;
       background-color: var(--top-header-bg-color) !important;
     }
