@@ -53,8 +53,8 @@ INTERNAL_JOBS_SK=dev-e2e-callback-sk make dev        # app @33333
 # ② activelist 上游（W5 al 场景需四栈）：PG + 服务（验签 SK 须与主仓 gateway.sk 一致）
 cd ../activelist && docker compose -f deploy/compose.dev.yaml up -d
 ACTIVELIST_PG_PORT=15432 ACTIVELIST_CALLER_ZHUZHAO_SK=dev-gateway-sk go run ./cmd/apiserver  # @18081（自身 config 默认，11-02 迁移后）
-#    + 主仓 configs/config.yaml 的 gateway target 需指向 127.0.0.1:18081（默认 activelist:18081
-#    为 compose 网络主机名——宿主形态改后跑，勿提交；compose 形态天然可达免改）
+#    + 主仓 make dev 自动注入 GATEWAY_AL_TARGET=http://127.0.0.1:18081（宿主形态 /al 上游
+#    免改 config——2026-11-02 env 注入治理；compose 形态读 config 默认服务名，天然可达）
 # ③ taskrunner 上游（W5 task 场景需五栈；Redis 复用 dev 栈 6379、SQLite 零依赖）
 cd ../taskrunner && TASKRUNNER_HTTP_ADDR=:18080 TASKRUNNER_REDIS_PASSWORD=zhuzhao_dev \
   TASKRUNNER_CALLER_ZHUZHAO_SK=dev-taskrunner-sk TASKRUNNER_SELF_SK=dev-callback-sk \
