@@ -278,7 +278,7 @@ useTableFit(itemsTable, () => items.value)
     </div>
 
     <!-- 新建类型 -->
-    <el-dialog v-model="typeVisible" title="新建字典类型" width="440px">
+    <el-dialog :close-on-click-modal="false" v-model="typeVisible" title="新建字典类型" width="440px">
       <el-input v-model="typeForm.code" placeholder="code（如 env_type）" class="mb-3" />
       <el-input v-model="typeForm.name" placeholder="名称" class="mb-3" />
       <el-input v-model="typeForm.remark" placeholder="备注（可选）" />
@@ -290,7 +290,7 @@ useTableFit(itemsTable, () => items.value)
     </el-dialog>
 
     <!-- 新增项 -->
-    <el-dialog v-model="itemVisible" :title="`新增字典项（${selectedType?.code ?? ''}）`" width="440px">
+    <el-dialog :close-on-click-modal="false" v-model="itemVisible" :title="`新增字典项（${selectedType?.code ?? ''}）`" width="440px">
       <el-input v-model="itemForm.code" placeholder="code" class="mb-3" />
       <el-input v-model="itemForm.label" placeholder="标签（业务表单显示）" class="mb-3" />
       <el-input-number v-model="itemForm.sort_order" :min="0" :controls="false" class="mb-3" />

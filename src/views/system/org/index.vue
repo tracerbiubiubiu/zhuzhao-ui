@@ -413,7 +413,7 @@ async function onDelete(node: OrgTreeNode) {
     </el-card>
 
     <!-- 新建/编辑 -->
-    <el-dialog v-model="editVisible" :title="editIsCreate ? '新建组织' : '编辑组织'" width="520px">
+    <el-dialog :close-on-click-modal="false" v-model="editVisible" :title="editIsCreate ? '新建组织' : '编辑组织'" width="520px">
       <el-form ref="editFormRef" :model="editForm" :rules="editRules" label-width="110px">
         <el-form-item label="编码" prop="code">
           <el-input v-model="editForm.code" :disabled="!editIsCreate" placeholder="ltree 路径用（如 tech）" />
@@ -456,7 +456,7 @@ async function onDelete(node: OrgTreeNode) {
     </el-dialog>
 
     <!-- 移动 -->
-    <el-dialog v-model="moveVisible" :title="`移动组织 — ${moveForm.name}`" width="440px">
+    <el-dialog :close-on-click-modal="false" v-model="moveVisible" :title="`移动组织 — ${moveForm.name}`" width="440px">
       <el-form label-width="90px">
         <el-form-item label="新上级">
           <el-tree-select

@@ -149,7 +149,7 @@ async function onToggle(row: AssignmentRuleRow) {
       </el-table>
     </el-card>
 
-    <el-dialog v-model="dialog.visible" title="新建分派规则" width="520px">
+    <el-dialog :close-on-click-modal="false" v-model="dialog.visible" title="新建分派规则" width="520px">
       <el-form label-width="110px" @submit.prevent>
         <el-form-item label="工单类型" required>
           <el-select v-model="form.type_code" filterable placeholder="选择类型" class="!w-full">

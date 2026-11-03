@@ -808,7 +808,7 @@ useTableFit(deadTable, () => deadList.value)
     </el-drawer>
 
     <!-- 提交任务（admin=定义下拉带默认参数；operator=action 输入——P5-S4 读端点后统一选单） -->
-    <el-dialog v-model="submitVisible" title="提交任务" width="560px">
+    <el-dialog :close-on-click-modal="false" v-model="submitVisible" title="提交任务" width="560px">
       <el-alert
         title="提交≠执行成功：受理后由队列异步执行，结果在「运行记录」查询"
         type="info" show-icon :closable="false" class="mb-4"
@@ -856,7 +856,7 @@ useTableFit(deadTable, () => deadList.value)
     </el-dialog>
 
     <!-- 新建任务定义 -->
-    <el-dialog v-model="jobVisible" title="新建任务定义" width="560px">
+    <el-dialog :close-on-click-modal="false" v-model="jobVisible" title="新建任务定义" width="560px">
       <el-alert v-if="jobError" :title="jobError" type="error" show-icon class="mb-4" :closable="false" />
       <el-form label-width="100px">
         <el-form-item label="动作" required>
@@ -904,7 +904,7 @@ useTableFit(deadTable, () => deadList.value)
 
     <!-- 编辑任务定义（2026-11-03 定义管理批——updateJob patch：cron/params/description/
          dept/timeout_secs 可改；action_id/trigger_type 上游无改口、enabled 走行内开关） -->
-    <el-dialog v-model="jobEditVisible" title="编辑任务定义" width="560px">
+    <el-dialog :close-on-click-modal="false" v-model="jobEditVisible" title="编辑任务定义" width="560px">
       <el-alert title="动作与触发类型创建后不可修改；启停用行内开关" type="info" show-icon :closable="false" class="mb-4" />
       <el-alert v-if="jobEditError" :title="jobEditError" type="error" show-icon class="mb-4" :closable="false" />
       <el-form label-width="100px">

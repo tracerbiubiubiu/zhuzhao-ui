@@ -570,7 +570,7 @@ useTableFit(dataTable, () => list.value)
     </div>
 
     <!-- 写入/编辑（schema 驱动表单——四类型） -->
-    <el-dialog v-model="formVisible" :title="formIsCreate ? `写入「${selectedType}」` : `编辑 #${editing.id}`" width="560px">
+    <el-dialog :close-on-click-modal="false" v-model="formVisible" :title="formIsCreate ? `写入「${selectedType}」` : `编辑 #${editing.id}`" width="560px">
       <el-alert v-if="formError" :title="formError" type="error" show-icon class="mb-4" :closable="false" />
       <el-form label-width="120px">
         <el-form-item v-for="f in schema" :key="f.name" :label="f.name" :required="f.required">
@@ -601,7 +601,7 @@ useTableFit(dataTable, () => list.value)
     </el-dialog>
 
     <!-- 导入（JSON 数组与导出对称；网关上限 1MB） -->
-    <el-dialog v-model="importVisible" title="导入数据" width="560px">
+    <el-dialog :close-on-click-modal="false" v-model="importVisible" title="导入数据" width="560px">
       <el-alert v-if="importError" :title="importError" type="error" show-icon class="mb-4" :closable="false" />
       <el-alert v-if="importResult" :title="importResult" type="success" show-icon class="mb-4" :closable="false" />
       <input type="file" accept=".json,application/json" class="mb-3" @change="onImportFile">

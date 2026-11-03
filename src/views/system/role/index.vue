@@ -270,7 +270,7 @@ async function onDelete(row: RoleRow) {
     </el-card>
 
     <!-- 新建/编辑 -->
-    <el-dialog v-model="editVisible" :title="editIsCreate ? '新建角色' : '编辑角色'" width="520px">
+    <el-dialog :close-on-click-modal="false" v-model="editVisible" :title="editIsCreate ? '新建角色' : '编辑角色'" width="520px">
       <el-form ref="editFormRef" :model="editForm" :rules="editRules" label-width="90px">
         <el-form-item label="编码" prop="code">
           <el-input v-model="editForm.code" :disabled="!editIsCreate" placeholder="如 ops_support" />
@@ -305,7 +305,7 @@ async function onDelete(row: RoleRow) {
     </el-dialog>
 
     <!-- 分配菜单（check-strictly 勾选树） -->
-    <el-dialog v-model="menusVisible" :title="`分配菜单 — ${menusForm.roleName}`" width="520px">
+    <el-dialog :close-on-click-modal="false" v-model="menusVisible" :title="`分配菜单 — ${menusForm.roleName}`" width="520px">
       <el-alert
         type="info" :closable="false" class="mb-2"
         title="勾选/取消目录会联动其下全部页面与按钮；页面与按钮之间勾选相互独立（可只勾页面不勾按钮=只读授权），保存为整体替换。"

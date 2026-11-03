@@ -655,7 +655,7 @@ useTableFit(tplTable, () => pagedTplRows.value)
     </el-card>
 
     <!-- 类型新建/编辑（states/transitions=画布模式默认 + JSON 源码模式专家兜底——S2 B2-2） -->
-    <el-dialog v-model="typeDialog.visible" :title="typeDialog.isCreate ? '新建类型' : '编辑类型'" :width="typeDialog.isCreate ? '600px' : '980px'">
+    <el-dialog :close-on-click-modal="false" v-model="typeDialog.visible" :title="typeDialog.isCreate ? '新建类型' : '编辑类型'" :width="typeDialog.isCreate ? '600px' : '980px'">
       <el-form ref="typeFormRef" :model="typeForm" label-width="110px">
         <el-form-item label="编码" required>
           <el-input v-model="typeForm.code" :disabled="!typeDialog.isCreate" placeholder="如 incident" maxlength="50" />
@@ -747,7 +747,7 @@ useTableFit(tplTable, () => pagedTplRows.value)
     </el-dialog>
 
     <!-- 字段编辑器（全量替换——危险确认） -->
-    <el-dialog v-model="fieldsDialog.visible" :title="`字段配置 — ${fieldsDialog.name}`" width="960px">
+    <el-dialog :close-on-click-modal="false" v-model="fieldsDialog.visible" :title="`字段配置 — ${fieldsDialog.name}`" width="960px">
       <el-tabs v-model="fieldsDialog.mode">
         <el-tab-pane label="设计模式" name="designer">
           <div v-loading="fieldsDialog.loading" class="mb-1 text-xs text-gray-400">
@@ -805,7 +805,7 @@ useTableFit(tplTable, () => pagedTplRows.value)
     </el-dialog>
 
     <!-- 模板新建/编辑 -->
-    <el-dialog v-model="tplDialog.visible" :title="tplDialog.isCreate ? '新建模板' : '编辑模板'" width="560px">
+    <el-dialog :close-on-click-modal="false" v-model="tplDialog.visible" :title="tplDialog.isCreate ? '新建模板' : '编辑模板'" width="560px">
       <el-form ref="tplFormRef" :model="tplForm" :rules="tplRules" label-width="120px">
         <el-form-item label="编码" prop="code">
           <el-input v-model="tplForm.code" :disabled="!tplDialog.isCreate" maxlength="50" />

@@ -263,7 +263,7 @@ function formatTime(iso?: string | null): string {
       </el-table>
 
       <!-- 创建/明文一次弹窗 -->
-      <el-dialog v-model="patVisible" :title="createdSecret ? '凭据已创建——仅此一次' : '新建 API 凭据'" width="520px">
+      <el-dialog :close-on-click-modal="false" v-model="patVisible" :title="createdSecret ? '凭据已创建——仅此一次' : '新建 API 凭据'" width="520px">
         <template v-if="!createdSecret">
           <el-input v-model="patForm.name" placeholder="凭据名称（如 CI 部署脚本）" class="mb-3" />
           <div class="flex items-center gap-2 mb-3">
