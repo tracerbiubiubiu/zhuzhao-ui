@@ -117,6 +117,23 @@ test('W5 冒烟：任务中心三 Tab（提交对话框/runs 过滤/死信/jobs�
     await expect(editDlg).toContainText('动作与触发类型创建后不可修改')
     await editDlg.getByRole('button', { name: '取消' }).click()
     await expect(editDlg).not.toBeVisible()
+
+    // ── 手动触发→回调落 succeeded（2026-11-03 trigger 回调修复回归锚：修复前
+    // 回调快照一致性校验因记账合成键恒 409——run 恒 failed + 死信累积；修复后
+    // trigger 响应回带真实 action/params、记账同源、回调落 succeeded 终态）──
+    const trigResp = page.waitForResponse((r) => r.url().includes('/jobs/trigger'), { timeout: 10_000 })
+    await jobRow.getByRole('button', { name: '手动触发' }).click()
+    const trig = await trigResp
+    expect(trig.status()).toBe(200)
+    const trigData = (await trig.json()).data as { task_id: string; action: string }
+    expect(trigData.action, 'trigger 响应回带真实 action（协议新字段）').toBe(action)
+    // 轮询任务全景至 succeeded（本地执行+回调 <5s；恒 failed=409 回归信号）
+    const trigLogin = await apiLogin(state.admin.employeeNo, state.admin.password, 'w5-trig')
+    const trigH = { token: trigLogin.env!.data.access_token } as const
+    await expect.poll(async () => {
+      const r = await api<{ status: string }>(`/api/v1/tasks/${trigData.task_id}`, trigH)
+      return r.env!.data.status
+    }, { timeout: 20_000, message: '手动触发任务未落 succeeded——409 回归或执行异常' }).toBe('succeeded')
   } finally {
     cleanupJob()
   }
