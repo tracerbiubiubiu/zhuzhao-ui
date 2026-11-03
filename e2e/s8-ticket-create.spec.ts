@@ -96,3 +96,52 @@ test('S8：发起工单（动态字段+校验预检+跳详情）', async ({ page
   }
 
 })
+
+/**
+ * richtext 编辑器挂载哨兵（2026-11-03 错包实证批补）：曾因依赖装成同作者的
+ * React 孪生包 md-editor-rt（Vue 版=md-editor-v3），MdEditor 在 Vue 里渲染成
+ * `<!---->` 恒空、包装层却正常——字段级断言拦不住，只有真浏览器挂载断言能拦。
+ */
+test('S8b：richtext 字段渲染出 md-editor 编辑器（错包回归哨兵）', async ({ page }) => {
+  const state = loadState()
+  const suffix = Date.now().toString(36)
+  const typeCode = `s8_rt_${suffix}`
+
+  const admin = await apiLogin(state.admin.employeeNo, state.admin.password, 's8-rt-setup')
+  const h = { token: admin.env!.data.access_token } as const
+  const created = await api('/api/v1/ticket-types', {
+    ...h, method: 'POST',
+    body: { code: typeCode, name: `S8RT_${suffix}`, description: 'E2E 临时', default_sla_hours: 4 },
+  })
+  expect(created.env!.code).toBe(0)
+  const fields = await api('/api/v1/ticket-types/fields/replace', {
+    ...h, method: 'POST',
+    body: {
+      code: typeCode,
+      fields: [
+        { field_key: 'detail', field_label: '故障详情', field_type: 'richtext', sort_order: 1 },
+      ],
+    },
+  })
+  expect(fields.env!.code).toBe(0)
+
+  try {
+    await uiLogin(page, state.admin.employeeNo, state.admin.password)
+    await page.goto('/#/tickets/new')
+
+    await page.locator('.el-form-item').filter({ hasText: '工单类型' }).locator('.el-select').click()
+    await page.getByRole('option', { name: `S8RT_${suffix}` }).click()
+
+    // 核心断言：MdEditor 真实挂载（容器+工具栏双存在——错包时容器空渲染 `<!---->`）
+    await expect(page.locator('.richtext-field .md-editor')).toBeVisible({ timeout: 15_000 })
+    await expect(page.locator('.richtext-field .md-editor .md-editor-toolbar')).toBeVisible()
+    // 编辑器可输入（v-model 链路活着——md-editor-v7 输入区=CodeMirror .cm-content，非 textarea）
+    const editorBody = page.locator('.richtext-field .md-editor .cm-content').first()
+    await expect(editorBody).toBeVisible()
+    await editorBody.click()
+    await editorBody.pressSequentially('哨兵输入')
+    await expect(page.locator('.richtext-field .md-editor')).toContainText('哨兵输入')
+  } finally {
+    await api('/api/v1/ticket-types/delete', { ...h, method: 'POST', body: { code: typeCode } }).catch(() => {})
+  }
+})

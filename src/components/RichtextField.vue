@@ -21,14 +21,15 @@
 /**
  * RichtextField B5-4 富文本编辑器（05 号 §6——MD 源文本存储 + 服务端白名单渲染）。
  *
- * md-editor-rt 组件 + 粘贴图片直传（paste→Blob→presign 三步→稳定 URL 插入）+
+ * md-editor-v3 组件（⚠ 同作者的 md-editor-rt 是 React 版——曾错装致编辑器恒空
+ * 渲染 `<!---->`，2026-11-03 运行时实证）+ 粘贴图片直传（paste→Blob→presign 三步→稳定 URL 插入）+
  * 本地草稿（localStorage 按 type_code 防抖存储——05 号 §6 拍板形态①）。
  * 禁 base64 内联（既定纪律——图片一律走对象存储稳定 URL）。
  */
 import { ref, watch, onMounted } from 'vue'
 import { ElAlert, ElButton } from 'element-plus'
-import { MdEditor } from 'md-editor-rt'
-import 'md-editor-rt/lib/style.css'
+import { MdEditor, type ToolbarNames } from 'md-editor-v3'
+import 'md-editor-v3/lib/style.css'
 import { uploadAndConfirm } from '@/api/storage'
 import { formatDateTime } from '@/utils/datetime'
 
@@ -46,14 +47,14 @@ const draftRestored = ref(false)
 const draftTime = ref('')
 
 // 工具栏（B5-4 §6 排版诉求=标题/列表/代码块/表格/图片）
-const toolbars = [
+const toolbars: ToolbarNames[] = [
   'bold', 'underline', 'italic', 'title', 'strikeThrough',
   'sub', 'sup', 'quote', 'unorderedList', 'orderedList',
   'codeRow', 'code', 'table', 'link', 'image',
   '-', 'revoke', 'next',
-] as const
+]
 
-// ─── 粘贴图片直传（onUploadImg 回调——md-editor-rt 内部处理 paste/drop 事件）───
+// ─── 粘贴图片直传（onUploadImg 回调——md-editor-v3 内部处理 paste/drop 事件）───
 async function onUploadImg(files: File[], callback: (urls: string[]) => void) {
   const urls: string[] = []
   for (const file of files) {

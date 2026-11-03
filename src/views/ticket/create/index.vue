@@ -386,7 +386,7 @@ async function handleSubmit() {
               </div>
               <div v-if="fileErrors[f.field_key]" class="text-xs text-red-500 mt-1">{{ fileErrors[f.field_key] }}</div>
             </div>
-            <!-- richtext=md-editor-rt 富文本编辑器（工具栏+图片粘贴直传+本地草草稿） -->
+            <!-- richtext=md-editor-v3 富文本编辑器（工具栏+图片粘贴直传+本地草稿） -->
             <RichtextField
               v-else-if="f.field_type === 'richtext' && !isFormulaField(f)"
               :model-value="(form.custom[f.field_key] as string | undefined) ?? ''"
