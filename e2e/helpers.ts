@@ -145,3 +145,25 @@ export function pgAvailable(): boolean {
     return false
   }
 }
+
+// ─── taskrunner SQLite（宿主形态 data/taskrunner.db——jobs 定义无 API 删除面，
+// E2E 建的任务定义清理走此直删；兄弟仓路径，env 覆盖适配非标准布局）───
+
+export const TASKRUNNER_DB = process.env.E2E_TASKRUNNER_DB
+  ?? resolve(here, '../../taskrunner/data/taskrunner.db')
+
+export function taskrunnerSqlite(sql: string): string {
+  return execSync(
+    `sqlite3 ${JSON.stringify(TASKRUNNER_DB)} ${JSON.stringify(sql)}`,
+    { timeout: 10_000 },
+  ).toString().trim()
+}
+
+export function taskrunnerDbAvailable(): boolean {
+  try {
+    taskrunnerSqlite('SELECT 1')
+    return true
+  } catch {
+    return false
+  }
+}
