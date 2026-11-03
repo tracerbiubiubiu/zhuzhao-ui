@@ -3,6 +3,7 @@
   import { ElScrollbar, type ScrollbarInstance } from 'element-plus'
   import { useRouter } from 'vue-router'
   import { useI18n } from 'vue-i18n'
+  import Sortable from 'sortablejs'
   import { appConfig } from '@/config/app'
   import ContextMenu from '@/components/ContextMenu/index.vue'
   import type { ContextMenuSchema } from '@/components/ContextMenu/types'
@@ -18,6 +19,7 @@
 
   const tagsViewRef = ref<HTMLElement>()
   const scrollbarRef = ref<ScrollbarInstance>()
+  const listRef = ref<HTMLElement>()
   const routers = computed(() => permissionStore.routers)
   const visitedViews = computed(() => tagsViewStore.visitedViews)
   const activeTag = computed(() =>
@@ -184,7 +186,31 @@
   // 溢出状态联动：页签数量/宽度变化（ResizeObserver）与滚动位置（scroll 事件）双路更新
   watch(visitedViews, () => nextTick(updateOverflow))
   let overflowObserver: ResizeObserver | undefined
+
+  // 拖拽排序（2026-11-03 批次②——Chrome/VS Code 页签形态，sortablejs 与 FormDesigner
+  // 画布同依赖）：affix 首页钉首位不可拖不可越（filter+onMove 双闸）；顺序以 store 为
+  // 唯一事实源——onEnd 先回滚 Sortable 的手动 DOM 搬移（vuedraggable 同款防漂移），
+  // 再 moveView 让 keyed v-for 按状态重排，杜绝两套 DOM 事实源竞争。
+  let sortable: Sortable | null = null
   onMounted(() => {
+    if (listRef.value) {
+      sortable = Sortable.create(listRef.value, {
+        animation: 160,
+        filter: `.${prefixCls}__item--affix`,
+        onMove(evt) {
+          return !(evt.related as HTMLElement | undefined)?.classList.contains(
+            `${prefixCls}__item--affix`
+          )
+        },
+        onEnd(evt) {
+          const { item, from, oldIndex, newIndex } = evt
+          if (oldIndex == null || newIndex == null || oldIndex === newIndex) return
+          item.remove()
+          from.insertBefore(item, from.children[oldIndex] ?? null)
+          tagsViewStore.moveView(oldIndex, newIndex)
+        }
+      })
+    }
     const wrap = scrollbarRef.value?.wrapRef
     if (wrap) {
       overflowObserver = new ResizeObserver(updateOverflow)
@@ -196,6 +222,7 @@
     updateOverflow()
   })
   onBeforeUnmount(() => {
+    sortable?.destroy()
     overflowObserver?.disconnect()
     const wrap = scrollbarRef.value?.wrapRef
     if (wrap) {
@@ -220,7 +247,7 @@
 
     <div :class="`${prefixCls}__viewport`">
       <ElScrollbar ref="scrollbarRef" :class="`${prefixCls}__scrollbar`" @wheel="onTagsWheel">
-        <div :class="`${prefixCls}__list`">
+        <div ref="listRef" :class="`${prefixCls}__list`">
           <ContextMenu
             v-for="item in visitedViews"
             :key="item.path"

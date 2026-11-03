@@ -109,3 +109,32 @@ describe('tagsView restoreViews（刷新恢复）', () => {
     expect(store.cachedViews).toEqual([])
   })
 })
+
+describe('tagsView moveView（拖拽排序——2026-11-03 批次②）', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+  })
+
+  const seed = (store: ReturnType<typeof useTagsViewStore>) => {
+    store.visitedViews = ['/a', '/b', '/c'].map((p) => ({
+      path: p, fullPath: p, name: p, title: p, query: {}, hash: '', affix: false, noCache: false,
+    }))
+  }
+
+  it('splice 语义：2→1 交换相邻顺序', () => {
+    const store = useTagsViewStore()
+    seed(store)
+    store.moveView(2, 1)
+    expect(store.visitedViews.map((v) => v.path)).toEqual(['/a', '/c', '/b'])
+  })
+
+  it('越界/同位 no-op（防 Sortable 异常索引破坏数组）', () => {
+    const store = useTagsViewStore()
+    seed(store)
+    store.moveView(0, 0)
+    store.moveView(-1, 2)
+    store.moveView(0, 99)
+    store.moveView(99, 0)
+    expect(store.visitedViews.map((v) => v.path)).toEqual(['/a', '/b', '/c'])
+  })
+})

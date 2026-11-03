@@ -106,6 +106,14 @@ export const useTagsViewStore = defineStore('tagsView', {
       this.visitedViews = this.visitedViews.filter((item) => item.path !== view.path)
       this.syncCachedViews()
     },
+    /** 拖拽排序（2026-11-03 批次②）：store 为顺序唯一事实源（Sortable 的 DOM 搬移在
+     *  组件层回滚，见 TagsView onEnd）；cachedViews 与顺序无关不动 */
+    moveView(from: number, to: number) {
+      if (from < 0 || to < 0 || from === to) return
+      if (from >= this.visitedViews.length || to >= this.visitedViews.length) return
+      const [moved] = this.visitedViews.splice(from, 1)
+      if (moved) this.visitedViews.splice(to, 0, moved)
+    },
     removeCachedView(name?: string) {
       if (name) {
         this.cachedViews = this.cachedViews.filter((item) => item !== name)
