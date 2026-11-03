@@ -13,6 +13,10 @@
  *   「勿填口令/密钥/PII」（共享队列全可见，E-⑤ 前端配合面）；64KB 上限前端预检
  * - jobs 写操作挂 task:manage；trigger 对 enabled=false 后端 409——按钮同步禁用
  * - 「只看我提交的」仅运行记录（submitted_by=me 由 zhuzhao 代理换 actor 透传）
+ * - 2026-11-03 死信排障批：Tab 红点改 mounted 探测驱动（原绑 deadList.length 首入
+ *   Tab 前恒隐——提醒失效）+ 死信详情 dialog + **DeadLetterRow 类型对齐真实响应**
+ *   （原类型臆测：action/error/attempts/failed_at 字段实际不存在，列表 3/4 列恒空；
+ *   dev 实测真实形状=type/state/last_error/retried/max_retry/last_failed_at）
  */
 import { formatDateTime } from '@/utils/datetime'
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
@@ -80,6 +84,7 @@ function jumpWaterline(key: string) {
 onMounted(() => {
   fetchWaterline()
   waterlineTimer = setInterval(fetchWaterline, 30_000)
+  probeDead()
 })
 onUnmounted(() => {
   if (waterlineTimer) clearInterval(waterlineTimer)
@@ -206,9 +211,34 @@ async function onRetryDead(row: DeadLetterRow) {
     await retryTaskApi(row.task_id)
     ElMessage.success('已重新入队（死信移出）')
     fetchDead()
+    probeDead()
   } catch (err: unknown) {
     const resp = (err as { response?: { data?: { message?: string } } })?.response?.data
     ElMessage.error(resp?.message ?? '重试失败')
+  }
+}
+
+// ─── 死信详情（2026-11-03 排障批——行数据直显零请求：request_id/job_id/dept/attempts
+//   + params/error 全文；原表格仅 4 列，排障关键字段恰好都未展示）───
+const deadDetailVisible = ref(false)
+const deadDetail = ref<DeadLetterRow | null>(null)
+
+function openDeadDetail(row: DeadLetterRow) {
+  deadDetail.value = row
+  deadDetailVisible.value = true
+}
+
+// 红点数据源修正（2026-11-03）：原绑定 deadList.length 只在首入死信 Tab 后才可能亮——
+// 提醒语义失效；改为 mounted 静默探测 page_size=1（零成本），非空即亮，重试成功后复探。
+// 刻意不挂水位条 dead 计数（那是 job_runs/PG 语义，与死信 Tab asynq archived/Redis 不同源）
+const deadHasAny = ref(false)
+
+async function probeDead() {
+  try {
+    const res = await listDeadLettersApi({ page: 1, page_size: 1 })
+    deadHasAny.value = (res.list?.length ?? 0) > 0
+  } catch {
+    /* 探测失败不亮点——不与 Tab 拉取竞争，静默降级 */
   }
 }
 
@@ -541,21 +571,26 @@ useTableFit(deadTable, () => deadList.value)
           </ProTable>
         </el-tab-pane>
 
-        <!-- ── Tab3 死信（第三位——需人工介入的告警面）（只读+重试；无 total 按页号翻；红点=存在待处理死信） ── -->
+        <!-- ── Tab3 死信（第三位——需人工介入的告警面）（只读+详情/重试；无 total 按页号翻；
+             红点=探测有死信（mounted 即探，不依赖首入 Tab）） ── -->
         <el-tab-pane name="dead">
           <template #label>
-            <el-badge is-dot :hidden="!deadList.length" type="danger">死信</el-badge>
+            <el-badge is-dot :hidden="!deadHasAny" type="danger">死信</el-badge>
           </template>
           <div class="min-h-0 flex-initial">
             <el-table ref="deadTable" :data="deadList" v-loading="deadLoading" row-key="task_id" height="100%">
-            <el-table-column prop="task_id" label="任务 ID" min-width="210" show-overflow-tooltip />
-            <el-table-column prop="action" label="动作" width="150" show-overflow-tooltip />
-            <el-table-column prop="error" label="最后错误" min-width="220" show-overflow-tooltip />
-            <el-table-column prop="failed_at" label="失败时间" width="170">
-              <template #default="{ row }">{{ formatTime((row as DeadLetterRow).failed_at) }}</template>
+            <el-table-column prop="task_id" label="任务 ID" min-width="200" show-overflow-tooltip />
+            <el-table-column prop="type" label="类型" min-width="150" show-overflow-tooltip />
+            <el-table-column prop="last_error" label="最后错误" min-width="220" show-overflow-tooltip />
+            <el-table-column label="已重试" width="90" align="center">
+              <template #default="{ row }">{{ (row as DeadLetterRow).retried ?? '—' }} / {{ (row as DeadLetterRow).max_retry ?? '—' }}</template>
             </el-table-column>
-            <el-table-column label="操作" width="110" fixed="right">
+            <el-table-column prop="last_failed_at" label="失败时间" width="170">
+              <template #default="{ row }">{{ formatTime((row as DeadLetterRow).last_failed_at) }}</template>
+            </el-table-column>
+            <el-table-column label="操作" width="150" fixed="right">
               <template #default="{ row }">
+                <el-button link type="primary" size="small" @click="openDeadDetail(row as DeadLetterRow)">详情</el-button>
                 <el-button
                   v-permission="'task:operate'" link type="danger" size="small"
                   @click="onRetryDead(row as DeadLetterRow)"
@@ -604,6 +639,25 @@ useTableFit(deadTable, () => deadList.value)
         </template>
         <div v-else-if="!detailLoading" class="text-sm text-gray-400">未查到该任务</div>
       </div>
+    </el-dialog>
+
+    <!-- 死信详情（2026-11-03 排障批——行数据直显零请求；真实字段 type/state/重试账 + last_error 全文；
+         原臆测字段 request_id/job_id/dept/params 在 asynq archived 投影中不存在，dev 实测取证后删除） -->
+    <el-dialog v-model="deadDetailVisible" title="死信详情" width="720px">
+      <template v-if="deadDetail">
+        <el-descriptions :column="2" border>
+          <el-descriptions-item label="任务 ID" :span="2">{{ deadDetail.task_id }}</el-descriptions-item>
+          <el-descriptions-item label="类型">{{ deadDetail.type || '—' }}</el-descriptions-item>
+          <el-descriptions-item label="状态">{{ deadDetail.state || '—' }}</el-descriptions-item>
+          <el-descriptions-item label="已重试">{{ deadDetail.retried ?? '—' }}</el-descriptions-item>
+          <el-descriptions-item label="重试上限">{{ deadDetail.max_retry ?? '—' }}</el-descriptions-item>
+          <el-descriptions-item label="失败时间" :span="2">{{ formatTime(deadDetail.last_failed_at) }}</el-descriptions-item>
+        </el-descriptions>
+        <div class="mt-3">
+          <div class="text-xs text-gray-400 mb-1">最后错误（全文）</div>
+          <pre class="whitespace-pre-wrap text-xs text-[var(--el-color-danger)] bg-gray-50 dark:bg-gray-800 p-2 rounded">{{ deadDetail.last_error || '（无）' }}</pre>
+        </div>
+      </template>
     </el-dialog>
 
     <!-- 提交任务（admin=定义下拉带默认参数；operator=action 输入——P5-S4 读端点后统一选单） -->

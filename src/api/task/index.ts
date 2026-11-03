@@ -35,17 +35,19 @@ export interface TaskDetail extends TaskRunRow {
   live_state?: string
 }
 
-/** 死信行 */
+/** 死信行（2026-11-03 对齐真实响应——原类型为臆测形状，action/error/attempts 等字段
+ *  在实际数据中不存在，列表 3/4 列恒空；真实形状=asynq archived 投影，dev 实测取证） */
 export interface DeadLetterRow {
   task_id: string
-  request_id?: string
-  action: string
-  job_id?: string
-  dept?: string
-  params?: string
-  error: string
-  attempts?: number
-  failed_at?: string
+  /** asynq 任务类型（如 taskrunner:callback） */
+  type: string
+  /** asynq 任务态（死信=archived） */
+  state: string
+  /** 最后错误全文（含对端响应片段） */
+  last_error: string
+  retried?: number
+  max_retry?: number
+  last_failed_at?: string
   [k: string]: unknown
 }
 
