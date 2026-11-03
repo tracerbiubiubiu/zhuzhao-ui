@@ -82,4 +82,23 @@ test('W5 冒烟：任务中心三 Tab（提交对话框/runs 过滤/死信/jobs�
   const dresp = await deadResp
   expect(dresp.status()).toBe(200)
   await expect(page.getByRole('columnheader', { name: '任务 ID' })).toBeVisible({ timeout: 10_000 })
+
+  // ── 任务定义详情/编辑（2026-11-03 定义管理批：行数据直显抽屉 + updateJob patch 编辑框）──
+  await page.getByRole('tab', { name: '任务定义' }).click()
+  await jobRow.getByRole('button', { name: '详情' }).click()
+  const jobDrawer = page.locator('.el-drawer:visible').filter({ hasText: '任务定义详情' })
+  await expect(jobDrawer).toBeVisible()
+  await expect(jobDrawer).toContainText(desc) // 说明列直显（行数据零请求）
+  await expect(jobDrawer).toContainText(action)
+  await jobDrawer.locator('.el-drawer__close-btn').click()
+  await expect(jobDrawer).not.toBeVisible()
+
+  await jobRow.getByRole('button', { name: '编辑' }).click()
+  const editDlg = page.locator('.el-dialog:visible').filter({ hasText: '编辑任务定义' })
+  await expect(editDlg).toBeVisible()
+  // manual 类型：无 cron 编辑项（仅 cron 触发类型显示 CronBuilder）+ 只读边界提示
+  await expect(editDlg.locator('.el-form-item').filter({ hasText: 'cron 表达式' })).toHaveCount(0)
+  await expect(editDlg).toContainText('动作与触发类型创建后不可修改')
+  await editDlg.getByRole('button', { name: '取消' }).click()
+  await expect(editDlg).not.toBeVisible()
 })

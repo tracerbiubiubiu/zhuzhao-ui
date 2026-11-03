@@ -19,7 +19,8 @@ test('P5-S10：抄送我/自摘 + 标签挂/筛/摘（详情页卡片）', async
   const me = await mustData(api<{ id: string }>('/api/v1/user/profile', h), 'GET /user/profile')
   const orgId = (await mustData(api<Array<{ id: string }>>('/api/v1/orgs', h), 'GET /orgs'))[0].id
   const created = await api<{ id: string }>('/api/v1/tickets', {
-    ...h, method: 'POST', body: { type_code: 'incident', title: `P5-S10 抄送标签_${suffix}`, org_id: orgId },
+    // 2026-11-03 数据态适配：dev 库 incident 类型 impact_scope（select）转必填——建单须带
+    ...h, method: 'POST', body: { type_code: 'incident', title: `P5-S10 抄送标签_${suffix}`, org_id: orgId, custom_data: { impact_scope: '单个部门' } },
   })
   expect(created.env?.code, '建单须成功').toBe(0)
   const tid = created.env!.data.id

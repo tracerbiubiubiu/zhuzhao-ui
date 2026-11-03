@@ -23,6 +23,8 @@ export interface TaskRunRow {
   attempts: number
   error: string
   duration_ms: number
+  /** taskrunner submitted_by：cron 定时触发显式留空（cron.go「无用户参与」设计）——
+   *  手动提交经网关恒填 actor；前端空值渲染「系统定时」标签做审计归因 */
   submitted_by: string
   enqueued_at: string
   started_at?: string | null
@@ -166,13 +168,20 @@ export async function createJobApi(input: {
   return data as unknown as TaskJobRow
 }
 
-/** patch：enabled 启停为主（cron/params/description 指针可改） */
+/**
+ * patch 语义（taskrunner JobPatch 指针：JSON 省略字段=不改）：
+ * - params：显式 null 被服务端 400 拒——清空传 {}；仅 cron 触发类型可改 cron_spec
+ *   （否则 400 透传）；description/dept 传空串=清空
+ * - 网关侧 raw body 纯透传（taskrunner_handler UpdateJob 不解字段），新增上游字段无需网关改动
+ */
 export async function updateJobApi(input: {
   job_id: string
   enabled?: boolean
   cron_spec?: string
   params?: unknown
   description?: string
+  dept?: string
+  timeout_secs?: number
 }): Promise<void> {
   await request.post('/api/v1/jobs/update', input, { _silentError: true })
 }

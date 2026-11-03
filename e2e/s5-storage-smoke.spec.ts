@@ -65,7 +65,8 @@ test.describe('S5 存储面冒烟', () => {
     const h = { token: login.env!.data.access_token }
     const orgId = ((await api('/api/v1/orgs', h)).env!.data as Array<{ id: string }>)[0].id
     const created = await api<{ id: string }>('/api/v1/tickets', {
-      ...h, method: 'POST', body: { type_code: 'incident', title: 'E2E 附件冒烟', org_id: orgId },
+      // 2026-11-03 数据态适配：dev 库 incident 类型 impact_scope（select）转必填——建单须带
+      ...h, method: 'POST', body: { type_code: 'incident', title: 'E2E 附件冒烟', org_id: orgId, custom_data: { impact_scope: '单个部门' } },
     })
     // B1-7 批3（三路F-E-3）：硬断言建单成功——原 if(code===0) 包裹使建单失败静默通过
     expect(created.env?.code, '建单失败——附件断言须红').toBe(0)

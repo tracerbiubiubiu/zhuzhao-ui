@@ -31,7 +31,8 @@ test('W4 冒烟：工单列表渲染+关键字筛选+标题链接进详情', asy
   // 四轮审计：原断言 '#1' 是路由参直出（404 也过）——改为造真单+断言标题文本
   const created = await api('/api/v1/tickets', {
     ...h, method: 'POST',
-    body: { type_code: 'incident', title: 'W4 冒烟单据', org_id: '1', priority: 3 },
+    // 2026-11-03 数据态适配：dev 库 incident 类型 impact_scope（select）转必填——建单须带
+    body: { type_code: 'incident', title: 'W4 冒烟单据', org_id: '1', priority: 3, custom_data: { impact_scope: '单个部门' } },
   })
   expect(created.env!.code).toBe(0)
   const tid = (created.env!.data as { id: string }).id
