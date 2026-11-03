@@ -151,8 +151,9 @@ export const useUserStore = defineStore('user', {
       this.rawMenus = []
       // 3. 权限动态路由复位（isAddRouters 必须回 false，否则新会话不重注册）
       usePermissionStore().reset()
-      // 4. 标签页复位
-      useTagsViewStore().removeAllViews()
+      // 4. 标签页复位（$reset 而非 removeAllViews——连持久化一起清空+restored 标志复位，
+      //    跨用户登录不得残留上一账号页签（2026-11-03 持久化批）；订阅随写空 storage）
+      useTagsViewStore().$reset()
       // 5. 路由注册表复位（清动态路由 + 允许 catch-all 下次重新尾注册）
       resetRouter()
       resetCatchAll()

@@ -12,13 +12,15 @@ import type { RouteRecordRaw } from 'vue-router'
  * 根容器 `/`（Layout + redirect:/home）在 src/router/index.ts 的 constantRouterMap 中组装。
  */
 const constantRoutes: RouteRecordRaw[] = [
-  { path: '/login', name: 'Login', component: () => import('@/views/Login/Login.vue'), meta: { title: '登录', hidden: true } },
-  { path: '/change-password', name: 'ChangePassword', component: () => import('@/views/ChangePassword/index.vue'), meta: { title: '修改密码', hidden: true } },
+  // 全屏独立布局四页一律 noTagsView（2026-11-03 页签持久化批硬化——独立页不挂 Layout
+  // 本就不产生页签；显式声明让持久化恢复校验（createTagView）与建签口径同源兜底）
+  { path: '/login', name: 'Login', component: () => import('@/views/Login/Login.vue'), meta: { title: '登录', hidden: true, noTagsView: true } },
+  { path: '/change-password', name: 'ChangePassword', component: () => import('@/views/ChangePassword/index.vue'), meta: { title: '修改密码', hidden: true, noTagsView: true } },
   // 会话加载瞬时失败页（§3.3：5xx/网络抖动不清会话——守卫 transient 分支跳入，白名单放行）
-  { path: '/session-error', name: 'SessionError', component: () => import('@/views/Error/SessionError.vue'), meta: { title: '会话加载失败', hidden: true } },
+  { path: '/session-error', name: 'SessionError', component: () => import('@/views/Error/SessionError.vue'), meta: { title: '会话加载失败', hidden: true, noTagsView: true } },
   // 403 无权限页（§3.2⑤）——守卫 route:{path} 校验未过（路由存在但无码）跳入；
   // 路由不存在仍由 catch-all 404 兜底（routePermission 对 NotFound 豁免，二者不混）
-  { path: '/403', name: 'Forbidden', component: () => import('@/views/Error/403.vue'), meta: { title: '无权限', hidden: true } },
+  { path: '/403', name: 'Forbidden', component: () => import('@/views/Error/403.vue'), meta: { title: '无权限', hidden: true, noTagsView: true } },
   // 个人中心（§3.2④ 菜单外静态补充路由——任何登录用户可达，挂根容器 Layout 下，
   // 与 Redirect 同款装配方式：router/index.ts 单独挂 children、不进顶层整表展开）
   { path: '/profile', name: 'Profile', component: () => import('@/views/Profile/index.vue'), meta: { title: '个人中心', hidden: true } },

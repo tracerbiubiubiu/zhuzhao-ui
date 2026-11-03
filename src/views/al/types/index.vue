@@ -273,6 +273,7 @@ useTableFit(typesTable, () => rows.value)
     <!-- 注册/演进共用编辑器 -->
     <el-dialog
       v-model="editorVisible"
+      :close-on-click-modal="false"
       :title="editorMode === 'create' ? '注册类型' : `演进「${editorForm.type_name}」（当前 v${editorForm.version}）`"
       width="640px"
     >

@@ -96,7 +96,7 @@
     </el-card>
 
     <!-- 模板编辑对话框（code 建后不可改；is_system 行不可入） -->
-    <el-dialog v-model="tplDialog.visible" :title="tplDialog.isCreate ? '新建消息模板' : `编辑模板 ${tplForm.code}`" width="640px">
+    <el-dialog v-model="tplDialog.visible" :close-on-click-modal="false" :title="tplDialog.isCreate ? '新建消息模板' : `编辑模板 ${tplForm.code}`" width="640px">
       <el-form label-width="90px" @submit.prevent>
         <el-form-item label="标识" required>
           <el-input v-model="tplForm.code" :disabled="!tplDialog.isCreate" placeholder="如 ticket_assigned_v2" maxlength="64" />
@@ -133,7 +133,7 @@
     </el-dialog>
 
     <!-- 规则编辑对话框（upsert：biz_type+event_action 唯一，同键保存=改绑模板/收件人） -->
-    <el-dialog v-model="ruleDialog.visible" :title="ruleDialog.isCreate ? '新建订阅规则' : `编辑规则 ${ruleForm.biz_type}:${ruleForm.event_action}`" width="560px">
+    <el-dialog v-model="ruleDialog.visible" :close-on-click-modal="false" :title="ruleDialog.isCreate ? '新建订阅规则' : `编辑规则 ${ruleForm.biz_type}:${ruleForm.event_action}`" width="560px">
       <el-form label-width="100px" @submit.prevent>
         <el-form-item label="业务域" required>
           <el-select v-model="ruleForm.biz_type" class="!w-full" :disabled="!ruleDialog.isCreate">

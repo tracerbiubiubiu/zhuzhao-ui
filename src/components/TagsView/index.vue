@@ -68,6 +68,19 @@
     await navigateTo(visitedViews.value[index] ?? visitedViews.value[index - 1])
   }
 
+  // 中键关闭（2026-11-03 业界对齐批——浏览器页签惯例）：button=1 auxclick 触发关闭；
+  // mousedown 同键先行 preventDefault——压掉两类原生默认行为（Chromium 中键滚轮模式、
+  // 链接中键新开标签页）。affix 首页由 closeTag 内既有守卫兜住。
+  const onTagMouseDown = (e: MouseEvent) => {
+    if (e.button === 1) e.preventDefault()
+  }
+  const onTagAuxClick = (view: TagView, e: MouseEvent) => {
+    if (e.button === 1) {
+      e.preventDefault()
+      void closeTag(view)
+    }
+  }
+
   const closeAllTags = async () => {
     tagsViewStore.removeAllViews()
     await navigateTo(visitedViews.value.at(-1))
@@ -216,6 +229,8 @@
               `${prefixCls}__item`,
               { [`${prefixCls}__item--affix`]: item.affix, 'is-active': isActive(item) }
             ]"
+            @mousedown="onTagMouseDown"
+            @auxclick="onTagAuxClick(item, $event)"
           >
             <div :class="`${prefixCls}__item-body`">
               <RouterLink :to="item.fullPath" :class="`${prefixCls}__link`">

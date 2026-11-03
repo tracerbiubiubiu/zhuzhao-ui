@@ -19,6 +19,7 @@ import { checkRoutePermission } from './router/routePermission'
 import { classifySessionLoadError } from './router/sessionError'
 import { usePermissionStoreWithOut } from '@/store/modules/permission'
 import { useUserStoreWithOut } from '@/store/modules/user'
+import { createTagView, useTagsViewStore } from '@/store/modules/tagsView'
 import 'nprogress/nprogress.css'
 
 NProgress.configure({ showSpinner: false })
@@ -56,6 +57,15 @@ export const ensureDynamicRoutes = async () => {
     })
     catchAllRegistered = true
   }
+
+  // 页签刷新恢复（2026-11-03 业界对齐批）：持久化页签按当前会话路由表校验重建。
+  // 权限过滤在此天然成立——无权路由未注册，resolve 落 catch-all → 丢弃（安全语义）；
+  // 必须在 catch-all 注册之后执行（NotFound 判定依赖它）。每会话一次（store 内守卫）。
+  useTagsViewStore().restoreViews((fullPath) => {
+    const resolved = router.resolve(fullPath)
+    if (resolved.matched.length === 0 || resolved.name === 'NotFound') return undefined
+    return createTagView(resolved)
+  })
 
   permissionStore.setIsAddRouters(true)
   return true

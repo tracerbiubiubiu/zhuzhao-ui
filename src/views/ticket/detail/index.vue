@@ -755,7 +755,7 @@ async function submitRelation() {
 
     <!-- 编辑对话框 -->
     </div>
-    <el-dialog v-model="editVisible" title="编辑工单" width="520px">
+    <el-dialog v-model="editVisible" :close-on-click-modal="false" title="编辑工单" width="520px">
       <el-form ref="editFormRef" :model="editForm" label-width="80px">
         <el-form-item label="标题" required>
           <el-input v-model="editForm.title" maxlength="200" show-word-limit />
@@ -780,7 +780,7 @@ async function submitRelation() {
     </el-dialog>
 
     <!-- 分派对话框 -->
-    <el-dialog v-model="assignVisible" title="分派工单" width="420px">
+    <el-dialog v-model="assignVisible" :close-on-click-modal="false" title="分派工单" width="420px">
       <el-form label-width="80px" @submit.prevent>
         <el-form-item label="处理人">
           <UserPicker v-model="assignForm.userId" />
@@ -799,7 +799,7 @@ async function submitRelation() {
     </el-dialog>
 
     <!-- 关闭对话框（可选关闭说明） -->
-    <el-dialog v-model="closeVisible" title="关闭工单" width="460px">
+    <el-dialog v-model="closeVisible" :close-on-click-modal="false" title="关闭工单" width="460px">
       <el-input v-model="closeForm.comment" type="textarea" :rows="3" placeholder="关闭说明（可选）" />
       <el-alert v-if="closeError" :title="closeError" type="error" show-icon class="mt-2" :closable="false" />
       <template #footer>

@@ -435,7 +435,7 @@ async function onDelete(row: UserRow) {
     </el-card>
 
     <!-- 新建/编辑 -->
-    <el-dialog v-model="editVisible" :title="editIsCreate ? '新建用户' : '编辑用户'" width="480px">
+    <el-dialog v-model="editVisible" :close-on-click-modal="false" :title="editIsCreate ? '新建用户' : '编辑用户'" width="480px">
       <el-form ref="editFormRef" :model="editForm" :rules="editRules" label-width="80px">
         <el-form-item label="用户名" prop="username">
           <el-input v-model="editForm.username" :disabled="!editIsCreate" />
@@ -463,7 +463,7 @@ async function onDelete(row: UserRow) {
     </el-dialog>
 
     <!-- 重置密码 -->
-    <el-dialog :model-value="resetVisible" title="重置密码" width="420px" @update:model-value="resetVisible = $event">
+    <el-dialog :model-value="resetVisible" :close-on-click-modal="false" title="重置密码" width="420px" @update:model-value="resetVisible = $event">
       <el-form ref="resetFormRef" :model="resetForm" :rules="resetRules" label-width="80px">
         <el-form-item label="用户">
           <el-input :model-value="resetForm.username" disabled />
@@ -479,7 +479,7 @@ async function onDelete(row: UserRow) {
     </el-dialog>
 
     <!-- 分配角色 -->
-    <el-dialog :model-value="rolesVisible" title="分配角色" width="480px" @update:model-value="rolesVisible = $event">
+    <el-dialog :model-value="rolesVisible" :close-on-click-modal="false" title="分配角色" width="480px" @update:model-value="rolesVisible = $event">
       <el-form :model="rolesForm" label-width="80px">
         <el-form-item label="用户">
           <el-input :model-value="rolesForm.username" disabled />
@@ -498,7 +498,7 @@ async function onDelete(row: UserRow) {
     </el-dialog>
 
     <!-- 分配组织（P2-12：全量替换 + 主组织） -->
-    <el-dialog :model-value="orgsVisible" title="分配组织" width="520px" @update:model-value="orgsVisible = $event">
+    <el-dialog :model-value="orgsVisible" :close-on-click-modal="false" title="分配组织" width="520px" @update:model-value="orgsVisible = $event">
       <el-form label-width="80px" @submit.prevent>
         <el-form-item label="用户">
           <el-input :model-value="orgsForm.username" disabled />
