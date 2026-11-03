@@ -1,22 +1,21 @@
 <template>
   <div class="fill-page">
+    <!-- 一屏一卡：不立卡头（面包屑+菜单已定位）；分组语义以卡内小节标题承载（ui-card-header 纪律） -->
     <el-card shadow="never" class="!flex-none">
-      <template #header>
-        <div>
-          <div class="font-semibold">存储与上传</div>
-          <div class="text-xs text-gray-400 mt-1">
-            影响所有用户的文件上传行为；改动保存后立即生效，无需重启。仅超级管理员可修改。
-          </div>
-        </div>
-      </template>
+      <div class="mb-2">
+        <span class="text-13px font-medium">存储与上传</span>
+        <span class="text-xs text-gray-400 ml-2">
+          影响所有用户的上传行为 · 保存后立即生效 · 仅超级管理员可修改
+        </span>
+      </div>
 
       <div v-loading="loading">
         <div
           v-for="row in viewRows"
           :key="row.key"
-          class="flex items-start justify-between gap-6 py-16px border-b border-gray-100 dark:border-gray-700 last:border-b-0"
+          class="flex items-center justify-between gap-6 py-10px border-b border-gray-100 dark:border-gray-700 last:border-b-0"
         >
-          <!-- 左：人话标题 + 通俗描述；raw key 降为悬停辅助信息（排障用） -->
+          <!-- 左：人话标题 + 描述（范围并入同段避免行高膨胀）；raw key 降为悬停辅助 -->
           <div class="min-w-0 flex-1">
             <div class="flex items-center gap-2">
               <span class="text-14px font-medium">{{ row.meta.title }}</span>
@@ -25,14 +24,14 @@
                 <el-tag size="small" effect="plain" type="info">默认值</el-tag>
               </el-tooltip>
             </div>
-            <div class="text-xs text-gray-500 mt-4px leading-relaxed">{{ row.meta.desc }}</div>
-            <div v-if="row.meta.hardLimit" class="text-xs text-gray-400 mt-2px">
-              可设范围：{{ row.meta.hardLimit }}
+            <div class="text-xs text-gray-500 mt-2px leading-snug">
+              {{ row.meta.desc }}
+              <span v-if="row.meta.hardLimit" class="text-gray-400">· 范围：{{ row.meta.hardLimit }}</span>
             </div>
           </div>
 
           <!-- 右：当前值（人话主显示 + 原始值辅助）+ 操作 -->
-          <div class="flex items-center gap-3 flex-none pt-1 max-w-[280px]">
+          <div class="flex items-center gap-3 flex-none max-w-[280px]">
             <div class="text-right">
               <div class="text-14px font-600">{{ row.meta.formatPrimary(row.value) }}</div>
               <div v-if="row.meta.formatSecondary" class="text-xs text-gray-400">
