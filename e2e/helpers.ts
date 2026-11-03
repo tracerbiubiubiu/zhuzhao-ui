@@ -102,7 +102,21 @@ export async function tempTicketType(
   return {
     code,
     cleanup: async () => {
-      await api('/api/v1/ticket-types/delete', { ...h, method: 'POST', body: { code } }).catch(() => {})
+      // 类型删除守卫拒「有存活工单」——先删引用工单再删类型（2026-11-02 清理实证：
+      // 旧实现 .catch 静默吞「资源冲突」致 73 个类型跨日累积）；失败上抛不静默，
+      // 类型残留当轮显形（运行态列表卫生）。
+      const d1 = await api('/api/v1/ticket-types/delete', { ...h, method: 'POST', body: { code } }).catch(() => null)
+      if (d1?.env?.code !== 0) {
+        const list = await api(`/api/v1/tickets?type_code=${code}&page_size=100`, { ...h, method: 'GET' }).catch(() => null)
+        const rows = ((list?.env?.data as { list?: Array<{ id: string }> } | null)?.list ?? []) as Array<{ id: string }>
+        for (const t of rows) {
+          await api('/api/v1/tickets/delete', { ...h, method: 'POST', body: { id: t.id } }).catch(() => {})
+        }
+        const d2 = await api('/api/v1/ticket-types/delete', { ...h, method: 'POST', body: { code } }).catch(() => null)
+        if (d2?.env?.code !== 0) {
+          console.warn(`[cleanup] 临时类型 ${code} 删除仍失败（code=${d2?.env?.code}）——类型残留需人工核查`)
+        }
+      }
     },
   }
 }
