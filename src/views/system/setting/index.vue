@@ -9,10 +9,10 @@
         </span>
       </div>
 
-      <!-- 水平表单形态（业界后台惯例：label 左/值控件右，一行一项 ~40px）——
-           描述收进 ? 悬停（完整含范围），不再垂直堆叠占行 -->
-      <el-form label-position="left" label-width="200px" class="!mt-1">
-        <el-form-item v-for="row in viewRows" :key="row.key" class="!mb-2 !py-1 setting-row">
+      <!-- 内联控件形态（业界设置页主流：控件直接在行上，无逐行按钮/对话框）——
+           脏状态由底部保存条统一提交；描述收 ? 悬停 -->
+      <el-form label-position="left" label-width="200px" class="!mt-1" :disabled="!canEdit">
+        <el-form-item v-for="row in viewRows" :key="row.key" class="!mb-2 !py-1">
           <template #label>
             <span class="inline-flex items-center gap-1">
               {{ row.meta.title }}
@@ -25,118 +25,100 @@
             </span>
           </template>
           <div class="flex items-center justify-between gap-3 w-full">
-            <div class="flex items-center gap-2 min-w-0">
-              <span class="text-14px font-600">{{ row.meta.formatPrimary(row.value) }}</span>
-              <span v-if="row.meta.formatSecondary" class="text-xs text-gray-400 truncate">
-                {{ row.meta.formatSecondary(row.value) }}
-              </span>
-              <el-tag v-if="row.source === 'kv'" type="success" size="small" effect="plain">已自定义</el-tag>
-              <el-tooltip v-else content="系统内置默认值，尚未修改过" placement="top">
-                <el-tag size="small" effect="plain" type="info">默认</el-tag>
+            <div class="flex items-center gap-2 min-w-0 flex-wrap">
+              <!-- bytes：数字输入 + 实时换算 -->
+              <template v-if="row.meta.control === 'bytes'">
+                <el-input-number
+                  v-model="drafts[row.key]!.num"
+                  :min="1" :max="104857600" size="small" style="width: 160px"
+                  :data-testid="`setting-input-${row.key}`"
+                />
+                <span class="text-xs text-gray-400">≈ {{ fmtBytes(drafts[row.key]!.num) }}</span>
+              </template>
+              <!-- 个数/天数：数字输入 -->
+              <el-input-number
+                v-else-if="row.meta.control === 'count' || row.meta.control === 'days'"
+                v-model="drafts[row.key]!.num"
+                :min="1" :max="row.meta.control === 'days' ? 365 : (row.meta.maxCount ?? 100)"
+                size="small" style="width: 130px"
+                :data-testid="`setting-input-${row.key}`"
+              />
+              <!-- MIME 白名单：多选 -->
+              <el-select
+                v-else-if="row.meta.control === 'mime'"
+                v-model="drafts[row.key]!.mime"
+                multiple filterable collapse-tags collapse-tags-tooltip allow-create
+                default-first-option placeholder="输入或从预设选择"
+                size="small" style="width: 320px" class="!w-[320px]"
+                :data-testid="`setting-input-${row.key}`"
+              >
+                <el-option v-for="m in presetMimes" :key="m" :label="m" :value="m" />
+              </el-select>
+              <span v-else class="text-14px">{{ drafts[row.key]!.text }}</span>
+
+              <span class="text-xs text-gray-300">/ 初始 {{ row.meta.formatPrimary(row.default_value) }}</span>
+
+              <!-- 恢复默认：有覆盖且值≠出厂时出现 -->
+              <el-tooltip content="删除运行时覆盖，回到系统出厂值" placement="top">
+                <el-button
+                  v-if="row.source === 'kv' && row.isCustomized"
+                  link type="warning" size="small"
+                  data-testid="setting-reset"
+                  @click="resetRow(row)"
+                >恢复默认</el-button>
               </el-tooltip>
+
+              <el-tag v-if="row.source === 'kv' && row.isCustomized" type="success" size="small" effect="plain">已自定义</el-tag>
+              <el-tag v-else size="small" effect="plain" type="info">默认</el-tag>
             </div>
-            <el-button
-              v-if="canEdit"
-              type="primary"
-              plain
-              size="small"
-              @click="openEdit(row)"
-            >修改</el-button>
-            <el-tooltip v-else content="需超级管理员权限" placement="top">
+            <el-tooltip v-if="!canEdit" content="需超级管理员权限" placement="top">
               <span class="text-xs text-gray-400">只读</span>
             </el-tooltip>
           </div>
         </el-form-item>
       </el-form>
 
+      <!-- 脏状态保存条：内联改动统一提交（业界脏保存条惯例） -->
+      <div
+        v-if="dirtyKeys.length"
+        class="sticky bottom-0 -mx-4 px-4 py-2 flex items-center justify-between bg-[var(--el-color-primary-light-9)] dark:bg-gray-800 border-t border-[var(--el-color-primary-light-7)] rounded-b-[var(--el-card-border-radius)]"
+      >
+        <span class="text-xs" data-testid="setting-dirty-bar">
+          {{ dirtyKeys.length }} 项未保存（{{ dirtyTitles }}）
+        </span>
+        <div class="flex items-center gap-2">
+          <el-button size="small" @click="discardDrafts">放弃更改</el-button>
+          <el-button type="primary" size="small" :loading="saving" data-testid="setting-save" @click="saveDirty">
+            保存更改
+          </el-button>
+        </div>
+      </div>
+
       <el-empty v-if="!loading && !settings.length" description="未读取到设置项" :image-size="60" />
-      <div v-if="settings.length" class="text-xs text-gray-300">
+      <div v-if="settings.length" class="text-xs text-gray-300 mt-2">
         设置键：{{ settings.map((s) => s.key).join(' · ') }}
       </div>
     </el-card>
-
-    <el-dialog v-model="editVisible" :title="`修改「${editing?.meta.title}」`" width="520">
-      <el-alert
-        v-if="editing"
-        :title="editing.meta.desc"
-        type="info"
-        :closable="false"
-        class="mb-4"
-        show-icon
-      />
-      <div v-if="editing" class="mb-2 text-xs text-gray-400">
-        当前值：{{ editing.meta.formatPrimary(editing.value) }}
-        <span v-if="editing.meta.formatSecondary">（{{ editing.meta.formatSecondary(editing.value) }}）</span>
-      </div>
-
-      <el-form label-width="90">
-        <el-form-item label="新值">
-          <!-- bytes：数字输入 + 实时 MB 换算预览 -->
-          <template v-if="editing!.control === 'bytes'">
-            <div>
-              <el-input-number v-model="editNumberValue" :min="1" :max="104857600" style="width: 220px" />
-              <div class="text-xs text-gray-400 mt-1">≈ {{ fmtBytes(editNumberValue) }}（硬顶 100 MB）</div>
-            </div>
-          </template>
-          <!-- 个数类：按各键硬顶钳制 -->
-          <template v-else-if="editing!.control === 'count'">
-            <div>
-              <el-input-number v-model="editNumberValue" :min="1" :max="editing!.maxCount" style="width: 220px" />
-              <div class="text-xs text-gray-400 mt-1">最大 {{ editing!.maxCount }}</div>
-            </div>
-          </template>
-          <!-- 天数类 -->
-          <template v-else-if="editing!.control === 'days'">
-            <div>
-              <el-input-number v-model="editNumberValue" :min="1" :max="365" style="width: 220px" />
-              <div class="text-xs text-gray-400 mt-1">1–365 天</div>
-            </div>
-          </template>
-          <!-- MIME 白名单 -->
-          <el-select
-            v-else-if="editing!.control === 'mime'"
-            v-model="editMimeList"
-            multiple
-            filterable
-            allow-create
-            default-first-option
-            placeholder="输入或从预设选择"
-            style="width: 100%"
-          >
-            <el-option v-for="m in presetMimes" :key="m" :label="m" :value="m" />
-          </el-select>
-          <el-input v-else v-model="editValue" placeholder="输入值" />
-        </el-form-item>
-        <el-form-item v-if="editing!.control === 'mime'" label="">
-          <div class="text-xs text-gray-400">
-            可执行文件与 HTML/SVG 为服务端硬黑名单，加入白名单会被拒绝；至少保留一种图片格式，否则头像无法上传。
-          </div>
-        </el-form-item>
-      </el-form>
-
-      <template #footer>
-        <el-button @click="editVisible = false">取消</el-button>
-        <el-button type="primary" :loading="saving" @click="save">保存</el-button>
-      </template>
-    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
 /**
- * 系统设置管理页（B5-6 建；2026-11-03 重设计——键值表格改「人话卡片行」：
- * 标题/描述/范围走前端元信息映射（展示层人话化，后端 catalog description
- * 保留为 API 层原文），raw key 降为悬停辅助；值双显（人话主值+原始值辅助）；
- * 控件类型由映射表 control 显式声明（原 key.includes 字符串猜测废除）。
- * 新增 catalog 键时须同步补 META 行（缺省优雅降级=显示 key+后端描述）。
+ * 系统设置管理页（B5-6 建；2026-11-03 重设计二轮——水平表单的值区改「内联控件+
+ * 脏保存条」：控件直接在行上，改动经底部保存条统一提交，废除逐行按钮+对话框
+ * ——业界设置页主流（Vercel/Linear/GitHub Developer settings）。
+ * 语义修正：「默认/已自定义」标签按 value↔default_value 深比较（后端本批暴露
+ * default_value——原 source=kv 恒显已自定义，值改回默认也误导）；「恢复默认」
+ * 调 reset 端点删覆盖行回出厂值。
+ * 元信息映射 META=展示层 SSOT（标题/描述/控件类型/格式化）；新增 catalog 键须
+ * 同步补行（缺省优雅降级=显示 key+后端描述）。raw key 集中卡底脚注。
  */
-import { ref, computed, onMounted } from 'vue'
-import { Icon } from '@iconify/vue'
+import { ref, computed, reactive, onMounted } from 'vue'
 import {
-  ElCard, ElForm, ElFormItem, ElTag, ElButton, ElTooltip, ElAlert,
-  ElDialog, ElInput, ElInputNumber,
-  ElSelect, ElOption, ElMessage, ElEmpty,
+  ElCard, ElForm, ElFormItem, ElTag, ElButton, ElTooltip, ElMessageBox,
+  ElInputNumber, ElSelect, ElOption, ElMessage, ElEmpty,
 } from 'element-plus'
+import { Icon } from '@iconify/vue'
 import request from '@vea/request'
 import { useUserStoreWithOut } from '@/store/modules/user'
 
@@ -145,25 +127,25 @@ defineOptions({ name: 'system_setting' })
 interface SettingRow {
   key: string
   value: unknown
+  default_value?: unknown
   source: string
   min_editor_tier: string
   description: string
   updated_by?: string
   updated_at?: string
+  version?: number
 }
 
 type Control = 'bytes' | 'count' | 'days' | 'mime' | 'text'
 
-/** 人话元信息映射（展示层 SSOT——后端 description 仅作无映射时的降级显示） */
+/** 人话元信息映射（展示层 SSOT） */
 interface SettingMeta {
   title: string
   desc: string
   control: Control
-  /** 个数类硬顶（el-input-number max） */
   maxCount?: number
   hardLimit?: string
   formatPrimary: (v: unknown) => string
-  formatSecondary?: (v: unknown) => string
 }
 
 function fmtBytes(n: number): string {
@@ -179,7 +161,6 @@ const META: Record<string, SettingMeta> = {
     control: 'bytes',
     hardLimit: '1 字节 – 100 MB（硬顶，无法调更高）',
     formatPrimary: (v) => fmtBytes(Number(v)),
-    formatSecondary: (v) => `${Number(v).toLocaleString()} 字节`,
   },
   'storage.max_attachments_per_ticket': {
     title: '单个工单附件数上限',
@@ -203,7 +184,6 @@ const META: Record<string, SettingMeta> = {
     control: 'mime',
     hardLimit: '至少 1 种；黑名单类型不可加入',
     formatPrimary: (v) => `${Array.isArray(v) ? v.length : 0} 种类型`,
-    formatSecondary: (v) => (Array.isArray(v) ? `${v.slice(0, 2).join('、')} 等` : ''),
   },
   'storage.orphan_gc_days': {
     title: '未确认文件的自动清理天数',
@@ -214,29 +194,22 @@ const META: Record<string, SettingMeta> = {
   },
 }
 
-const userStore = useUserStoreWithOut()
-const settings = ref<SettingRow[]>([])
-const loading = ref(false)
-const editVisible = ref(false)
-const editing = ref<(SettingRow & { meta: SettingMeta; control: Control; maxCount?: number }) | null>(null)
-const editValue = ref<number | string>(0)
-/** el-input-number 需纯 number——computed 代理双向绑定 */
-const editNumberValue = computed({
-  get: () => (typeof editValue.value === 'number' ? editValue.value : Number(editValue.value) || 0),
-  set: (v: number) => { editValue.value = v },
-})
-const editMimeList = ref<string[]>([])
-const saving = ref(false)
-
 const presetMimes = [
   'image/jpeg', 'image/png', 'image/webp', 'image/gif',
   'application/pdf', 'text/plain', 'application/zip',
   'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
 ]
 
+const userStore = useUserStoreWithOut()
 const canEdit = userStore.hasPermission('system:setting:update')
 
-/** 展示行 = 数据行 + 元信息（无映射键优雅降级：标题显示 key、描述用后端原文） */
+const settings = ref<SettingRow[]>([])
+const loading = ref(false)
+const saving = ref(false)
+
+/** 草稿：每键一份可编辑副本（num=数值类/text=兜底/mime=列表） */
+const drafts = reactive<Record<string, { num: number; text: string; mime: string[] }>>({})
+
 const viewRows = computed(() =>
   settings.value.map((r) => {
     const meta = META[r.key] ?? {
@@ -245,15 +218,60 @@ const viewRows = computed(() =>
       control: 'text' as Control,
       formatPrimary: (v: unknown) => String(v),
     }
-    return { ...r, meta, control: meta.control, maxCount: meta.maxCount }
+    const isCustomized = r.default_value !== undefined
+      && JSON.stringify(normalize(r.value)) !== JSON.stringify(normalize(r.default_value))
+    return { ...r, meta, isCustomized }
   }),
 )
+
+/** 归一化比较（JSON 深比较——数组排序后比较，MIME 顺序无语义） */
+function normalize(v: unknown): unknown {
+  if (Array.isArray(v)) return [...v].sort()
+  return v
+}
+
+const dirtyKeys = computed(() =>
+  settings.value
+    .filter((r) => {
+      const d = drafts[r.key]
+      if (!d) return false
+      const meta = META[r.key]
+      if (!meta) return false
+      if (meta.control === 'mime') return JSON.stringify(normalize(d.mime)) !== JSON.stringify(normalize(r.value))
+      if (meta.control === 'text') return d.text !== String(r.value)
+      return d.num !== Number(r.value)
+    })
+    .map((r) => r.key),
+)
+
+const dirtyTitles = computed(() =>
+  dirtyKeys.value.map((k) => META[k]?.title ?? k).join('、'),
+)
+
+function seedDrafts() {
+  for (const r of settings.value) {
+    const meta = META[r.key]
+    if (meta?.control === 'mime') {
+      drafts[r.key] = { num: 0, text: '', mime: Array.isArray(r.value) ? [...r.value] : [] }
+    } else if (meta && meta.control !== 'text') {
+      drafts[r.key] = { num: Number(r.value) || 0, text: '', mime: [] }
+    } else {
+      drafts[r.key] = { num: 0, text: String(r.value ?? ''), mime: [] }
+    }
+  }
+}
+
+function discardDrafts() {
+  seedDrafts()
+  ElMessage.info('已放弃未保存的更改')
+}
 
 async function refresh() {
   loading.value = true
   try {
     const data = await request.get('/api/v1/system/settings')
     settings.value = data as unknown as SettingRow[]
+    seedDrafts()
   } catch {
     ElMessage.error('读取设置失败')
   } finally {
@@ -261,36 +279,48 @@ async function refresh() {
   }
 }
 
-function openEdit(row: SettingRow & { meta: SettingMeta; control: Control; maxCount?: number }) {
-  editing.value = row
-  if (row.control === 'mime') {
-    editMimeList.value = Array.isArray(row.value) ? [...row.value] : []
-  } else if (typeof row.value === 'number') {
-    editValue.value = row.value
-  } else {
-    editValue.value = String(row.value)
+async function saveDirty() {
+  if (!dirtyKeys.value.length) return
+  saving.value = true
+  let failed = 0
+  try {
+    // 逐键顺序提交（后端键级校验——单键失败不阻断其余键，失败计数后统一报错）
+    for (const key of dirtyKeys.value) {
+      const meta = META[key]
+      const d = drafts[key]
+      try {
+        const value = meta?.control === 'mime' ? d.mime : meta?.control === 'text' ? d.text : d.num
+        await request.post('/api/v1/system/settings/update', { key, value })
+      } catch {
+        failed++
+      }
+    }
+    if (failed) ElMessage.error(`${failed} 项保存失败，其余已生效（失败项请检查取值后重试）`)
+    else ElMessage.success('设置已保存，立即生效')
+    await refresh()
+  } finally {
+    saving.value = false
   }
-  editVisible.value = true
 }
 
-async function save() {
-  if (!editing.value) return
-  saving.value = true
+async function resetRow(row: SettingRow) {
   try {
-    const value = editing.value.control === 'mime' ? editMimeList.value : editValue.value
-    await request.post('/api/v1/system/settings/update', {
-      key: editing.value.key,
-      value,
-    })
-    ElMessage.success('设置已更新，立即生效')
-    editVisible.value = false
+    await ElMessageBox.confirm(
+      `将「${META[row.key]?.title ?? row.key}」恢复为系统出厂值？当前的运行时覆盖将被删除。`,
+      '恢复默认',
+      { type: 'warning', confirmButtonText: '恢复默认', cancelButtonText: '取消' },
+    )
+  } catch {
+    return
+  }
+  try {
+    await request.post('/api/v1/system/settings/reset', { key: row.key })
+    ElMessage.success('已恢复出厂默认值')
     await refresh()
   } catch (e: unknown) {
     const msg = (e as { response?: { data?: { message?: string } } })?.response?.data?.message
-      || (e instanceof Error ? e.message : '保存失败')
+      || (e instanceof Error ? e.message : '恢复失败')
     ElMessage.error(msg)
-  } finally {
-    saving.value = false
   }
 }
 
