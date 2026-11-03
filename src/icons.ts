@@ -24,6 +24,7 @@ import formatLineSpacing from '@iconify-icons/mdi/format-line-spacing'
 import fullscreen from '@iconify-icons/mdi/fullscreen'
 import fullscreenExit from '@iconify-icons/mdi/fullscreen-exit'
 import helpCircle from '@iconify-icons/mdi/help-circle'
+import helpCircleOutline from '@iconify-icons/mdi/help-circle-outline'
 import home from '@iconify-icons/mdi/home'
 import keyOutline from '@iconify-icons/mdi/key-outline'
 import menu from '@iconify-icons/mdi/menu'
@@ -73,6 +74,7 @@ export const icons = {
   'mdi:fullscreen': fullscreen,
   'mdi:fullscreen-exit': fullscreenExit,
   'mdi:help-circle': helpCircle,
+  'mdi:help-circle-outline': helpCircleOutline,
   'mdi:home': home,
   'mdi:key-outline': keyOutline,
   'mdi:menu': menu,

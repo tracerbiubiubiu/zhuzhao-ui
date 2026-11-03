@@ -9,34 +9,31 @@
         </span>
       </div>
 
-      <div v-loading="loading">
-        <div
-          v-for="row in viewRows"
-          :key="row.key"
-          class="flex items-center justify-between gap-6 py-10px border-b border-gray-100 dark:border-gray-700 last:border-b-0"
-        >
-          <!-- 左：人话标题 + 描述（范围并入同段避免行高膨胀）；raw key 降为悬停辅助 -->
-          <div class="min-w-0 flex-1">
-            <div class="flex items-center gap-2">
-              <span class="text-14px font-medium">{{ row.meta.title }}</span>
+      <!-- 水平表单形态（业界后台惯例：label 左/值控件右，一行一项 ~40px）——
+           描述收进 ? 悬停（完整含范围），不再垂直堆叠占行 -->
+      <el-form label-position="left" label-width="200px" class="!mt-1">
+        <el-form-item v-for="row in viewRows" :key="row.key" class="!mb-2 !py-1 setting-row">
+          <template #label>
+            <span class="inline-flex items-center gap-1">
+              {{ row.meta.title }}
+              <el-tooltip
+                :content="`${row.meta.desc}${row.meta.hardLimit ? `（范围：${row.meta.hardLimit}）` : ''}`"
+                placement="top"
+              >
+                <Icon icon="mdi:help-circle-outline" :height="14" class="text-gray-300 hover:text-gray-400 cursor-help" />
+              </el-tooltip>
+            </span>
+          </template>
+          <div class="flex items-center justify-between gap-3 w-full">
+            <div class="flex items-center gap-2 min-w-0">
+              <span class="text-14px font-600">{{ row.meta.formatPrimary(row.value) }}</span>
+              <span v-if="row.meta.formatSecondary" class="text-xs text-gray-400 truncate">
+                {{ row.meta.formatSecondary(row.value) }}
+              </span>
               <el-tag v-if="row.source === 'kv'" type="success" size="small" effect="plain">已自定义</el-tag>
               <el-tooltip v-else content="系统内置默认值，尚未修改过" placement="top">
-                <el-tag size="small" effect="plain" type="info">默认值</el-tag>
+                <el-tag size="small" effect="plain" type="info">默认</el-tag>
               </el-tooltip>
-            </div>
-            <div class="text-xs text-gray-500 mt-2px leading-snug">
-              {{ row.meta.desc }}
-              <span v-if="row.meta.hardLimit" class="text-gray-400">· 范围：{{ row.meta.hardLimit }}</span>
-            </div>
-          </div>
-
-          <!-- 右：当前值（人话主显示 + 原始值辅助）+ 操作 -->
-          <div class="flex items-center gap-3 flex-none max-w-[280px]">
-            <div class="text-right">
-              <div class="text-14px font-600">{{ row.meta.formatPrimary(row.value) }}</div>
-              <div v-if="row.meta.formatSecondary" class="text-xs text-gray-400">
-                {{ row.meta.formatSecondary(row.value) }}
-              </div>
             </div>
             <el-button
               v-if="canEdit"
@@ -49,9 +46,12 @@
               <span class="text-xs text-gray-400">只读</span>
             </el-tooltip>
           </div>
-        </div>
+        </el-form-item>
+      </el-form>
 
-        <el-empty v-if="!loading && !settings.length" description="未读取到设置项" :image-size="60" />
+      <el-empty v-if="!loading && !settings.length" description="未读取到设置项" :image-size="60" />
+      <div v-if="settings.length" class="text-xs text-gray-300">
+        设置键：{{ settings.map((s) => s.key).join(' · ') }}
       </div>
     </el-card>
 
@@ -131,9 +131,10 @@
  * 新增 catalog 键时须同步补 META 行（缺省优雅降级=显示 key+后端描述）。
  */
 import { ref, computed, onMounted } from 'vue'
+import { Icon } from '@iconify/vue'
 import {
-  ElCard, ElTag, ElButton, ElTooltip, ElAlert,
-  ElDialog, ElForm, ElFormItem, ElInput, ElInputNumber,
+  ElCard, ElForm, ElFormItem, ElTag, ElButton, ElTooltip, ElAlert,
+  ElDialog, ElInput, ElInputNumber,
   ElSelect, ElOption, ElMessage, ElEmpty,
 } from 'element-plus'
 import request from '@vea/request'
