@@ -14,9 +14,11 @@
  * - jobs 写操作挂 task:manage；trigger 对 enabled=false 后端 409——按钮同步禁用
  * - 「只看我提交的」仅运行记录（submitted_by=me 由 zhuzhao 代理换 actor 透传）
  * - 2026-11-03 死信排障批：Tab 红点改 mounted 探测驱动（原绑 deadList.length 首入
- *   Tab 前恒隐——提醒失效）+ 死信详情 dialog + **DeadLetterRow 类型对齐真实响应**
+ *   Tab 前恒隐——提醒失效）+ 死信详情 + **DeadLetterRow 类型对齐真实响应**
  *   （原类型臆测：action/error/attempts/failed_at 字段实际不存在，列表 3/4 列恒空；
  *   dev 实测真实形状=type/state/last_error/retried/max_retry/last_failed_at）
+ * - 同日弹层形态批：任务详情/死信详情 dialog→右抽屉 620px（详情=抽屉/动作=对话框
+ *   全仓统一，frontend-standard §弹层形态；表单类 提交任务/新建任务定义 仍 dialog）
  */
 import { formatDateTime } from '@/utils/datetime'
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
@@ -26,7 +28,7 @@ import { usePermission } from '@/common/auth'
 import {
   ElAlert, ElBadge, ElButton, ElCard, ElDialog, ElForm, ElFormItem, ElInput, ElInputNumber,
   ElMessage, ElMessageBox, ElOption, ElSelect, ElSwitch, ElTabPane, ElTabs, ElTable,
-  ElTableColumn, ElTag, ElDescriptions, ElDescriptionsItem,
+  ElTableColumn, ElTag, ElDescriptions, ElDescriptionsItem, ElDrawer,
 } from 'element-plus'
 import ProTable from '@/components/ProTable/index.vue'
 import CronBuilder from '@/components/CronBuilder/index.vue'
@@ -611,8 +613,8 @@ useTableFit(deadTable, () => deadList.value)
       </el-tabs>
     </el-card>
 
-    <!-- 任务详情（job_runs 快照 + live_state） -->
-    <el-dialog v-model="detailVisible" title="任务详情" width="720px">
+    <!-- 任务详情（job_runs 快照 + live_state）——详情=右抽屉统一形态（frontend-standard §弹层形态，长文档 620px） -->
+    <el-drawer v-model="detailVisible" title="任务详情" size="620px">
       <div v-loading="detailLoading">
         <template v-if="detail">
           <el-descriptions :column="2" border>
@@ -639,11 +641,12 @@ useTableFit(deadTable, () => deadList.value)
         </template>
         <div v-else-if="!detailLoading" class="text-sm text-gray-400">未查到该任务</div>
       </div>
-    </el-dialog>
+    </el-drawer>
 
     <!-- 死信详情（2026-11-03 排障批——行数据直显零请求；真实字段 type/state/重试账 + last_error 全文；
-         原臆测字段 request_id/job_id/dept/params 在 asynq archived 投影中不存在，dev 实测取证后删除） -->
-    <el-dialog v-model="deadDetailVisible" title="死信详情" width="720px">
+         原臆测字段 request_id/job_id/dept/params 在 asynq archived 投影中不存在，dev 实测取证后删除。
+         形态=右抽屉 620px（frontend-standard §弹层形态长文档，与审计请求详情/Panic 详情齐平）） -->
+    <el-drawer v-model="deadDetailVisible" title="死信详情" size="620px">
       <template v-if="deadDetail">
         <el-descriptions :column="2" border>
           <el-descriptions-item label="任务 ID" :span="2">{{ deadDetail.task_id }}</el-descriptions-item>
@@ -658,7 +661,7 @@ useTableFit(deadTable, () => deadList.value)
           <pre class="whitespace-pre-wrap text-xs text-[var(--el-color-danger)] bg-gray-50 dark:bg-gray-800 p-2 rounded">{{ deadDetail.last_error || '（无）' }}</pre>
         </div>
       </template>
-    </el-dialog>
+    </el-drawer>
 
     <!-- 提交任务（admin=定义下拉带默认参数；operator=action 输入——P5-S4 读端点后统一选单） -->
     <el-dialog v-model="submitVisible" title="提交任务" width="560px">

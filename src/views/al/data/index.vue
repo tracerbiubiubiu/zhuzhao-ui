@@ -617,7 +617,7 @@ useTableFit(dataTable, () => list.value)
     </el-dialog>
 
     <!-- 行详情抽屉：动态 schema 全字段 + 系统字段；编辑/删除收进底部（废弃类型随只读隐藏编辑） -->
-    <el-drawer v-model="detailVisible" :title="detailRow ? `数据详情 #${detailRow.id}` : '数据详情'" size="440px">
+    <el-drawer v-model="detailVisible" :title="detailRow ? `数据详情 #${detailRow.id}` : '数据详情'" size="560px">
       <el-descriptions v-if="detailRow" :column="1" border size="small">
         <el-descriptions-item v-for="f in schema" :key="f.name" :label="f.name">
           {{ cellText(f, detailRow as AlDataDoc) }}

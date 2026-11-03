@@ -352,7 +352,7 @@ useTableFit(typesTable, () => rows.value)
     </el-dialog>
 
     <!-- 变更历史 -->
-    <el-drawer v-model="historyVisible" :title="`「${historyType}」变更历史（新→旧）`" size="480px">
+    <el-drawer v-model="historyVisible" :title="`「${historyType}」变更历史（新→旧）`" size="560px">
       <div v-loading="historyLoading">
         <div v-for="(h, i) in historyRows" :key="i" class="mb-3 pb-3 border-b border-gray-100 last:border-0">
           <div class="flex items-center gap-2 text-sm">
