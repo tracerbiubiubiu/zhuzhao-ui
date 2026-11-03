@@ -96,7 +96,14 @@ export const useTagsViewStore = defineStore('tagsView', {
     addView(view: TagView) {
       const index = this.visitedViews.findIndex((item) => item.path === view.path)
       if (index === -1) {
-        this.visitedViews.push(view)
+        // affix 页签钉最前（2026-11-03 运行时验证实锤：深链首跳/恢复场景 filterAffixTags
+        // 晚于页签集建立——push 会把首页落到尾部，违背业界 affix 钉首位形态）
+        if (view.affix) {
+          const firstNonAffix = this.visitedViews.findIndex((item) => !item.affix)
+          this.visitedViews.splice(firstNonAffix === -1 ? this.visitedViews.length : firstNonAffix, 0, view)
+        } else {
+          this.visitedViews.push(view)
+        }
       } else {
         this.visitedViews[index] = view
       }

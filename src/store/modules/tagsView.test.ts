@@ -138,3 +138,32 @@ describe('tagsView moveView（拖拽排序——2026-11-03 批次②）', () => 
     expect(store.visitedViews.map((v) => v.path)).toEqual(['/a', '/b', '/c'])
   })
 })
+
+describe('tagsView addView affix 钉首位（2026-11-03 运行时验证批补）', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+  })
+
+  const view = (path: string, affix = false) => ({
+    path, fullPath: path, name: path, title: path, query: {}, hash: '', affix, noCache: false,
+  })
+
+  it('affix 页签到非空页签集 → 插最前（深链首跳/恢复场景 push 落尾回归）', () => {
+    const store = useTagsViewStore()
+    store.visitedViews = [view('/messages'), view('/tasks')]
+    store.addView(view('/home', true))
+    expect(store.visitedViews.map((v) => v.path)).toEqual(['/home', '/messages', '/tasks'])
+    expect(store.visitedViews[0]?.affix).toBe(true)
+  })
+
+  it('全 affix 页签集追加仍有序；非 affix 照旧 push；已存在 path 原位替换', () => {
+    const store = useTagsViewStore()
+    store.visitedViews = [view('/home', true)]
+    store.addView(view('/about', true))
+    expect(store.visitedViews.map((v) => v.path)).toEqual(['/home', '/about'])
+    store.addView(view('/tasks'))
+    expect(store.visitedViews.map((v) => v.path)).toEqual(['/home', '/about', '/tasks'])
+    store.addView(view('/tasks', false))
+    expect(store.visitedViews.map((v) => v.path)).toEqual(['/home', '/about', '/tasks'])
+  })
+})

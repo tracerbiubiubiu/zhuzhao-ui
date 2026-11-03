@@ -280,9 +280,12 @@ rules「新建规则」参照实现；org 页层级面包屑随工具行挪卡�
     ① 刷新持久化（`vea-tagsview-v1` 只落 path/query 元数据；恢复=动态路由注册后
     按当前会话路由表校验重建——无权/已下线/noTagsView 页签一律丢弃，换账号降权
     零残留；登出 `$reset` 连 storage 一起清）；② 活动页签=F5 前所在页（URL 天然
-    保持，Chrome 同款）；③ 中键关闭页签（affix 首页不可关）；④ 右键菜单六项
-    （刷新/关闭/左/右/其它/全部）；⑤ 拖拽排序（sortablejs——affix 首页钉首位
-    不可拖不可越；顺序以 store 为唯一事实源，Sortable DOM 搬移在 onEnd 回滚）。
+    保持，Chrome 同款）；③ 中键关闭页签；④ 右键菜单六项
+    （刷新/关闭/左/右/其它/全部）；⑤ 拖拽排序（sortablejs——顺序以 store 为
+    唯一事实源，Sortable DOM 搬移在 onEnd 回滚）。**注：本仓路由表暂未使用
+    `meta.affix`（无常驻页签，页签全可关可拖，首页为普通页签）**——addView 已
+    预留 affix 钉首位语义（标 affix 的页签插入非 affix 之前，单测钉死），启用
+    meta.affix 时自动生效。
 
 ## 滚动条归属
 
