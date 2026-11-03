@@ -30,7 +30,7 @@
               <template v-if="row.meta.control === 'bytes'">
                 <el-input-number
                   v-model="drafts[row.key]!.num"
-                  :min="1" :max="104857600" size="small" style="width: 160px"
+                  :min="1" :max="104857600" :controls="false" size="small" style="width: 130px"
                   :data-testid="`setting-input-${row.key}`"
                 />
                 <span class="text-xs text-gray-400">≈ {{ fmtBytes(drafts[row.key]!.num) }}</span>
@@ -40,7 +40,7 @@
                 v-else-if="row.meta.control === 'count' || row.meta.control === 'days'"
                 v-model="drafts[row.key]!.num"
                 :min="1" :max="row.meta.control === 'days' ? 365 : (row.meta.maxCount ?? 100)"
-                size="small" style="width: 130px"
+                :controls="false" size="small" style="width: 110px"
                 :data-testid="`setting-input-${row.key}`"
               />
               <!-- MIME 白名单：多选 -->
