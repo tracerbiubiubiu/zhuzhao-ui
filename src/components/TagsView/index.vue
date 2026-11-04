@@ -246,7 +246,9 @@
     </button>
 
     <div :class="`${prefixCls}__viewport`">
-      <ElScrollbar ref="scrollbarRef" :class="`${prefixCls}__scrollbar`" @wheel="onTagsWheel">
+      <!-- wheel 只走 onMounted 挂在 wrap 上的非被动监听：ElScrollbar 单根且无 wheel emit，
+           模板再挂 @wheel 会经冒泡与 wrap 监听各触发一次 → scrollBy 双倍（2026-11-03 复核实证） -->
+      <ElScrollbar ref="scrollbarRef" :class="`${prefixCls}__scrollbar`">
         <div ref="listRef" :class="`${prefixCls}__list`">
           <ContextMenu
             v-for="item in visitedViews"

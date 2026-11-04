@@ -27,7 +27,7 @@ test('页签持久化：开两页 → F5 → 页签集与顺序原样恢复，�
   await expect(tabs(page)).toHaveCount(2, { timeout: 15_000 })
 
   const before = await tabs(page).allInnerTexts()
-  expect(before.length, '页签集非平凡（affix 首页+非 affix 一枚）').toBeGreaterThanOrEqual(2)
+  expect(before.length, '页签集非平凡（首页+第二枚）').toBeGreaterThanOrEqual(2)
 
   await page.reload()
   await expect(tabs(page)).toHaveCount(before.length)
@@ -45,7 +45,7 @@ test('中键关闭：关活动页签回邻页签，且关闭态持久化（reloa
   await page.goto('/#/system/user')
   await expect(tabs(page)).toHaveCount(2, { timeout: 15_000 })
 
-  // 中键关活动页签（最后开的一枚）→ 关闭后回邻页签（首页 affix 不可关 → navigateTo 兜底）
+  // 中键关活动页签（最后开的一枚）→ 关闭后回邻页签（navigateTo 兜底）
   await tabs(page).last().click({ button: 'middle' })
   await expect(tabs(page)).toHaveCount(1)
   await expect(page).toHaveURL(/#\/home/, { timeout: 15_000 })
@@ -75,7 +75,7 @@ test('拖拽排序：交换页签顺序且顺序持久化', async ({ page }) => 
   expect(after, '末位页签左移一位，其余保持').toEqual([before[0], before[2], before[1]])
   await expect(page).toHaveURL(/#\/system\/role/)
 
-  // 顺序持久化：reload 后保持拖后顺序（affix 首页仍首位）
+  // 顺序持久化：reload 后保持拖后顺序
   await page.reload()
   await expect(tabs(page)).toHaveCount(3)
   const restored = await tabs(page).allInnerTexts()
