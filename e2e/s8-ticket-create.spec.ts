@@ -145,3 +145,84 @@ test('S8b：richtext 字段渲染出 md-editor 编辑器（错包回归哨兵）
     await api('/api/v1/ticket-types/delete', { ...h, method: 'POST', body: { code: typeCode } }).catch(() => {})
   }
 })
+
+/**
+ * S8c 贴图全链哨兵（2026-11-04 悬挂投递批——主仓 97f62e2 随批）：
+ * 合成剪贴板贴图 → 提交 → 详情页富文本图 naturalWidth>0。
+ * 此前双缺口（悬挂对象不落绑+投递面 404）在「提交后详情裂图」处显形——
+ * 编辑器挂载哨兵（S8b）拦不住，只有跨仓全链断言能拦。
+ */
+test('S8c：richtext 贴图→建单→详情页图片可渲染（悬挂投递全链哨兵）', async ({ page }) => {
+  const state = loadState()
+  const suffix = Date.now().toString(36)
+  const typeCode = `s8_img_${suffix}`
+
+  const admin = await apiLogin(state.admin.employeeNo, state.admin.password, 's8-img-setup')
+  const h = { token: admin.env!.data.access_token } as const
+  const created = await api('/api/v1/ticket-types', {
+    ...h, method: 'POST',
+    body: { code: typeCode, name: `S8IMG_${suffix}`, description: 'E2E 临时', default_sla_hours: 4 },
+  })
+  expect(created.env!.code).toBe(0)
+  const fields = await api('/api/v1/ticket-types/fields/replace', {
+    ...h, method: 'POST',
+    body: {
+      code: typeCode,
+      fields: [{ field_key: 'detail', field_label: '故障详情', field_type: 'richtext', sort_order: 1 }],
+    },
+  })
+  expect(fields.env!.code).toBe(0)
+
+  try {
+    await uiLogin(page, state.admin.employeeNo, state.admin.password)
+    await page.goto('/#/tickets/new')
+    await page.locator('.el-form-item').filter({ hasText: '工单类型' }).locator('.el-select').click()
+    await page.getByRole('option', { name: `S8IMG_${suffix}` }).click()
+    await expect(page.locator('.richtext-field .md-editor')).toBeVisible({ timeout: 15_000 })
+
+    // 合成 PNG 剪贴板粘贴（同 IAB 实测配方——真浏览器 paste 事件，直传三步真跑）
+    await page.locator('.richtext-field .cm-content').first().click()
+    await page.evaluate(() => {
+      const cv = document.createElement('canvas')
+      cv.width = 8; cv.height = 8
+      const ctx = cv.getContext('2d')!
+      ctx.fillStyle = '#3498db'
+      ctx.fillRect(0, 0, 8, 8)
+      const bin = atob(cv.toDataURL('image/png').split(',')[1]!)
+      const bytes = new Uint8Array(bin.length)
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
+      const dt = new DataTransfer()
+      dt.items.add(new File([bytes], 'e2e-paste.png', { type: 'image/png' }))
+      const cm = document.querySelector('.richtext-field .cm-content')! as HTMLElement
+      cm.focus()
+      cm.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData: dt }))
+    })
+    // 直传+插入断言走 v-model——cm-content 文本被 v3 shortenText 折叠显示为
+    // ![](...)（长 URL 展示层折叠，底层文档完整——IAB 实测同解）
+    await expect
+      .poll(async () => await page.evaluate(() => {
+        let inst = (document.querySelector('.el-form') as any)?.__vueParentComponent
+        while (inst && !(inst.setupState && 'form' in (inst.setupState ?? {}))) inst = inst.parent
+        return String(inst?.setupState?.form?.custom?.detail ?? '')
+      }), { timeout: 20_000 })
+      .toContain('/api/v1/files/tickets/')
+
+    // 必填面（标题/组织）+ 提交
+    await page.getByRole('textbox').first().fill('S8c 贴图全链哨兵单')
+    const orgItem = page.locator('.el-form-item').filter({ hasText: '归属组织' })
+    await orgItem.locator('.el-select').click()
+    await page.getByRole('option', { name: '集团总部' }).click({ timeout: 15_000 })
+    await page.getByRole('button', { name: '提交工单' }).click()
+    await page.waitForURL(/#\/tickets\/\d+/)
+
+    // 全链断言：详情页富文本图真实渲染（此前双缺口在此裂图 404）
+    const detailImg = page.locator('.richtext-view img, [class*="richtext"] img').first()
+    await expect(detailImg).toBeVisible({ timeout: 20_000 })
+    await expect
+      .poll(async () => await detailImg.evaluate((el) => (el as HTMLImageElement).naturalWidth), { timeout: 20_000 })
+      .toBeGreaterThan(0)
+  } finally {
+    await api('/api/v1/ticket-types/delete', { ...h, method: 'POST', body: { code: typeCode } }).catch(() => {})
+  }
+})
+
