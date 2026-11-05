@@ -31,11 +31,15 @@ import { getOrgTreeApi, type OrgTreeNode } from '@/api/system/org'
 import { getDictItemsByCodeApi } from '@/api/system/dict'
 import UserPicker from '@/components/UserPicker/index.vue'
 import RichtextField from '@/components/RichtextField.vue'
+import { richtextDraftKey } from '@/components/useRichtextDraft'
+import { useUserStore } from '@/store/modules/user'
 
 defineOptions({ name: 'TicketCreate' })
 
 const router = useRouter()
 const formRef = ref<FormInstance>()
+const richtextRefs = ref<InstanceType<typeof RichtextField>[]>([])
+const userStore = useUserStore()
 const loading = ref(false)
 const errorMsg = ref('')
 
@@ -255,6 +259,11 @@ async function handleSubmit() {
       custom_data: Object.keys(form.custom).length ? form.custom : undefined,
       ...(form.escalationSupervisor ? { escalation_supervisor_id: Number(form.escalationSupervisor) } : {}),
     })
+    richtextRefs.value.forEach((editor) => editor.clearDraft())
+    // 发起页在 keep-alive 中存活；成功后复原表单，返回发起页不能继承已提交内容。
+    Object.assign(form, { type_code: '', title: '', description: '', priority: 3, org_id: '', custom: {}, escalationSupervisor: '' })
+    fields.value = []
+    formRef.value?.clearValidate()
     ElMessage.success('工单已提交')
     router.push(`/tickets/${id}`)
   } catch (err: unknown) {
@@ -389,9 +398,11 @@ async function handleSubmit() {
             <!-- richtext=md-editor-v3 富文本编辑器（工具栏+图片粘贴直传+本地草稿） -->
             <RichtextField
               v-else-if="f.field_type === 'richtext' && !isFormulaField(f)"
+              :key="`${form.type_code}:${f.field_key}`"
+              ref="richtextRefs"
               :model-value="(form.custom[f.field_key] as string | undefined) ?? ''"
               :placeholder="f.required ? '必填' : ''"
-              :draft-key="`ticket_create_${f.field_key}`"
+              :draft-key="richtextDraftKey(userStore.profile?.id, form.type_code, f.field_key)"
               @update:model-value="(v: string) => { form.custom[f.field_key] = v }"
             />
             <el-input

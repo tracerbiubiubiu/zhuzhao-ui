@@ -11,7 +11,7 @@
     />
     <div v-if="draftRestored" class="draft-hint">
       <el-alert type="info" :closable="true" @close="draftRestored = false">
-        已恢复本地草稿（{{ draftTime }}）—— <el-button link type="primary" @click="clearDraft">丢弃草稿</el-button>
+        已恢复本地草稿（{{ draftTime }}）—— <el-button link type="primary" @click="discardDraft">丢弃草稿</el-button>
       </el-alert>
     </div>
   </div>
@@ -23,28 +23,32 @@
  *
  * md-editor-v3 组件（⚠ 同作者的 md-editor-rt 是 React 版——曾错装致编辑器恒空
  * 渲染 `<!---->`，2026-11-03 运行时实证）+ 粘贴图片直传（paste→Blob→presign 三步→稳定 URL 插入）+
- * 本地草稿（localStorage 按 type_code 防抖存储——05 号 §6 拍板形态①）。
+ * 本地草稿（localStorage 按账号/类型/字段隔离，2s 防抖；提交成功清理）。
  * 禁 base64 内联（既定纪律——图片一律走对象存储稳定 URL）。
  */
-import { ref, watch, onMounted } from 'vue'
+import { computed } from 'vue'
 import { ElAlert, ElButton } from 'element-plus'
 import { MdEditor, type ToolbarNames } from 'md-editor-v3'
 import 'md-editor-v3/lib/style.css'
 import { uploadAndConfirm } from '@/api/storage'
 import { formatDateTime } from '@/utils/datetime'
+import { useRichtextDraft } from './useRichtextDraft'
 
 const props = defineProps<{
   modelValue: string
   placeholder?: string
-  /** 草稿 key（通常 = ticket type_code——按类型隔离） */
+  /** 由 richtextDraftKey 生成的账号/类型/字段完整 key；无身份时不持久化 */
   draftKey?: string
 }>()
 
 const emit = defineEmits<{ 'update:modelValue': [value: string] }>()
 
-const content = ref(props.modelValue || '')
-const draftRestored = ref(false)
-const draftTime = ref('')
+const { content, draftRestored, draftTimestamp, clearDraft, discardDraft } = useRichtextDraft(
+  () => props.modelValue,
+  () => props.draftKey,
+  (value) => emit('update:modelValue', value),
+)
+const draftTime = computed(() => formatDateTime(draftTimestamp.value))
 
 // 工具栏（B5-4 §6 排版诉求=标题/列表/代码块/表格/图片）
 const toolbars: ToolbarNames[] = [
@@ -69,49 +73,6 @@ async function onUploadImg(files: File[], callback: (urls: string[]) => void) {
     }
   }
   callback(urls)
-}
-
-// ─── 本地草稿（防抖 2s 写 localStorage，提交后由父组件调用 clearDraft）───
-let debounceTimer: ReturnType<typeof setTimeout> | null = null
-
-watch(content, (val) => {
-  emit('update:modelValue', val)
-  if (props.draftKey && debounceTimer) {
-    clearTimeout(debounceTimer)
-  }
-  if (props.draftKey) {
-    debounceTimer = setTimeout(() => {
-      if (val.trim()) {
-        localStorage.setItem(`richtext-draft:${props.draftKey}`, JSON.stringify({ content: val, ts: Date.now() }))
-      }
-    }, 2000)
-  }
-})
-
-onMounted(() => {
-  if (props.draftKey) {
-    const raw = localStorage.getItem(`richtext-draft:${props.draftKey}`)
-    if (raw) {
-      try {
-        const draft = JSON.parse(raw)
-        if (draft.content && draft.content.trim() && draft.content !== props.modelValue) {
-          content.value = draft.content
-          draftTime.value = formatDateTime(draft.ts)
-          draftRestored.value = true
-        }
-      } catch {
-        localStorage.removeItem(`richtext-draft:${props.draftKey}`)
-      }
-    }
-  }
-})
-
-function clearDraft() {
-  if (props.draftKey) {
-    localStorage.removeItem(`richtext-draft:${props.draftKey}`)
-  }
-  content.value = props.modelValue || ''
-  draftRestored.value = false
 }
 
 defineExpose({ clearDraft })

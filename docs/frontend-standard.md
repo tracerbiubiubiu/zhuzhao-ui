@@ -437,3 +437,10 @@ radio 快捷段四态 + range=[from,to]（YYYY-MM-DD）驱动服务端/客户端
 | UI 惯例 | `src/uiConventions.test.ts` | 主列表缺 #empty 空态引导/placeholder 超宽截断/el-input-number 漏 `:controls="false"` |
 | 图标注册 | `src/icons.test.ts` | 视图直写未注册图标（死图标） |
 | apiPaths 前缀 | `src/api/apiPaths.test.ts` | API 路径漏网关前缀 |
+
+
+## 富文本本地草稿（2026-11-05 审计修复）
+
+草稿作用域固定为当前用户 ID / 工单类型 / 字段三元组（`richtextDraftKey`）。无身份不持久化；旧的无属主 key 删除且不迁移给当前用户。`useRichtextDraft` 统一防抖、恢复、外部 model 同步及 scope 销毁清理，storage 异常不阻断输入。
+
+“丢弃草稿”必须恢复编辑前初值并同步父表单；成功建单须清全部编辑器草稿、取消保存 timer 并复原 keep-alive 中的发起表单。未提交退出保存当前输入；提交后的卸载不得把旧内容再写回。回归见 S8d 的账号/类型隔离、恢复/丢弃与提交后重进全链。
