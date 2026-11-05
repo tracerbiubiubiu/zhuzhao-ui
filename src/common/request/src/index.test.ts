@@ -20,7 +20,7 @@ import { usePermissionStore } from '@/store/modules/permission'
 import { useTagsViewStore, type TagView } from '@/store/modules/tagsView'
 import { ensureDynamicRoutes } from '@/permission'
 import { singleFlightRefresh, refreshAccessToken } from '@/common/request/src'
-import { setTokens, getAccessToken, clearTokens } from '@/common/auth/tokenStorage'
+import { setTokens, getAccessToken, clearTokens, getSessionGeneration, SessionChangedError } from '@/common/auth/tokenStorage'
 import { notifyError } from '@/common/request/errorToast'
 
 // 打桩 errorToast（node 环境其内部 typeof document 短路——不打桩则拦截器接线零断言可抓，
@@ -30,7 +30,7 @@ vi.mock('@/common/request/errorToast', () => ({ notifyError: vi.fn() }))
 const h = vi.hoisted(() => {
   const post = vi.fn()
   const service: any = vi.fn(() => Promise.resolve('replayed'))
-  const handlers: { err?: (error: any) => Promise<any> } = {}
+  const handlers: { err?: (error: any) => Promise<any>; ok?: (response: any) => any; req?: (config: any) => any } = {}
   return { post, service, handlers }
 })
 
@@ -44,9 +44,10 @@ vi.mock('axios', () => ({
   default: {
     create: () => {
       h.service.interceptors = {
-        request: { use: () => {} },
+        request: { use: (onRequest: any) => { h.handlers.req = onRequest } },
         response: {
           use: (_onFulfilled: any, onRejected: any) => {
+            h.handlers.ok = _onFulfilled
             h.handlers.err = onRejected
           },
         },
@@ -328,5 +329,127 @@ describe('响应拦截器 401 分支', () => {
     const error = makeError(403, 20007)
     await expect(h.handlers.err?.(error)).rejects.toBe(error)
     expect(notifyError).not.toHaveBeenCalled()
+  })
+})
+
+describe('B08 audit: stale async responses crossing sessions', () => {
+  it('单飞按会话隔离，旧 finally 不得解除新会话刷新锁', async () => {
+    seedSession()
+    const finish: Array<(v: unknown) => void> = []
+    h.post.mockImplementation(() => new Promise(resolve => { finish.push(resolve) }))
+    const a = singleFlightRefresh()
+    useUserStoreWithOut().resetState()
+    setTokens({ access_token: 'B-login', refresh_token: 'B-RT' })
+    const b = singleFlightRefresh()
+    expect(h.post).toHaveBeenCalledTimes(2)
+    finish[0]!({ data: { code: 0, data: { access_token: 'A-late', refresh_token: 'A-RT2' } } })
+    expect((await a).stale).toBe(true)
+    expect(singleFlightRefresh()).toBe(b)
+    finish[1]!({ data: { code: 0, data: { access_token: 'B-new', refresh_token: 'B-RT2' } } })
+    await b
+    expect(getAccessToken()).toBe('B-new')
+  })
+
+  it.each([[401, 20003], [403, 20007], [503, 10008]])('旧会话错误 %i/%i 不清新会话、不跳页、不弹 toast', async (status, code) => {
+    seedSession()
+    const config = h.handlers.req!({ headers: {}, url: '/old' })
+    useUserStoreWithOut().resetState()
+    setTokens({ access_token: 'B-login', refresh_token: 'B-RT' })
+    const err = { config, response: { status, data: { code } } }
+    await expect(h.handlers.err!(err)).rejects.toBeInstanceOf(SessionChangedError)
+    expect(getAccessToken()).toBe('B-login')
+    expect(fakeWindow.location.hash).toBe('#/home')
+    expect(notifyError).not.toHaveBeenCalled()
+  })
+
+  it('旧成功响应拒绝交给页面，当前成功响应照常解包；刷新同会话不误弃请求', () => {
+    seedSession()
+    const config = h.handlers.req!({ headers: {}, url: '/old' })
+    setTokens({ access_token: 'A-refreshed', refresh_token: 'A-RT2' })
+    expect(h.handlers.ok!({ config, data: { code: 0, data: 'same identity' } })).toBe('same identity')
+    useUserStoreWithOut().resetState()
+    setTokens({ access_token: 'B-login', refresh_token: 'B-RT' })
+    expect(() => h.handlers.ok!({ config, data: { code: 0, data: 'A secret' } })).toThrow(SessionChangedError)
+    expect(() => h.handlers.req!(config)).toThrow(SessionChangedError)
+    const current = h.handlers.req!({ headers: {}, url: '/new' })
+    expect(h.handlers.ok!({ config: current, data: { code: 0, data: 'B data' } })).toBe('B data')
+  })
+
+  it('旧 logout finally 不得清除新登录，旧改密响应不得轮换新账号令牌', async () => {
+    seedSession()
+    let finishLogout: (v: unknown) => void = () => {}
+    h.service.post = vi.fn(() => new Promise(resolve => { finishLogout = resolve }))
+    const logout = useUserStoreWithOut().logout()
+    useUserStoreWithOut().resetState()
+    setTokens({ access_token: 'B-login', refresh_token: 'B-RT' })
+    finishLogout(null)
+    await logout
+    expect(getAccessToken()).toBe('B-login')
+    let finishPassword: (v: unknown) => void = () => {}
+    h.service.post = vi.fn(() => new Promise(resolve => { finishPassword = resolve }))
+    const password = useUserStoreWithOut().changePassword('synthetic-old', 'synthetic-new')
+    useUserStoreWithOut().resetState()
+    setTokens({ access_token: 'C-login', refresh_token: 'C-RT' })
+    finishPassword({ access_token: 'B-password-late', refresh_token: 'B-password-RT' })
+    await expect(password).rejects.toBeInstanceOf(SessionChangedError)
+    expect(getAccessToken()).toBe('C-login')
+  })
+
+  it('两个登录交错，较早登录晚到不得覆盖较新登录', async () => {
+    const finish: Array<(v: unknown) => void> = []
+    h.service.post = vi.fn(() => new Promise(resolve => { finish.push(resolve) }))
+    const a = useUserStoreWithOut().login({ employee_no: 'A', password: 'synthetic-A' })
+    const generation = getSessionGeneration()
+    const b = useUserStoreWithOut().login({ employee_no: 'B', password: 'synthetic-B' })
+    expect(getSessionGeneration()).toBeGreaterThan(generation)
+    finish[1]!({ access_token: 'B-login', refresh_token: 'B-RT' })
+    await b
+    finish[0]!({ access_token: 'A-late', refresh_token: 'A-RT' })
+    await expect(a).rejects.toBeInstanceOf(SessionChangedError)
+    expect(getAccessToken()).toBe('B-login')
+  })
+  it('late refresh from A must not overwrite B login tokens', async () => {
+    seedSession()
+    let finish: (v: unknown) => void = () => {}
+    h.post.mockImplementation(() => new Promise(resolve => { finish = resolve }))
+    const pending = singleFlightRefresh()
+    useUserStoreWithOut().resetState()
+    setTokens({ access_token: 'B-login', refresh_token: 'B-RT' })
+    finish({ data: { code: 0, data: { access_token: 'A-late', refresh_token: 'A-RT2' } } })
+    await pending
+    expect(getAccessToken()).toBe('B-login')
+  })
+
+  it('late fatal refresh from A must not clear B session', async () => {
+    seedSession()
+    let fail: (v: unknown) => void = () => {}
+    h.post.mockImplementation(() => new Promise((_resolve, reject) => { fail = reject }))
+    const err = makeError(401, 20002)
+    const pending = h.handlers.err!(err).catch(() => {})
+    useUserStoreWithOut().resetState()
+    setTokens({ access_token: 'B-login', refresh_token: 'B-RT' })
+    useUserStoreWithOut().profile = { id: 'B' } as any
+    fakeWindow.location.hash = '#/home'
+    fail({ response: { status: 401, data: { code: 20004 } } })
+    await pending
+    expect(getAccessToken()).toBe('B-login')
+    expect(useUserStoreWithOut().profile?.id).toBe('B')
+  })
+
+  it('late loadSession A must not restore A after reset and B login', async () => {
+    seedSession()
+    useUserStoreWithOut().sessionLoaded = false
+    const finish: Array<(v: unknown) => void> = []
+    h.service.get = vi.fn(() => new Promise(resolve => { finish.push(resolve) }))
+    const pending = useUserStoreWithOut().loadSession()
+    await vi.waitFor(() => { expect(finish).toHaveLength(3) })
+    useUserStoreWithOut().resetState()
+    setTokens({ access_token: 'B-login', refresh_token: 'B-RT' })
+    useUserStoreWithOut().profile = { id: 'B' } as any
+    finish[0]!({ id: 'A', must_change_password: false })
+    finish[1]!({ permissions: ['button:admin.delete'] })
+    finish[2]!({ menus: [homeMenu] })
+    await expect(pending).rejects.toBeInstanceOf(SessionChangedError)
+    expect(useUserStoreWithOut().profile?.id).toBe('B')
   })
 })

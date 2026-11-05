@@ -10,7 +10,7 @@
  */
 
 import axios, { type AxiosInstance, type AxiosError, type InternalAxiosRequestConfig } from 'axios'
-import { getAccessToken, getRefreshToken, setTokens, clearTokens, type TokenPair } from '@/common/auth/tokenStorage'
+import { getAccessToken, getRefreshToken, setTokens, clearTokens, getSessionGeneration, SessionChangedError, type TokenPair } from '@/common/auth/tokenStorage'
 import { useUserStoreWithOut } from '@/store/modules/user'
 import { TOKEN_EXPIRED, TOKEN_INVALID, REFRESH_FATAL_CODES } from '@/common/constants/errorBehavior'
 import { notifyError } from '../errorToast'
@@ -26,6 +26,7 @@ export function generateRequestID(): string {
 /** 带「已重放过」标记的请求配置（重放上限 1 次，防 20002 死循环） */
 interface RetryableConfig extends InternalAxiosRequestConfig {
   _retry?: boolean
+  _sessionGeneration?: number
 }
 
 /**
@@ -38,6 +39,8 @@ export interface RefreshResult {
   token: string | null
   /** true=终态（RT 无效/改密纪元/重放）→ 应清会话跳登录；false=非终态（网络/5xx）→ 保会话 */
   terminal: boolean
+  /** 身份会话已变；调用方不得用旧结果重放/清理/提示新会话。 */
+  stale?: boolean
 }
 
 /** 终态码判定（把 REFRESH_FATAL_CODES 常量真正接上，替代「有无响应」粗判） */
@@ -46,7 +49,7 @@ function isFatalRefreshCode(code: unknown): boolean {
 }
 
 /** 单飞刷新锁 */
-let _refreshing: Promise<RefreshResult> | null = null
+let _refreshing: { generation: number; promise: Promise<RefreshResult> } | null = null
 
 /**
  * 执行一次刷新（终态语义版，取代旧 _doRefresh 的 `string | null`）。
@@ -61,6 +64,7 @@ let _refreshing: Promise<RefreshResult> | null = null
  *  - 4xx 但码族未命中（保守起见不误登出）
  */
 export async function refreshAccessToken(): Promise<RefreshResult> {
+  const generation = getSessionGeneration()
   const rt = getRefreshToken()
   if (!rt) return { token: null, terminal: true } // 无 RT 无法刷新 → 会话不可续
   try {
@@ -69,6 +73,7 @@ export async function refreshAccessToken(): Promise<RefreshResult> {
       timeout: 30000,
     })
     const body = resp.data as { code?: number; data?: TokenPair } | undefined
+    if (generation !== getSessionGeneration()) return { token: null, terminal: false, stale: true }
     if (body?.code === 0 && body.data?.access_token) {
       setTokens(body.data)
       return { token: body.data.access_token, terminal: false }
@@ -76,6 +81,7 @@ export async function refreshAccessToken(): Promise<RefreshResult> {
     // 业务失败：仅终态码族终态化
     return { token: null, terminal: isFatalRefreshCode(body?.code) }
   } catch (err: unknown) {
+    if (generation !== getSessionGeneration()) return { token: null, terminal: false, stale: true }
     const response = (err as AxiosError)?.response
     if (!response) {
       // 无 HTTP 响应（网络断开/超时）→ 非终态，保留会话
@@ -93,16 +99,24 @@ export async function refreshAccessToken(): Promise<RefreshResult> {
 
 /** 单飞刷新：并发 401 只发一次 POST /auth/refresh，其余挂起复用同一 Promise */
 export function singleFlightRefresh(): Promise<RefreshResult> {
-  if (!_refreshing) {
-    _refreshing = refreshAccessToken().finally(() => { _refreshing = null })
+  const generation = getSessionGeneration()
+  if (!_refreshing || _refreshing.generation !== generation) {
+    const current = { generation, promise: Promise.resolve({ token: null, terminal: false } as RefreshResult) }
+    current.promise = refreshAccessToken().finally(() => {
+      if (_refreshing === current) _refreshing = null
+    })
+    _refreshing = current
   }
-  return _refreshing
+  return _refreshing.promise
 }
 
 // ─── axios 实例 ───
 const service: AxiosInstance = axios.create({ timeout: 30000 })
 
 service.interceptors.request.use((config: InternalAxiosRequestConfig) => {
+  const tracked = config as RetryableConfig
+  tracked._sessionGeneration ??= getSessionGeneration()
+  if (tracked._sessionGeneration !== getSessionGeneration()) throw new SessionChangedError()
   const at = getAccessToken()
   if (at) config.headers.Authorization = `Bearer ${at}`
   config.headers['X-Request-ID'] = generateRequestID()
@@ -111,12 +125,17 @@ service.interceptors.request.use((config: InternalAxiosRequestConfig) => {
 
 service.interceptors.response.use(
   (response) => {
+    const generation = (response.config as RetryableConfig)?._sessionGeneration
+    if (generation !== undefined && generation !== getSessionGeneration()) throw new SessionChangedError()
     // 成功但 data:null 的接口（logout 等）→ 返回 null 而非整个信封
     const envelope = response.data as { code?: number; data?: unknown }
     const result = envelope?.code === 0 ? (envelope.data ?? null) : envelope
     return result as never // 类型断言：运行时 data 直返（调用方拿到的就是业务数据）
   },
   async (error: AxiosError) => {
+    if (error instanceof SessionChangedError) return Promise.reject(error)
+    const generation = (error.config as RetryableConfig | undefined)?._sessionGeneration ?? getSessionGeneration()
+    if (generation !== getSessionGeneration()) return Promise.reject(new SessionChangedError())
     const status = error.response?.status
     let body = error.response?.data as { code?: number; message?: string } | undefined
     // blob 端点（如 al 导出）的错误体也是 Blob——先转文本解析出信封 code/message，
@@ -129,6 +148,7 @@ service.interceptors.response.use(
         /* 非 JSON 错误体（如纯文本 404 page not found）——保持 Blob 原值 */
       }
     }
+    if (generation !== getSessionGeneration()) return Promise.reject(new SessionChangedError())
     const bizCode = body?.code
 
     // 403+20007 强制改密（errorBehavior 接线——跳改密页不清会话）
@@ -151,6 +171,7 @@ service.interceptors.response.use(
           return Promise.reject(error)
         }
         const result = await singleFlightRefresh()
+        if (result.stale || generation !== getSessionGeneration()) return Promise.reject(new SessionChangedError())
         if (result.token && config) {
           config._retry = true
           config.headers.Authorization = `Bearer ${result.token}`

@@ -19,6 +19,12 @@ export interface TokenPair {
 // 内存缓存（避免每请求读 localStorage）
 let cached: TokenPair | null = null
 let cachedDeviceId: string | null = null
+// 身份会话代次与 AT 轮换分开：refresh 不换身份，登录/reset 才使旧异步工作失效。
+let sessionGeneration = 0
+export const getSessionGeneration = () => sessionGeneration
+export class SessionChangedError extends Error {
+  constructor() { super('会话已切换，忽略旧请求'); this.name = 'SessionChangedError' }
+}
 
 /** 生成浏览器级 UUID（v4 简版——device_id 不需密码学强度） */
 function generateUUID(): string {
@@ -90,8 +96,9 @@ export function getRefreshToken(): string | null {
 
 /** 清除全部 token（登出/刷新失败） */
 export function clearTokens(): void {
+  sessionGeneration++
   cached = null
-  localStorage.removeItem(STORAGE_KEY)
+  try { localStorage.removeItem(STORAGE_KEY) } catch { /* storage 被禁仍须拆除内存会话 */ }
 }
 
 /** 是否已登录 */
