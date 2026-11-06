@@ -41,7 +41,7 @@ export function useTableFit(
   const syncObserve = () => {
     const el = tableRef.value?.$el?.parentElement
     if (!el || el === observedEl) return
-    observer?.unobserve(observedEl as HTMLElement)
+    if (observedEl) observer?.unobserve(observedEl)
     observedEl = el
     observer?.observe(el)
   }
