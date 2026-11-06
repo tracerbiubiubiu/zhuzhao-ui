@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { api, apiLogin, loadState, tempTicketType } from './helpers'
+import { api, apiLogin, loadState, tempTicketType, waitUserRateBudget } from './helpers'
 import { uiLogin } from './ui'
 
 /**
@@ -52,6 +52,7 @@ test('S2 工作台冒烟：admin 登录 → 菜单渲染 → 状态卡与最近�
       }
     }
 
+    await waitUserRateBudget() // 图/四张状态夹具与浏览器共用user_id限流桶
     const badgeResponse = page.waitForResponse((r) => new URL(r.url()).pathname === '/api/v1/badges' && r.status() === 200)
     await uiLogin(page, admin.employeeNo, admin.password)
     await expect(page).toHaveURL(/#\/home/, { timeout: 30_000 })

@@ -94,3 +94,11 @@ test('场景描述', async ({ page }) => {
 **运行前提**：五栈在位（app@33333/activelist@18081/taskrunner@18080/PG/Redis）+
 vite webServer 自动拉起（Playwright 探测 127.0.0.1:4000——strictPort 已启，
 端口被占会显式失败不静默漂移）。串行 workers=1（共享 dev 栈 DB 防互踩）。
+
+## 密集夹具与限流预算（2026-11-06 审计复验）
+
+标准栈`rate_limit.default`为20rps/40burst，登录后按user_id共享，换device/token不能隔离。
+真实全量曾在同一秒叠加6个Node夹具/assign和35个浏览器请求，reload的menus被429/10007拒绝；
+原失败必须保留，不能失败后盲重试或放宽服务端规则。S2密集夹具完成、S3a夹具完成及APIassign后强制reload前，
+用`waitUserRateBudget`预留40/20秒+100ms完整补桶窗。该节奏有运行配置与request_id时序证据；
+若测试栈限流配置变化，须重新核预算。FE4零错误断言保持，不把所有429加入白名单。
