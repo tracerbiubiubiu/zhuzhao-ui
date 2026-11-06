@@ -79,6 +79,25 @@ test('S2 工作台冒烟：admin 登录 → 菜单渲染 → 状态卡与最近�
     await expect(page.locator('tr', { hasText: `S2 冒烟单据_${suffix}` }).locator('.el-tag', { hasText: '待处理' })).toBeVisible()
     expect(ticketId).toBeTruthy()
 
+    // 真实computed颜色：状态/优先级是12px语义文字，不能以淡底淡字掩掉可读性。
+    const tagContrasts = await page.locator('.home-recent-row .el-tag').evaluateAll((tags) => {
+      const luminance = (css: string) => {
+        const rgb = css.match(/[\d.]+/g)!.slice(0, 3).map(Number).map((v) => {
+          const c = v / 255
+          return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4
+        })
+        return rgb[0] * 0.2126 + rgb[1] * 0.7152 + rgb[2] * 0.0722
+      }
+      return tags.map((tag) => {
+        const style = getComputedStyle(tag)
+        const a = luminance(style.color), b = luminance(style.backgroundColor)
+        return { text: tag.textContent, ratio: (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05) }
+      })
+    })
+    expect(tagContrasts.length).toBeGreaterThan(0)
+    for (const tag of tagContrasts) expect(tag.ratio, `徽标${tag.text}的文字对比度`).toBeGreaterThanOrEqual(4.5)
+
+
     // 首页卡片反复进入已缓存列表：URL、筛选回显和真实请求必须同口径。
     await page.locator('.el-card').filter({ hasText: '待处理' }).first().click()
     await expect(page).toHaveURL(/#\/tickets\?status=open/)

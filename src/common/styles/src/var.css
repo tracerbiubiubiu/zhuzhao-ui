@@ -83,3 +83,17 @@ html:root.dark {
   --layout-shadow: 0 1px 2px rgb(0 0 0 / 18%), 0 10px 30px rgb(0 0 0 / 18%);
   --app-content-bg-color: #0b1120;
 }
+
+/* 状态文字保留语义色与浅底，亮色提高文字对比；dark/实色Tag沿EP主题。 */
+html:root:not(.dark) .el-tag.el-tag--warning:not(.el-tag--dark) {
+  --el-tag-text-color: #8a4b08;
+}
+html:root:not(.dark) .el-tag.el-tag--success:not(.el-tag--dark) {
+  --el-tag-text-color: #276b39;
+}
+html:root:not(.dark) .el-tag.el-tag--danger:not(.el-tag--dark) {
+  --el-tag-text-color: #b42318;
+}
+html:root:not(.dark) .el-tag.el-tag--info:not(.el-tag--dark) {
+  --el-tag-text-color: #4b5563;
+}
