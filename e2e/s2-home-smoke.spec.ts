@@ -1,6 +1,8 @@
 import { expect, test } from '@playwright/test'
 import { api, apiLogin, loadState, tempTicketType, waitUserRateBudget } from './helpers'
 import { uiLogin } from './ui'
+import { setDarkTheme } from './appearance'
+import { primaryButtonStates } from './buttonContrast'
 
 /**
  * S2 工作台冒烟（主仓 03 号 §2 场景表，W2 冒烟集；2026-10-02 断言加固）
@@ -103,6 +105,19 @@ test('S2 工作台冒烟：admin 登录 → 菜单渲染 → 状态卡与最近�
     await page.locator('.el-card').filter({ hasText: '待处理' }).first().click()
     await expect(page).toHaveURL(/#\/tickets\?status=open/)
     const statusSelect = page.locator('.filter-bar .el-select').nth(1)
+    // F14：真实鼠标状态下暗色实色primary文字可读；颜色稳定后测，不代替动画质量验证。
+    const initialDark = await page.getByRole('switch', { name: 'Toggle dark mode' }).isChecked()
+    await setDarkTheme(page, true)
+    const primary = page.getByRole('button', { name: '新建工单', exact: true })
+    const buttonStates = await primaryButtonStates(page, primary)
+    expect(buttonStates[1].hover).toBe(true)
+    expect(buttonStates[2].active).toBe(true)
+    for (const state of buttonStates) {
+      expect(state.disabled).toBe(false)
+      expect(state.opacity).toBe('1')
+      expect(state.ratio, `暗色实色主按钮${state.state}文字对比度`).toBeGreaterThanOrEqual(4.5)
+    }
+    await setDarkTheme(page, initialDark)
     await expect(statusSelect).toContainText('待处理')
     const focus = page.getByRole('button', { name: '表格聚焦', exact: true })
     await focus.press('Enter')

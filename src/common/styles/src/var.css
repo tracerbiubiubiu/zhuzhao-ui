@@ -97,3 +97,10 @@ html:root:not(.dark) .el-tag.el-tag--danger:not(.el-tag--dark) {
 html:root:not(.dark) .el-tag.el-tag--info:not(.el-tag--dark) {
   --el-tag-text-color: #4b5563;
 }
+
+/* 暗色实色主按钮用深文字配既有浅紫底；plain/text/link/dashed与禁用专用色保持原义。 */
+html:root.dark .el-button.el-button--primary:not(.is-plain):not(.is-text):not(.is-link):not(.is-dashed) {
+  --el-button-text-color: #111827;
+  --el-button-hover-text-color: #111827;
+  --el-button-active-text-color: #111827;
+}
