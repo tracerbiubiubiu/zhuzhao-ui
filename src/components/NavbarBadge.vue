@@ -2,7 +2,7 @@
 /**
  * NavbarBadge 全局待办角标（S10 B10-3——10 号附录 A.4）：
  * 60s 轮询 GET /badges（sections 开放 map——未知 section 忽略向前兼容）；
- * 点击跳工单列表 assignee=me。轮询失败静默（角标是提示面，不弹错）。
+ * 待办跳工单列表 assignee=me + exclude_statuses=closed,rejected，与角标计数同口径。轮询失败静默（角标是提示面，不弹错）。
  */
 import { onMounted, onUnmounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
@@ -34,7 +34,7 @@ onUnmounted(() => {
 })
 
 function goTodo() {
-  void router.push({ path: '/tickets', query: { assignee: 'me' } })
+  void router.push({ path: '/tickets', query: { assignee: 'me', exclude_statuses: 'closed,rejected' } })
 }
 
 function goInbox() {
@@ -47,6 +47,7 @@ function goInbox() {
     class="navbar-badge header-action"
     data-testid="navbar-badge"
     title="站内消息（未读）"
+    :aria-label="`站内消息（${unread}条未读）`"
     @click="goInbox"
   >
     <el-badge :value="unread" :hidden="unread === 0" :max="99" type="danger" data-testid="badge-unread">
@@ -56,7 +57,8 @@ function goInbox() {
   <button
     class="navbar-badge header-action"
     data-testid="navbar-todo"
-    title="待办工单"
+    title="待办工单（分派给我，排除已关闭和已驳回）"
+    :aria-label="`待办工单（${todo}条，排除已关闭和已驳回）`"
     @click="goTodo"
   >
     <el-badge :value="todo" :hidden="todo === 0" :max="99" type="warning">

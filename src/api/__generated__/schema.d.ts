@@ -2920,6 +2920,8 @@ export interface paths {
                     status?: string;
                     /** @description 状态集合，逗号分隔，与status互斥（例assigned,in_progress） */
                     statuses?: string;
+                    /** @description 排除状态集合，逗号分隔，与status/statuses互斥 */
+                    exclude_statuses?: string;
                     /** @description 优先级（1紧急/2高/3中/4低） */
                     priority?: number;
                     /** @description 处理人过滤，仅支持 me（当前用户——工作台待办/已办卡数据源） */
@@ -3367,6 +3369,8 @@ export interface paths {
                     status?: string;
                     /** @description 状态集合，逗号分隔，与status互斥（例assigned,in_progress） */
                     statuses?: string;
+                    /** @description 排除状态集合，逗号分隔，与status/statuses互斥 */
+                    exclude_statuses?: string;
                     /** @description 优先级 */
                     priority?: number;
                     /** @description 标签（S10 B10-2） */

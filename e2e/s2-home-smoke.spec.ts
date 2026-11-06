@@ -17,31 +17,46 @@ test('S2 工作台冒烟：admin 登录 → 菜单渲染 → 状态卡与最近�
   const h = { token: login.env!.data.access_token } as const
   const orgId = ((await api('/api/v1/orgs', { token: h.token })).env!.data as Array<{ id: string }>)[0].id
   const tt = await tempTicketType(h, 'e2e_s2')
-  const created = await api('/api/v1/tickets', {
-    ...h, method: 'POST',
-    body: { type_code: tt.code, title: `S2 冒烟单据_${suffix}`, org_id: orgId },
-  })
-  expect(created.env!.code).toBe(0)
-  const ticketId = (created.env!.data as { id: string }).id
-  const mine = (await api<{ id: string }>('/api/v1/user/profile', h)).env!.data.id
+  let ticketId = ''
   const handled: string[] = []
-  for (const status of ['assigned', 'closed']) {
-    const r = await api<{ id: string }>('/api/v1/tickets', {
-      ...h, method: 'POST', body: { type_code: tt.code, title: `S2 ${status}_${suffix}`, org_id: orgId },
-    })
-    expect(r.env!.code).toBe(0)
-    const id = r.env!.data.id
-    handled.push(id)
-    expect((await api('/api/v1/tickets/assign', { ...h, method: 'POST', body: { id, assigned_to: mine } })).env!.code).toBe(0)
-    if (status === 'closed') {
-      expect((await api('/api/v1/tickets/transition', { ...h, method: 'POST', body: { id, to: 'in_progress' } })).env!.code).toBe(0)
-      expect((await api('/api/v1/tickets/close', { ...h, method: 'POST', body: { id } })).env!.code).toBe(0)
-    }
-  }
-
   try {
+    // 自定义非终态用真实类型图推进，不能把角标排除集合退化成内置状态白名单。
+    const graph = await api('/api/v1/ticket-types/update', {
+      ...h, method: 'POST', body: {
+        code: tt.code,
+        states: ['open', 'assigned', 'in_progress', 'pending_verify', 'closed', 'rejected', 'review_custom'],
+        transitions: { open: ['assigned', 'closed'], assigned: ['in_progress', 'open', 'review_custom'], in_progress: ['pending_verify', 'rejected', 'closed'], pending_verify: ['closed', 'in_progress'], closed: ['open'], rejected: ['open'], review_custom: ['closed'] },
+      },
+    })
+    expect(graph.env!.code).toBe(0)
+    const created = await api('/api/v1/tickets', {
+      ...h, method: 'POST',
+      body: { type_code: tt.code, title: `S2 冒烟单据_${suffix}`, org_id: orgId },
+    })
+    expect(created.env!.code).toBe(0)
+    ticketId = (created.env!.data as { id: string }).id
+    const mine = (await api<{ id: string }>('/api/v1/user/profile', h)).env!.data.id
+    for (const status of ['assigned', 'closed', 'review_custom']) {
+      const r = await api<{ id: string }>('/api/v1/tickets', {
+        ...h, method: 'POST', body: { type_code: tt.code, title: `S2 ${status}_${suffix}`, org_id: orgId },
+      })
+      expect(r.env!.code).toBe(0)
+      const id = r.env!.data.id
+      handled.push(id)
+      expect((await api('/api/v1/tickets/assign', { ...h, method: 'POST', body: { id, assigned_to: mine } })).env!.code).toBe(0)
+      if (status === 'closed') {
+        expect((await api('/api/v1/tickets/transition', { ...h, method: 'POST', body: { id, to: 'in_progress' } })).env!.code).toBe(0)
+        expect((await api('/api/v1/tickets/close', { ...h, method: 'POST', body: { id } })).env!.code).toBe(0)
+      } else if (status === 'review_custom') {
+        expect((await api('/api/v1/tickets/transition', { ...h, method: 'POST', body: { id, to: 'review_custom' } })).env!.code).toBe(0)
+      }
+    }
+
+    const badgeResponse = page.waitForResponse((r) => new URL(r.url()).pathname === '/api/v1/badges' && r.status() === 200)
     await uiLogin(page, admin.employeeNo, admin.password)
     await expect(page).toHaveURL(/#\/home/, { timeout: 30_000 })
+
+    const badgeCount = (await (await badgeResponse).json()).data.sections.todo as number
 
     // 侧栏：admin 全量菜单——管理面目录可见
     await expect(page.locator('.el-menu').getByText('系统管理')).toBeVisible()
@@ -106,8 +121,43 @@ test('S2 工作台冒烟：admin 登录 → 菜单渲染 → 状态卡与最近�
     expect(result.list.every((t) => ['assigned', 'in_progress'].includes(t.status))).toBe(true)
     expect(result.list.some((t) => t.id === handled[0]), '我的待办必须包含本轮已分派单').toBe(true)
     expect(result.list.some((t) => t.id === handled[1]), '我的待办不能混入本轮已关闭单').toBe(false)
+    expect(result.list.some((t) => t.id === handled[2]), '首页两态待办不包含自定义状态').toBe(false)
+    const todoExport = page.waitForResponse((r) => {
+      const u = new URL(r.url())
+      return u.pathname === '/api/v1/tickets/export' && u.searchParams.get('statuses') === 'assigned,in_progress' && u.searchParams.get('assignee') === 'me'
+    })
+    await page.getByTestId('btn-export').click()
+    expect((await todoExport).status()).toBe(200)
+
+    // 角标是另一已明确统计口径：分派给我且排除终态，须保留自定义状态。
+    const badgeList = page.waitForResponse((r) => {
+      const u = new URL(r.url())
+      return u.pathname === '/api/v1/tickets' && u.searchParams.get('exclude_statuses') === 'closed,rejected' && u.searchParams.get('assignee') === 'me'
+    })
+    await page.getByTestId('navbar-todo').press('Enter')
+    await expect(statusSelect).toContainText('排除 已关闭 / 已驳回')
+    const badgeRows = (await (await badgeList).json()).data as { list: Array<{ id: string; status: string }>; total: number }
+    expect(badgeRows.total, '角标与入口列表总数必须一致').toBe(badgeCount)
+    expect(badgeRows.list.some((t) => t.id === handled[0])).toBe(true)
+    expect(badgeRows.list.some((t) => t.id === handled[2]), '角标必须保留本轮自定义非终态').toBe(true)
+    expect(badgeRows.list.every((t) => !['closed', 'rejected'].includes(t.status))).toBe(true)
+    const badgeExport = page.waitForResponse((r) => {
+      const u = new URL(r.url())
+      return u.pathname === '/api/v1/tickets/export' && u.searchParams.get('exclude_statuses') === 'closed,rejected'
+        && u.searchParams.get('assignee') === 'me' && !u.searchParams.has('status') && !u.searchParams.has('statuses')
+    })
+    await page.getByTestId('btn-export').click()
+    expect((await badgeExport).status()).toBe(200)
+    await statusSelect.click()
+    await page.getByRole('option', { name: '已关闭', exact: true }).click()
+    await page.locator('.v-tags-view__link').filter({ hasText: '首页' }).click()
+    await page.getByTestId('navbar-todo').press('Enter')
+    await expect(statusSelect).toContainText('排除 已关闭 / 已驳回')
+    await page.getByRole('button', { name: '重置', exact: true }).click()
+    await expect(statusSelect).not.toContainText('排除')
+
   } finally {
-    for (const id of [ticketId, ...handled]) await api('/api/v1/tickets/delete', { ...h, method: 'POST', body: { id } }).catch(() => {})
+    for (const id of [ticketId, ...handled].filter(Boolean)) await api('/api/v1/tickets/delete', { ...h, method: 'POST', body: { id } }).catch(() => {})
     await tt.cleanup()
   }
 })
