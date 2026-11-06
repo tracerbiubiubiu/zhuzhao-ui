@@ -5,7 +5,7 @@
  * 并入筛选行右端（不设孤行）> 独占行（皆无时兜底，当前仓内无此页型）。
  */
 import { ElButton, ElTooltip } from 'element-plus'
-import { Icon } from '@iconify/vue'
+import { Icon } from '@iconify/vue/offline'
 
 defineProps<{ density: 'default' | 'small'; focused: boolean; showFocus: boolean }>()
 defineEmits<{ (e: 'toggle-density'): void; (e: 'toggle-focus'): void }>()

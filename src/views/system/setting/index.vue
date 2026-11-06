@@ -118,7 +118,7 @@ import {
   ElCard, ElForm, ElFormItem, ElTag, ElButton, ElTooltip, ElMessageBox,
   ElInputNumber, ElSelect, ElOption, ElMessage, ElEmpty,
 } from 'element-plus'
-import { Icon } from '@iconify/vue'
+import { Icon } from '@iconify/vue/offline'
 import request from '@vea/request'
 import { useUserStoreWithOut } from '@/store/modules/user'
 

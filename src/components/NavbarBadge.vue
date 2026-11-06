@@ -7,7 +7,7 @@
 import { onMounted, onUnmounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElBadge } from 'element-plus'
-import { Icon } from '@iconify/vue'
+import { Icon } from '@iconify/vue/offline'
 import { getBadgesApi } from '@/api/ticket'
 
 const router = useRouter()

@@ -465,3 +465,5 @@ radio 快捷段四态 + range=[from,to]（YYYY-MM-DD）驱动服务端/客户端
 图标按钮除悬停提示外须提供可访问名称；表格聚焦按钮的 `aria-label` 和 `aria-pressed` 同步动作/状态，Enter进入、Esc退出；包裹原生按钮的Tooltip不拦截Enter/Space。未选择数据类型时只展示选择引导，不能显示无目标的空态写入入口；创建时同时校验类型有效且未废弃。类型配置页说明须兑现S3a当前能力，不能继续声称三态经API不可达；节点审批仍依S3b边界登记，不因已有流转接口而宣称审批已实现。
 
 角标待办保持服务端“分派给我且排除closed/rejected”的口径，含类型图自定义状态，点击携带`exclude_statuses`；首页我的待办仍是assigned/in_progress两态。列表状态选择明确回显两种集合，重置/改选单态退出集合，导出复用同一参数；不得客户端分页后过滤或硬编码全部非终态。
+
+图标统一复用`@vea/components`全局Icon，局部使用Iconify时只导入`@iconify/vue/offline`，与全局registerIcons共享注册表；禁止在线入口另开外网取图，工具/设置/导航同规。`icons.test`扫描入口，真实浏览器阻断外网时仍应呈现SVG图形。
