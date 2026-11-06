@@ -18,6 +18,7 @@
 import { test, expect } from '@playwright/test'
 import { api, apiLogin, loadState, tempTicketType } from './helpers'
 import { uiLogin } from './ui'
+import { descriptionMetrics, setDarkTheme } from './appearance'
 
 test.setTimeout(180_000)
 
@@ -30,12 +31,13 @@ test('S10/S11：详情评论/备注分层+关联判重+分派/关闭流+viewer �
   const h = { token: admin.env!.data.access_token } as const
   const orgId = ((await api('/api/v1/orgs', { token: h.token })).env!.data as Array<{ id: string }>)[0].id
   const tt = await tempTicketType(h, 'e2e_s10')
-  const mk = async (title: string) => {
-    const r = await api('/api/v1/tickets', { ...h, method: 'POST', body: { type_code: tt.code, title, org_id: orgId } })
+  const mk = async (title: string, description?: string) => {
+    const r = await api('/api/v1/tickets', { ...h, method: 'POST', body: { type_code: tt.code, title, org_id: orgId, description } })
     expect(r.env!.code).toBe(0)
     return (r.env!.data as { id: string }).id
   }
-  const t1 = await mk(`S10 主单_${suffix}`)
+  const longDescription = '首行：保留  两个空格。\nhttps://example.invalid/' + 'abcd1234efgh'.repeat(40) + '\n末行：完整保留。'
+  const t1 = await mk(`S10 主单_${suffix}`, longDescription)
   const t2 = await mk(`S10 从单_${suffix}`)
 
   // viewer 绑根组织（透明读旁观者——幂等 upsert，重复运行安全）。
@@ -52,6 +54,25 @@ test('S10/S11：详情评论/备注分层+关联判重+分派/关闭流+viewer �
     await page.waitForURL(/#\/home/, { timeout: 30_000 }) // 等登录重定向落定——勿带竞态 goto（fe3 同款）
     await page.goto(`/#/tickets/${t1}`)
     await expect(page.getByText(`S10 主单_${suffix}`).first()).toBeVisible()
+
+    // F13：合法长URL在两种主题和常用/宽屏均可完整阅读，原文不插入断词字符。
+    const initialViewport = page.viewportSize()
+    const initialDark = await page.getByRole('switch', { name: 'Toggle dark mode' }).isChecked()
+    const description = page.getByTestId('ticket-description')
+    for (const dark of [false, true]) {
+      await setDarkTheme(page, dark)
+      for (const size of [{ width: 1024, height: 900 }, { width: 2560, height: 1440 }]) {
+        await page.setViewportSize(size)
+        const metrics = await descriptionMetrics(description)
+        expect(metrics.text).toBe(longDescription)
+        expect(metrics.scrollWidth).toBeLessThanOrEqual(metrics.clientWidth + 1)
+        expect(metrics.linesInside, '每行文字框都在描述区域内').toBe(true)
+        expect(metrics.documentX).toBe(0)
+        expect(metrics.sectionX).toBe(0)
+      }
+    }
+    await setDarkTheme(page, initialDark)
+    if (initialViewport) await page.setViewportSize(initialViewport)
 
     const composer = page.getByPlaceholder('公开评论内容')
     await composer.fill('S10 公开评论内容')
