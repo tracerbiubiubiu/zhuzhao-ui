@@ -78,8 +78,11 @@ test('场景描述', async ({ page }) => {
 - **禁 `.el-form-item` 过滤定位**（FilterBar 批后 form-item 已 div 化）——按
   placeholder（`getByPlaceholder('工号，如 E000001')`）/ data-testid / 控件文本
   （`.filter-bar` scope）/ 列锚（`columnheader`）定位；
-- el-dropdown 菜单 teleport 到 body——`page.getByRole('option', { name })` +
-  visible 过滤；getByText/ByRole name 均**子串匹配**——空态文案勿含 Tab 名子串；
+- el-dropdown 菜单 teleport 到 body——用触发按钮键盘Enter打开，以
+  `page.getByRole('menuitem', { name, exact: true })` + visible 过滤；远程Select按combobox的
+  `aria-controls`限定当前listbox，等目标option可见后用ArrowDown/Enter选择，防命中过期传送层；
+  getByText/ByRole name 默认**子串匹配**——空态文案勿含 Tab 名子串；
+- 生产构建的富文本断言看预览DOM、出站请求及详情回读，不读取`__vueParentComponent`等开发期内部状态；
 - 动态路由页面 `goto` 后 `reload()` 一次（冷启动保险）。
 
 **造数/清理**：

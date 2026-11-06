@@ -3,8 +3,14 @@ import { api, apiLogin, loadState, mustData, pgAvailable, psql, tempTicketType }
 import { uiLogin } from './ui'
 
 async function pickUser(page: Page, field: Locator, employeeNo: string) {
-  await field.getByRole('combobox').fill(employeeNo)
-  await page.getByRole('option').filter({ hasText: employeeNo }).click()
+  const combo = field.getByRole('combobox')
+  await combo.click()
+  await combo.fill(employeeNo)
+  const listbox = await combo.getAttribute('aria-controls')
+  expect(listbox).toBeTruthy()
+  await expect(page.locator(`[id="${listbox}"]`).getByRole('option').filter({ hasText: employeeNo })).toBeVisible()
+  await combo.press('ArrowDown')
+  await combo.press('Enter')
 }
 
 test('S17：建单/分派催办上级与抄送保持大ID精确字符串', async ({ page }) => {

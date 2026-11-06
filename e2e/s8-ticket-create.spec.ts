@@ -197,15 +197,10 @@ test('S8c：richtext 贴图→建单→详情页图片可渲染（悬挂投递�
       cm.focus()
       cm.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData: dt }))
     })
-    // 直传+插入断言走 v-model——cm-content 文本被 v3 shortenText 折叠显示为
-    // ![](...)（长 URL 展示层折叠，底层文档完整——IAB 实测同解）
-    await expect
-      .poll(async () => await page.evaluate(() => {
-        let inst = (document.querySelector('.el-form') as any)?.__vueParentComponent
-        while (inst && !(inst.setupState && 'form' in (inst.setupState ?? {}))) inst = inst.parent
-        return String(inst?.setupState?.form?.custom?.detail ?? '')
-      }), { timeout: 20_000 })
-      .toContain('/api/v1/files/tickets/')
+    // 真实预览 DOM 是生产构建也稳定的插入证据；不依赖开发期 __vueParentComponent。
+    // cm-content 会把长 URL 折叠，预览 img 的 src 保留完整对象路径。
+    await expect(page.locator('.richtext-field .md-editor-preview img').first())
+      .toHaveAttribute('src', /\/api\/v1\/files\/tickets\//, { timeout: 20_000 })
 
     // 必填面（标题/组织）+ 提交
     await page.getByRole('textbox').first().fill('S8c 贴图全链哨兵单')
