@@ -469,3 +469,5 @@ radio 快捷段四态 + range=[from,to]（YYYY-MM-DD）驱动服务端/客户端
 图标统一复用`@vea/components`全局Icon，局部使用Iconify时只导入`@iconify/vue/offline`，与全局registerIcons共享注册表；禁止在线入口另开外网取图，工具/设置/导航同规。`icons.test`扫描入口，真实浏览器阻断外网时仍应呈现SVG图形。
 
 状态/优先级等语义徽标须保留可读文字；亮色light/plain Tag采用全局较深语义文字，暗色与实色effect沿原主题。常规12px文字按[WCAG 2.2对比度说明](https://www.w3.org/WAI/WCAG22/Understanding/contrast-minimum.html)4.5:1复核，真实computed颜色由S2守卫，不能把全站无障碍合规与该单项验证混同。
+
+FilterBar的`data-ignore`为布尔存在标记（`data-ignore`值为空字符串仍有效），必须用`hasAttribute`判定，禁止以dataset值的真假纳入折叠；工单导出/重置、任务重置与审计重置默认保留可见。

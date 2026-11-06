@@ -20,7 +20,7 @@ const barRef = ref<HTMLElement>()
 function controlEls(): HTMLElement[] {
   return Array.from(barRef.value?.children ?? []).filter(
     (el) =>
-      !(el as HTMLElement).dataset?.ignore &&
+      !el.hasAttribute('data-ignore') &&
       !(el as HTMLElement).classList.contains('filter-collapse-toggle'),
   ) as HTMLElement[]
 }

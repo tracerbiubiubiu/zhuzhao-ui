@@ -141,6 +141,7 @@ test('S2 工作台冒烟：admin 登录 → 菜单渲染 → 状态卡与最近�
     expect(result.list.some((t) => t.id === handled[0]), '我的待办必须包含本轮已分派单').toBe(true)
     expect(result.list.some((t) => t.id === handled[1]), '我的待办不能混入本轮已关闭单').toBe(false)
     expect(result.list.some((t) => t.id === handled[2]), '首页两态待办不包含自定义状态').toBe(false)
+    await expect(page.getByTestId('btn-export'), '收起筛选时导出动作仍可见').toBeVisible()
     const todoExport = page.waitForResponse((r) => {
       const u = new URL(r.url())
       return u.pathname === '/api/v1/tickets/export' && u.searchParams.get('statuses') === 'assigned,in_progress' && u.searchParams.get('assignee') === 'me'
