@@ -42,6 +42,8 @@ export interface TicketRow {
 export interface TicketListQuery {
   type_code?: string
   status?: string
+  /** 多状态集合，逗号分隔，与 status 互斥；列表与导出同源过滤。 */
+  statuses?: string
   priority?: number
   assignee?: 'me'
   created_by?: 'me'

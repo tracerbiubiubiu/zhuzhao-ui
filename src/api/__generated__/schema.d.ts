@@ -172,7 +172,7 @@ export interface paths {
                     end?: string;
                     /** @description 工号 */
                     employee_no?: string;
-                    /** @description HTTP 方法（GET/POST/PUT/DELETE 等） */
+                    /** @description HTTP 方法（单值或逗号分隔多值，如 GET,POST） */
                     method?: string;
                 };
                 header?: never;
@@ -2135,6 +2135,47 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/system/settings/reset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 恢复默认（删除运行时覆盖回出厂值；幂等） */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            /** @description 设置键 */
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["github_com_tracerbiubiubiu_zhuzhao_internal_model.ResetSettingRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["response.Response"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/system/settings/update": {
         parameters: {
             query?: never;
@@ -2629,7 +2670,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** 删除工单类型（有工单禁删 → 409） */
+        /** 删除工单类型（有工单/模板引用禁删 → 409） */
         post: {
             parameters: {
                 query?: never;
@@ -2877,6 +2918,8 @@ export interface paths {
                     type_code?: string;
                     /** @description 工单状态 */
                     status?: string;
+                    /** @description 状态集合，逗号分隔，与status互斥（例assigned,in_progress） */
+                    statuses?: string;
                     /** @description 优先级（1紧急/2高/3中/4低） */
                     priority?: number;
                     /** @description 处理人过滤，仅支持 me（当前用户——工作台待办/已办卡数据源） */
@@ -3322,6 +3365,8 @@ export interface paths {
                     type_code?: string;
                     /** @description 工单状态 */
                     status?: string;
+                    /** @description 状态集合，逗号分隔，与status互斥（例assigned,in_progress） */
+                    statuses?: string;
                     /** @description 优先级 */
                     priority?: number;
                     /** @description 标签（S10 B10-2） */
@@ -4966,6 +5011,9 @@ export interface components {
             /** @example 0 */
             user_id: string;
         };
+        "github_com_tracerbiubiubiu_zhuzhao_internal_model.ResetSettingRequest": {
+            key: string;
+        };
         "github_com_tracerbiubiubiu_zhuzhao_internal_model.RoleIDRequest": {
             /** @example 0 */
             role_id: string;
@@ -4997,6 +5045,8 @@ export interface components {
             user_id: string;
         };
         "github_com_tracerbiubiubiu_zhuzhao_internal_model.SettingView": {
+            /** @description config 出厂默认（前端 恢复默认/已自定义 判定用） */
+            default_value?: number[];
             description?: string;
             key?: string;
             /** @description superadmin | admin */

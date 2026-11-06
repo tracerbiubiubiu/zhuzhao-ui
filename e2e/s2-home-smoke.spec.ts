@@ -23,6 +23,18 @@ test('S2 工作台冒烟：admin 登录 → 菜单渲染 → 状态卡与最近�
   })
   expect(created.env!.code).toBe(0)
   const ticketId = (created.env!.data as { id: string }).id
+  const mine = (await api<{ id: string }>('/api/v1/user/profile', h)).env!.data.id
+  const handled: string[] = []
+  for (const status of ['assigned', 'closed']) {
+    const r = await api<{ id: string }>('/api/v1/tickets', {
+      ...h, method: 'POST', body: { type_code: tt.code, title: `S2 ${status}_${suffix}`, org_id: orgId },
+    })
+    expect(r.env!.code).toBe(0)
+    const id = r.env!.data.id
+    handled.push(id)
+    expect((await api('/api/v1/tickets/assign', { ...h, method: 'POST', body: { id, assigned_to: mine } })).env!.code).toBe(0)
+    if (status === 'closed') expect((await api('/api/v1/tickets/close', { ...h, method: 'POST', body: { id } })).env!.code).toBe(0)
+  }
 
   try {
     await uiLogin(page, admin.employeeNo, admin.password)
@@ -48,8 +60,46 @@ test('S2 工作台冒烟：admin 登录 → 菜单渲染 → 状态卡与最近�
     // 行内状态 tag 与数据一致（open → 待处理）
     await expect(page.locator('tr', { hasText: `S2 冒烟单据_${suffix}` }).locator('.el-tag', { hasText: '待处理' })).toBeVisible()
     expect(ticketId).toBeTruthy()
+
+    // 首页卡片反复进入已缓存列表：URL、筛选回显和真实请求必须同口径。
+    await page.locator('.el-card').filter({ hasText: '待处理' }).first().click()
+    await expect(page).toHaveURL(/#\/tickets\?status=open/)
+    const statusSelect = page.locator('.filter-bar .el-select').nth(1)
+    await expect(statusSelect).toContainText('待处理')
+    await statusSelect.click()
+    await page.getByRole('option', { name: '已关闭', exact: true }).click()
+    await expect(statusSelect).toContainText('已关闭')
+    await page.locator('.v-tags-view__link').filter({ hasText: '首页' }).click()
+    await expect(page).toHaveURL(/#\/home/)
+    await page.locator('.el-card').filter({ hasText: '待处理' }).first().click()
+    await expect(page).toHaveURL(/#\/tickets\?status=open/)
+    await expect(statusSelect).toContainText('待处理')
+    await page.locator('.v-tags-view__link').filter({ hasText: '首页' }).click()
+    await expect(page).toHaveURL(/#\/home/)
+    const closedRequest = page.waitForResponse((r) => {
+      const u = new URL(r.url())
+      return u.pathname === '/api/v1/tickets' && u.searchParams.get('status') === 'closed'
+    })
+    await page.getByRole('link', { name: '查看已关闭工单', exact: true }).press('Enter')
+    await expect(page).toHaveURL(/#\/tickets\?status=closed/)
+    await expect(statusSelect).toContainText('已关闭')
+    expect((await closedRequest).status()).toBe(200)
+    await page.locator('.v-tags-view__link').filter({ hasText: '首页' }).click()
+    const todoRequest = page.waitForResponse((r) => {
+      const u = new URL(r.url())
+      return u.pathname === '/api/v1/tickets' && u.searchParams.get('statuses') === 'assigned,in_progress'
+        && u.searchParams.get('assignee') === 'me'
+    })
+    await page.getByRole('link', { name: '查看我的待办', exact: true }).press('Enter')
+    await expect(statusSelect).toContainText('待办（已分派 / 进行中）')
+    const response = await todoRequest
+    expect(response.status()).toBe(200)
+    const result = (await response.json()).data as { list: Array<{ id: string; status: string }> }
+    expect(result.list.every((t) => ['assigned', 'in_progress'].includes(t.status))).toBe(true)
+    expect(result.list.some((t) => t.id === handled[0]), '我的待办必须包含本轮已分派单').toBe(true)
+    expect(result.list.some((t) => t.id === handled[1]), '我的待办不能混入本轮已关闭单').toBe(false)
   } finally {
-    await api('/api/v1/tickets/delete', { ...h, method: 'POST', body: { id: ticketId } }).catch(() => {})
+    for (const id of [ticketId, ...handled]) await api('/api/v1/tickets/delete', { ...h, method: 'POST', body: { id } }).catch(() => {})
     await tt.cleanup()
   }
 })
