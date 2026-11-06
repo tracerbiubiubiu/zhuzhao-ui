@@ -247,8 +247,8 @@ export async function createTicketApi(input: CreateTicketInput): Promise<TicketR
   return data as unknown as TicketRow
 }
 
-/** 工单状态（03 S11：六态；in_progress/pending_verify/rejected 经 API 流转不可达——
- * 列表筛选仍可列（历史数据/关闭前曾流转），流转按钮只做分派/取消/关闭/更新/删除 */
+/** 常见状态筛选标签。Phase5 S3a已提供配置流转入口；实际可执行动作由后端
+ * available-transitions按类型图、权限、条件与校验器决定。审批节点仍属S3b。 */
 export const TICKET_STATUSES: Array<{ value: string; label: string }> = [
   { value: 'open', label: '待处理' },
   { value: 'assigned', label: '已分派' },

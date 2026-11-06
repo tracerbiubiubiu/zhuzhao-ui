@@ -10,8 +10,7 @@
  *   typeForm.statesText/transitionsText 为单一数据源，切模式时双向同步；保存前镜像后端
  *   validateTypeGraph 预检（A.3 双保险）+ **改图在途单告警（B2-3）**：被删/失去全部出边的
  *   状态上若有工单则弹确认（纯体验层，绕过亦被 AssertTransition 兜底）；
- *   ⚠ 编辑框注记：状态图可配但用户实际可点动作仅 分派/取消/关闭/更新/删除——
- *   三态经 API 不可达（03 S11），防管理员以为画了就能点
+ *   编辑框说明与S3a保持一致：实际流转受权限/条件/校验器约束；审批节点仍属S3b
  * - 乐观锁：类型/模板 version 回传 CAS（可省略——管理页应带上），10006 → 关框刷新范式
  */
 import { computed, nextTick, reactive, ref, watch} from 'vue'
@@ -736,7 +735,7 @@ useTableFit(tplTable, () => pagedTplRows.value)
           </el-form-item>
           <el-alert
             type="warning" :closable="false" class="mb-2"
-            title="状态图可配（含 in_progress/pending_verify 等），但用户实际可点的动作仅 分派/取消/关闭/更新/删除——in_progress、pending_verify、rejected 三态经 API 不可达（审批随翻案批），画了也不可点。"
+            title="状态图决定可选流转；实际可执行动作还受权限、转换条件与校验器限制。审批节点能力尚未启用。"
           />
         </template>
       </el-form>

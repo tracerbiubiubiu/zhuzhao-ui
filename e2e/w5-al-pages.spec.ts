@@ -48,6 +48,9 @@ test('W5 冒烟：al 类型注册/数据写入/cursor 分页/软删恢复', asyn
 
     // ── data 页：选类型 → 动态列渲染 + cursor 分页（25 行=2 页）──
     await page.goto('/#/al/data')
+    // 未选择类型只有选择引导，不暴露无目标的写入动作。
+    await expect(page.getByText('从左侧选择一个类型以查看其数据')).toBeVisible()
+    await expect(page.getByRole('button', { name: '写入首条', exact: true })).toHaveCount(0)
     // 两栏版：左栏类型清单搜索+点击切换（取代下拉）
     await page.getByPlaceholder('搜索类型').fill(typeName)
     await page.locator('.al-type-item').filter({ hasText: typeName }).click()

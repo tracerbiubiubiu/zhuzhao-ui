@@ -33,7 +33,10 @@ test('S2 工作台冒烟：admin 登录 → 菜单渲染 → 状态卡与最近�
     const id = r.env!.data.id
     handled.push(id)
     expect((await api('/api/v1/tickets/assign', { ...h, method: 'POST', body: { id, assigned_to: mine } })).env!.code).toBe(0)
-    if (status === 'closed') expect((await api('/api/v1/tickets/close', { ...h, method: 'POST', body: { id } })).env!.code).toBe(0)
+    if (status === 'closed') {
+      expect((await api('/api/v1/tickets/transition', { ...h, method: 'POST', body: { id, to: 'in_progress' } })).env!.code).toBe(0)
+      expect((await api('/api/v1/tickets/close', { ...h, method: 'POST', body: { id } })).env!.code).toBe(0)
+    }
   }
 
   try {
@@ -66,6 +69,11 @@ test('S2 工作台冒烟：admin 登录 → 菜单渲染 → 状态卡与最近�
     await expect(page).toHaveURL(/#\/tickets\?status=open/)
     const statusSelect = page.locator('.filter-bar .el-select').nth(1)
     await expect(statusSelect).toContainText('待处理')
+    const focus = page.getByRole('button', { name: '表格聚焦', exact: true })
+    await focus.press('Enter')
+    await expect(page.getByRole('button', { name: '退出表格聚焦', exact: true })).toHaveAttribute('aria-pressed', 'true')
+    await page.keyboard.press('Escape')
+    await expect(page.getByRole('button', { name: '表格聚焦', exact: true })).toHaveAttribute('aria-pressed', 'false')
     await statusSelect.click()
     await page.getByRole('option', { name: '已关闭', exact: true }).click()
     await expect(statusSelect).toContainText('已关闭')
