@@ -16,6 +16,14 @@ describe('ticket identity wire contract', () => {
     }, { _silentError: true })
   })
 
+  it('keeps cancellation as an explicit null without a supervisor patch', async () => {
+    vi.mocked(request.post).mockResolvedValue(null as never)
+    await assignTicketApi('23', null)
+    expect(request.post).toHaveBeenCalledWith('/api/v1/tickets/assign', {
+      id: '23', assigned_to: null,
+    }, { _silentError: true })
+  })
+
   it('keeps recipient arrays exact beyond the JavaScript safe integer boundary', async () => {
     vi.mocked(request.post).mockResolvedValue({ cc: [] } as never)
     await addTicketCCApi({ ticket_id: '23', user_ids: ['9007199254740993', '9007199254740995'] })
@@ -26,9 +34,10 @@ describe('ticket identity wire contract', () => {
 
   it('keeps the supervisor selected during ticket creation as a string', async () => {
     vi.mocked(request.post).mockResolvedValue({ id: '23' } as never)
-    await createTicketApi({ type_code: 'audit', title: 'synthetic', org_id: '1', escalation_supervisor_id: '9007199254740993' })
+    const custom = { summary: 'synthetic', related: ['alpha', 'beta'], optional: null }
+    await createTicketApi({ type_code: 'audit', title: 'synthetic', org_id: '1', custom_data: custom, escalation_supervisor_id: '9007199254740993' })
     expect(request.post).toHaveBeenCalledWith('/api/v1/tickets', {
-      type_code: 'audit', title: 'synthetic', org_id: '1', escalation_supervisor_id: '9007199254740993',
+      type_code: 'audit', title: 'synthetic', org_id: '1', custom_data: custom, escalation_supervisor_id: '9007199254740993',
     }, { _silentError: true })
   })
 

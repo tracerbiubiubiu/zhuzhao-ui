@@ -7,6 +7,7 @@
  * Ticket 行无 version（乐观锁三件套=用户/组织/角色，工单除外）。
  */
 import request from '@vea/request'
+import type { components } from '@/api/__generated__/schema'
 
 /** 工单行（= model.Ticket 的 JSON 投影；assigned_to 可空——创建即未分派；
  * created_by_name/assignee_name 为 W4 后端回填字段（03 S9——real_name 优先/空回退
@@ -229,18 +230,12 @@ export async function getTicketTypeFieldsApi(typeCode: string): Promise<TicketTy
   return ((data as unknown as { fields?: TicketTypeFieldDef[] })?.fields ?? [])
 }
 
-/** 发起工单入参（CreateTicketRequest——custom_data 生成类型标 number[] 失真，按实况
- * 覆写为字段键值对象；assigned_to 拒收[W0 P0-5]前端发起不传） */
-export interface CreateTicketInput {
-  type_code: string
-  title: string
-  org_id: string
-  priority?: number
-  description?: string
-  template_code?: string
+type GeneratedCreateTicketInput = components['schemas']['github_com_tracerbiubiubiu_zhuzhao_internal_model.CreateTicketRequest']
+
+/** 发起沿generated契约；仍不暴露assigned_to。Swag无additionalProperties的
+ * RawMessage object生成Record<string,never>，只此自由字段做窄适配，不放宽其他schema。 */
+export type CreateTicketInput = Omit<GeneratedCreateTicketInput, 'assigned_to' | 'custom_data'> & {
   custom_data?: Record<string, unknown>
-  /** 催办上级·人工指定；与后端标量int64的字符串契约一致。 */
-  escalation_supervisor_id?: string
 }
 
 /** 创建成功返回完整 Ticket 对象（含 id/status/org_path 等——非 {id} 窄形，调用方按需解构） */
@@ -461,15 +456,25 @@ export async function closeTicketApi(id: string, comment?: string): Promise<void
   await request.post('/api/v1/tickets/close', { id, ...(comment ? { comment } : {}) }, { _silentError: true })
 }
 
-/** 分派/取消分派（assignedTo=null 取消分派；open→assigned/assigned→open 自动推状态；
- * assigned_to 用户存在性校验属后端随手项池——传错 ID 500 兜底，前端仅格式预检） */
-export async function assignTicketApi(id: string, assignedTo: string | null, escalationSupervisorId?: string): Promise<void> {
-  await request.post('/api/v1/tickets/assign', {
+type GeneratedAssignTicketInput = components['schemas']['github_com_tracerbiubiubiu_zhuzhao_internal_model.AssignTicketRequest']
+
+/** Swagger2的nullable生成边界仅在assigned_to补null；supervisor完全沿generated。 */
+export type AssignTicketInput = Omit<GeneratedAssignTicketInput, 'assigned_to'> & {
+  assigned_to?: GeneratedAssignTicketInput['assigned_to'] | null
+}
+
+/** 分派/取消分派；assignedTo=null取消分派，open/assigned按后端状态机推进。 */
+export async function assignTicketApi(
+  id: AssignTicketInput['id'],
+  assignedTo: NonNullable<AssignTicketInput['assigned_to']> | null,
+  escalationSupervisorId?: AssignTicketInput['escalation_supervisor_id'],
+): Promise<void> {
+  const input = {
     id,
     ...(assignedTo ? { assigned_to: assignedTo } : { assigned_to: null }),
-    // 与后端 json:",string" 同规；不能转 Number（小ID也400，大ID另会丢精度）。
     ...(escalationSupervisorId ? { escalation_supervisor_id: escalationSupervisorId } : {}),
-  }, { _silentError: true })
+  } satisfies AssignTicketInput
+  await request.post('/api/v1/tickets/assign', input, { _silentError: true })
 }
 
 /** 删除工单（软删） */

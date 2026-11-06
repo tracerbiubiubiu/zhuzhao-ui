@@ -4819,7 +4819,7 @@ export interface components {
              *     （内嵌图 ticket_richtext 不可经该端点删——随工单生命周期，A.7）
              */
             attachments?: string[];
-            custom_data?: number[];
+            custom_data?: Record<string, never>;
             description?: string;
             /**
              * @description EscalationSupervisor 催办上级·人工指定（S10 B10-4——dd §31 基线档；可后续 Assign 改）
@@ -5151,7 +5151,7 @@ export interface components {
              *     值为 null 的键删除（清空字段）；合并后整体按类型字段 schema G2 重校验；仅非终态可改。
              *     字段级 diff（D20 changes[]）随 S6 B6-1 事件面统一落地——请求体已入通用审计行。
              */
-            custom_data?: number[];
+            custom_data?: Record<string, never>;
             description?: string;
             /** @example 0 */
             id: string;

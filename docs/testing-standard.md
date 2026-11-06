@@ -102,3 +102,7 @@ vite webServer 自动拉起（Playwright 探测 127.0.0.1:4000——strictPort �
 原失败必须保留，不能失败后盲重试或放宽服务端规则。S2密集夹具完成、S3a夹具完成及APIassign后强制reload前，
 用`waitUserRateBudget`预留40/20秒+100ms完整补桶窗。该节奏有运行配置与request_id时序证据；
 若测试栈限流配置变化，须重新核预算。FE4零错误断言保持，不把所有429加入白名单。
+
+## 工单请求契约窄接线（2026-11-06 审计修复）
+
+工单域本批仅Create/Assign两路入参绑定generated。Create保留不暴露assigned_to的发起约束；后端CustomData是动态键值对象，但Swag仅输出object、无additionalProperties，生成器将其收成Record<string,never>，因此仅Create.custom_data适配Record<string,unknown>。Assign仅assigned_to补null以保留取消分派，supervisor等字段完全沿生成类型，不单独覆写。两处supervisor分别string→boolean必须令真实页面与请求单测编译失败；正向同时核字符串大ID、自由对象与显式null取消。其余工单入参/响应仍未全量接线；此静态契约不改变无字段定义类型的既有后端G2验证边界。
