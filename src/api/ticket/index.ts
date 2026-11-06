@@ -237,8 +237,8 @@ export interface CreateTicketInput {
   description?: string
   template_code?: string
   custom_data?: Record<string, unknown>
-  /** 催办上级·人工指定（S10 B10-4——dd §31 基线档；数字——[]int64 不可 string 化） */
-  escalation_supervisor_id?: number
+  /** 催办上级·人工指定；与后端标量int64的字符串契约一致。 */
+  escalation_supervisor_id?: string
 }
 
 /** 创建成功返回完整 Ticket 对象（含 id/status/org_path 等——非 {id} 窄形，调用方按需解构） */
@@ -304,8 +304,8 @@ export async function listTicketCCApi(id: string): Promise<TicketCCRow[]> {
   return ((data as unknown as { cc?: TicketCCRow[] })?.cc ?? [])
 }
 
-/** 添加抄送（POST /tickets/cc——仅本人=读可见；含他人=update 权；幂等；user_ids 出站为数字数组） */
-export async function addTicketCCApi(input: { ticket_id: string; user_ids: number[] }): Promise<TicketCCRow[]> {
+/** 添加抄送（POST /tickets/cc——仅本人=读可见；含他人=update 权；幂等；ID数组元素保持精确字符串） */
+export async function addTicketCCApi(input: { ticket_id: string; user_ids: string[] }): Promise<TicketCCRow[]> {
   const data = await request.post('/api/v1/tickets/cc', input, { _silentError: true })
   return ((data as unknown as { cc?: TicketCCRow[] })?.cc ?? [])
 }
@@ -465,8 +465,8 @@ export async function assignTicketApi(id: string, assignedTo: string | null, esc
   await request.post('/api/v1/tickets/assign', {
     id,
     ...(assignedTo ? { assigned_to: assignedTo } : { assigned_to: null }),
-    // 催办上级·人工指定（S10 B10-4——dd §31 基线档；nil=保持不动；数字出站）
-    ...(escalationSupervisorId ? { escalation_supervisor_id: Number(escalationSupervisorId) } : {}),
+    // 与后端 json:",string" 同规；不能转 Number（小ID也400，大ID另会丢精度）。
+    ...(escalationSupervisorId ? { escalation_supervisor_id: escalationSupervisorId } : {}),
   }, { _silentError: true })
 }
 

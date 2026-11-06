@@ -257,7 +257,7 @@ async function handleSubmit() {
       priority: form.priority,
       description: form.description || undefined,
       custom_data: Object.keys(form.custom).length ? form.custom : undefined,
-      ...(form.escalationSupervisor ? { escalation_supervisor_id: Number(form.escalationSupervisor) } : {}),
+      ...(form.escalationSupervisor ? { escalation_supervisor_id: form.escalationSupervisor } : {}),
     })
     richtextRefs.value.forEach((editor) => editor.clearDraft())
     // 发起页在 keep-alive 中存活；成功后复原表单，返回发起页不能继承已提交内容。

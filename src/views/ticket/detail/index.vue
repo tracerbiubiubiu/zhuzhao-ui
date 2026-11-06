@@ -195,7 +195,7 @@ async function refreshCC() {
   await queryClient.invalidateQueries({ queryKey: ['ticket', 'cc'] })
 }
 
-async function doAddCC(userIds: number[]) {
+async function doAddCC(userIds: string[]) {
   ccSaving.value = true
   try {
     await addTicketCCApi({ ticket_id: ticketId.value, user_ids: userIds })
@@ -212,7 +212,7 @@ async function doAddCC(userIds: number[]) {
 
 function addCC() {
   if (!ccForm.userId) return
-  void doAddCC([Number(ccForm.userId)])
+  void doAddCC([ccForm.userId])
 }
 
 /** 抄送我：读可见面动作（无需 update 权） */
@@ -223,7 +223,7 @@ function addSelfCC() {
     ElMessage.info('你已在抄送列表中')
     return
   }
-  void doAddCC([Number(me)])
+  void doAddCC([me])
 }
 
 async function removeCC(cc: TicketCCRow) {

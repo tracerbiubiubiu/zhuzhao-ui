@@ -16,6 +16,7 @@
  */
 import { computed, nextTick, reactive, ref, watch} from 'vue'
 import { useTableFit } from '@vea/hooks'
+import { compareInt64Desc } from '@/utils/int64'
 import {
   ElAlert, ElButton, ElCard, ElCheckbox, ElDialog, ElForm, ElFormItem, ElInput, ElInputNumber,
   ElMessage, ElPagination, ElMessageBox, ElOption, ElRadioButton, ElRadioGroup, ElSelect, ElSwitch, ElTable, ElTableColumn, ElTabPane, ElTabs, ElTag,
@@ -65,7 +66,7 @@ const filteredTicketTypes = computed(() =>
     if (typeStatusFilter.value === 'off' && t.is_active) return false
     return true
   // id 降序（新建在前——分页后新建项必在首页可见，E2E/用户同理）
-  })).sort((a, b) => Number(b.id) - Number(a.id)),
+  })).sort((a, b) => compareInt64Desc(a.id, b.id)),
 )
 
 // 客户端分页（2026-10-29 击穿阈值整改：51 行破「全量内滚 ≤50」线——同 al/types 批）

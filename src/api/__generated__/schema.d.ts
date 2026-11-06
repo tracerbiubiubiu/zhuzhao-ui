@@ -4710,7 +4710,7 @@ export interface components {
         "github_com_tracerbiubiubiu_zhuzhao_internal_model.AddTicketCCRequest": {
             /** @example 0 */
             ticket_id: string;
-            user_ids: number[];
+            user_ids: string[];
         };
         "github_com_tracerbiubiubiu_zhuzhao_internal_model.AddTicketTagsRequest": {
             tags: string[];
