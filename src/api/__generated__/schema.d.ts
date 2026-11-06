@@ -5005,8 +5005,8 @@ export interface components {
             code: string;
             fields?: components["schemas"]["github_com_tracerbiubiubiu_zhuzhao_internal_model.TicketTypeFieldInput"][];
             /**
-             * @description Version 可选乐观锁：以父类型 ticket_types.version 做 CAS；nil = 不做 CAS。
-             *     须 > 0，否则 400。
+             * @description Version 为可选客户端期望版本；缺省时使用旧字段预检前的父类型快照CAS。
+             *     预检后配置改变返回409；非nil须>0，否则400。
              */
             version?: number;
         };
@@ -5185,8 +5185,8 @@ export interface components {
             transition_meta?: number[];
             transitions?: number[];
             /**
-             * @description Version 可选乐观锁：nil = 不做 CAS（保持旧 patch 行为）；非 nil = 命中
-             *     ticket_types.version 才写，否则 409。须 > 0，否则 400。
+             * @description Version 为可选客户端期望版本；非nil须命中ticket_types.version，否则409。
+             *     缺省时图/meta写由服务端快照CAS；普通属性patch兼容原路径。须>0，否则400。
              */
             version?: number;
         };
