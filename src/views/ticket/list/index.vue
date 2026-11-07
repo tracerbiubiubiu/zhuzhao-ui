@@ -11,7 +11,7 @@
  * - 新建入口（ticket:create）→ /tickets/new（发起表单页=form-create 渲染器）
  */
 import { formatDateTime } from '@/utils/datetime'
-import { reactive, ref } from 'vue'
+import { computed, onActivated, reactive, ref } from 'vue'
 import {
   ElButton, ElCard, ElCheckbox, ElDatePicker, ElInput, ElLink,
   ElOption, ElSelect, ElTag, ElRadioButton, ElRadioGroup} from 'element-plus'
@@ -30,6 +30,7 @@ import { usePermission } from '@/common/auth'
 defineOptions({ name: 'ticket_list' })
 
 const router = useRouter()
+const route = useRoute()
 const { hasPerm } = usePermission()
 const tableRef = ref<InstanceType<typeof ProTable>>()
 
@@ -39,6 +40,7 @@ const search = reactive({
   keyword: '',
   type_code: '',
   status: '',
+  excludeStatuses: '',
   priority: '' as '' | number,
   mineHandle: false, // assignee=me（仅字面量 me，后端解析为当前用户）
   mineCreated: false, // created_by=me
@@ -46,19 +48,49 @@ const search = reactive({
 })
 
 // URL 参数预填（首页统计卡/外部入口跳转——FE4 配套基础设施）：白名单键，非法值忽略。
-// 支持 status/assignee=me/keyword/type_code。
-{
-  const q = useRoute().query
-  if (typeof q.status === 'string' && q.status) search.status = q.status
-  if (q.assignee === 'me') search.mineHandle = true
-  if (q.created_by === 'me') search.mineCreated = true
-  if (typeof q.keyword === 'string' && q.keyword) search.keyword = q.keyword
-  if (typeof q.type_code === 'string' && q.type_code) search.type_code = q.type_code
-  if (typeof q.tag === 'string' && q.tag) search.tag = q.tag
+// 状态三种模式互斥，首页/角标各自兑现其服务端统计口径。
+function applyRouteFilters() {
+  const q = route.query
+  // 普通无 query 页签仍保留用户筛选；显式深链每次激活都重新兑现其筛选口径。
+  // AppView 按 fullPath 缓存，手动改筛选后再次点同一首页卡会复用该实例。
+  if (!['status', 'statuses', 'exclude_statuses', 'assignee', 'created_by', 'keyword', 'type_code', 'tag'].some((key) => key in q)) return
+  Object.assign(search, {
+    status: typeof q.exclude_statuses === 'string' ? '' : (typeof q.statuses === 'string' ? q.statuses : (typeof q.status === 'string' ? q.status : '')),
+    excludeStatuses: typeof q.exclude_statuses === 'string' ? q.exclude_statuses : '',
+    mineHandle: q.assignee === 'me',
+    mineCreated: q.created_by === 'me',
+    keyword: typeof q.keyword === 'string' ? q.keyword : '',
+    type_code: typeof q.type_code === 'string' ? q.type_code : '',
+    tag: typeof q.tag === 'string' ? q.tag : '',
+    priority: '',
+  })
 }
+applyRouteFilters()
 
 /** 创建日期范围 [from, to]（YYYY-MM-DD）——快捷段+自定义（2026-10-29 统一形态批，composable） */
 const { preset: datePreset, range: dateRange, apply: applyDatePreset, reset: presetReset } = useDatePresetRange()
+onActivated(() => {
+  if (route.path !== '/tickets') return
+  applyRouteFilters()
+  if (['status', 'statuses', 'exclude_statuses', 'assignee', 'created_by', 'keyword', 'type_code', 'tag'].some((key) => key in route.query)) presetReset()
+})
+
+// 首页两状态与角标非终态均走后端过滤；选择普通单状态或清空时退出集合模式。
+const statusSelection = computed({
+  get: () => search.excludeStatuses ? `exclude:${search.excludeStatuses}` : search.status,
+  set: (value: string | undefined) => {
+    const selected = value ?? ''
+    search.excludeStatuses = selected.startsWith('exclude:') ? selected.slice(8) : ''
+    search.status = selected.startsWith('exclude:') ? '' : selected
+  },
+})
+const statusFilter = () => search.excludeStatuses
+  ? { exclude_statuses: search.excludeStatuses }
+  : (search.status.includes(',') ? { statuses: search.status } : (search.status ? { status: search.status } : {}))
+const statusSetLabel = computed(() => search.excludeStatuses
+  ? `排除 ${search.excludeStatuses.split(',').map((s) => STATUS_LABEL[s] ?? s).join(' / ')}`
+  : (search.status === 'assigned,in_progress' ? '待办（已分派 / 进行中）'
+    : search.status.split(',').map((s) => STATUS_LABEL[s] ?? s).join(' / ')))
 
 // 筛选即时生效（筛选栏配方触发口径：全部控件变更即查，文本防抖 300ms 收敛；
 // URL 预填已在声明期完成，不经过本 watch）
@@ -76,7 +108,7 @@ async function onExport() {
     const blob = await exportTicketsApi({
       ...(search.keyword.trim() ? { keyword: search.keyword.trim() } : {}),
       ...(search.type_code ? { type_code: search.type_code } : {}),
-      ...(search.status ? { status: search.status } : {}),
+      ...statusFilter(),
       ...(search.priority !== '' ? { priority: search.priority } : {}),
       ...(search.mineHandle ? { assignee: 'me' as const } : {}),
       ...(search.mineCreated ? { created_by: 'me' as const } : {}),
@@ -101,6 +133,7 @@ function onReset() {
   search.keyword = ''
   search.type_code = ''
   search.status = ''
+  search.excludeStatuses = ''
   search.priority = ''
   search.mineHandle = false
   search.mineCreated = false
@@ -115,7 +148,7 @@ function fetcher(params: { page: number; page_size: number }) {
     page_size: params.page_size,
     ...(search.keyword.trim() ? { keyword: search.keyword.trim() } : {}),
     ...(search.type_code ? { type_code: search.type_code } : {}),
-    ...(search.status ? { status: search.status } : {}),
+    ...statusFilter(),
     ...(search.priority !== '' ? { priority: search.priority } : {}),
     ...(search.mineHandle ? { assignee: 'me' as const } : {}),
     ...(search.mineCreated ? { created_by: 'me' as const } : {}),
@@ -176,7 +209,8 @@ function typeLabel(code: string): string {
               </el-select>
             </div>
             <div>
-              <el-select v-model="search.status" placeholder="全部" clearable class="!w-[110px]">
+              <el-select v-model="statusSelection" :title="statusSetLabel || '全部状态'" placeholder="全部" clearable :class="search.excludeStatuses || search.status.includes(',') ? '!w-[220px]' : '!w-[110px]'">
+                <el-option v-if="search.excludeStatuses || search.status.includes(',')" :label="statusSetLabel" :value="statusSelection" />
                 <el-option v-for="s in TICKET_STATUSES" :key="s.value" :label="s.label" :value="s.value" />
               </el-select>
             </div>

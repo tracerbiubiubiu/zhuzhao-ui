@@ -78,8 +78,11 @@ test('场景描述', async ({ page }) => {
 - **禁 `.el-form-item` 过滤定位**（FilterBar 批后 form-item 已 div 化）——按
   placeholder（`getByPlaceholder('工号，如 E000001')`）/ data-testid / 控件文本
   （`.filter-bar` scope）/ 列锚（`columnheader`）定位；
-- el-dropdown 菜单 teleport 到 body——`page.getByRole('option', { name })` +
-  visible 过滤；getByText/ByRole name 均**子串匹配**——空态文案勿含 Tab 名子串；
+- el-dropdown 菜单 teleport 到 body——用触发按钮键盘Enter打开，以
+  `page.getByRole('menuitem', { name, exact: true })` + visible 过滤；远程Select按combobox的
+  `aria-controls`限定当前listbox，等目标option可见后用ArrowDown/Enter选择，防命中过期传送层；
+  getByText/ByRole name 默认**子串匹配**——空态文案勿含 Tab 名子串；
+- 生产构建的富文本断言看预览DOM、出站请求及详情回读，不读取`__vueParentComponent`等开发期内部状态；
 - 动态路由页面 `goto` 后 `reload()` 一次（冷启动保险）。
 
 **造数/清理**：
@@ -91,3 +94,15 @@ test('场景描述', async ({ page }) => {
 **运行前提**：五栈在位（app@33333/activelist@18081/taskrunner@18080/PG/Redis）+
 vite webServer 自动拉起（Playwright 探测 127.0.0.1:4000——strictPort 已启，
 端口被占会显式失败不静默漂移）。串行 workers=1（共享 dev 栈 DB 防互踩）。
+
+## 密集夹具与限流预算（2026-11-06 审计复验）
+
+标准栈`rate_limit.default`为20rps/40burst，登录后按user_id共享，换device/token不能隔离。
+真实全量曾在同一秒叠加6个Node夹具/assign和35个浏览器请求，reload的menus被429/10007拒绝；
+原失败必须保留，不能失败后盲重试或放宽服务端规则。S2密集夹具完成、S3a夹具完成及APIassign后强制reload前，
+用`waitUserRateBudget`预留40/20秒+100ms完整补桶窗。该节奏有运行配置与request_id时序证据；
+若测试栈限流配置变化，须重新核预算。FE4零错误断言保持，不把所有429加入白名单。
+
+## 工单请求契约窄接线（2026-11-06 审计修复）
+
+工单域本批仅Create/Assign两路入参绑定generated。Create保留不暴露assigned_to的发起约束；后端CustomData是动态键值对象，但Swag仅输出object、无additionalProperties，生成器将其收成Record<string,never>，因此仅Create.custom_data适配Record<string,unknown>。Assign仅assigned_to补null以保留取消分派，supervisor等字段完全沿生成类型，不单独覆写。两处supervisor分别string→boolean必须令真实页面与请求单测编译失败；正向同时核字符串大ID、自由对象与显式null取消。其余工单入参/响应仍未全量接线；此静态契约不改变无字段定义类型的既有后端G2验证边界。

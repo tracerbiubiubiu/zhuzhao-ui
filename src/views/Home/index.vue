@@ -114,7 +114,9 @@ function goDetail(id: number | string) {
     <div class="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
     <el-row :gutter="16" class="mb-4">
       <el-col v-for="card in statusCardDefs" :key="card.key" :span="6">
-        <el-card shadow="hover" class="cursor-pointer" @click="goTickets({ status: card.key })">
+        <el-card shadow="hover" class="cursor-pointer home-stat-link" role="link" tabindex="0"
+          :aria-label="`查看${card.label}工单`"
+          @click="goTickets({ status: card.key })" @keydown.enter="goTickets({ status: card.key })">
           <div class="flex items-center justify-between">
             <div>
               <div class="text-2xl font-bold" :style="{ color: card.color }">
@@ -131,20 +133,22 @@ function goDetail(id: number | string) {
     <!-- 我的待办/已办（W4 P1-c assignee=me 点亮） -->
     <el-row :gutter="16" class="mb-4">
       <el-col :span="12">
-        <el-card shadow="hover" class="cursor-pointer" @click="goTickets({ assignee: 'me' })">
+        <el-card shadow="hover" class="cursor-pointer home-stat-link" role="link" tabindex="0"
+          aria-label="查看我的待办" @click="goTickets({ assignee: 'me', statuses: 'assigned,in_progress' })" @keydown.enter="goTickets({ assignee: 'me', statuses: 'assigned,in_progress' })">
           <div class="flex items-center justify-between">
             <div>
               <div class="text-2xl font-bold" style="color: var(--el-color-danger)">
                 {{ loading ? '—' : myTodo }}
               </div>
-              <div class="text-sm text-gray-500 mt-1">我的待办（分派给我，未关闭）</div>
+              <div class="text-sm text-gray-500 mt-1">我的待办（分派给我，已分派 / 进行中）</div>
             </div>
             <span class="text-3xl">📋</span>
           </div>
         </el-card>
       </el-col>
       <el-col :span="12">
-        <el-card shadow="hover" class="cursor-pointer" @click="goTickets({ assignee: 'me', status: 'closed' })">
+        <el-card shadow="hover" class="cursor-pointer home-stat-link" role="link" tabindex="0"
+          aria-label="查看我的已办" @click="goTickets({ assignee: 'me', status: 'closed' })" @keydown.enter="goTickets({ assignee: 'me', status: 'closed' })">
           <div class="flex items-center justify-between">
             <div>
               <div class="text-2xl font-bold" style="color: var(--el-color-success)">
@@ -188,6 +192,10 @@ function goDetail(id: number | string) {
 </template>
 
 <style scoped>
+.home-stat-link:focus-visible {
+  outline: 2px solid var(--el-color-primary);
+  outline-offset: 2px;
+}
 /* 最近工单行可点进详情 */
 :deep(.home-recent-row) {
   cursor: pointer;

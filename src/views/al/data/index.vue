@@ -173,6 +173,7 @@ function toFormFieldValue(f: AlFieldDef, doc?: AlDataDoc): { value: unknown; tex
 }
 
 function openCreate() {
+  if (!selectedDef.value || isDeprecated.value) return
   formIsCreate.value = true
   formError.value = ''
   formData.value = {}
@@ -522,10 +523,10 @@ useTableFit(dataTable, () => list.value)
           <el-button size="small" @click="resetFilt">重置</el-button>
         </div>
 
-        <el-empty v-if="!listLoading && !list.length" description="暂无数据">
+        <el-empty v-if="selectedType && !listLoading && !list.length" description="暂无数据">
           <el-button v-if="!isDeprecated" v-permission="'activelist:data:write'" type="primary" @click="openCreate">写入首条</el-button>
         </el-empty>
-        <template v-else>
+        <template v-else-if="selectedType">
           <!-- min-h-0 flex-1 + height 100%：表格吃满剩余视口内部滚动（fill 链，与 ProTable 同款） -->
           <div class="min-h-0 flex-initial">
             <el-table ref="dataTable" :data="list" v-loading="listLoading" row-key="id" :row-class-name="rowClass" height="100%" @row-click="openDetail">

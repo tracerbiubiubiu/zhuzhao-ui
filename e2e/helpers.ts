@@ -45,6 +45,13 @@ interface ApiOptions {
   body?: unknown
 }
 
+/** 标准栈同一user_id共享20rps/40burst桶；夹具与浏览器、不同device/token也共用。
+ * 仅在密集夹具完成或API分派后强制reload前，预留完整补桶窗40/20s+100ms。
+ * 不是失败后重试；不改变真实限流，改测试栈规则时须同批核此预算。 */
+export async function waitUserRateBudget(): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, 2100))
+}
+
 /** 裸 API 调用（Node fetch；信封与 HTTP 状态原样透出，由调用方分流）。
  *  仅 429 退避重试一次：串行 spec 密集预置（登录+profile+orgs+建单+分派…）会打穿每用户 20rps/burst 40 桶
  *  （p5 五 spec 连跑实证 http=429 code=10007）；桶 1s 回填，退避 1.1s 足够；其他状态码原样透出不掩盖缺陷。 */

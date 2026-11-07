@@ -6,6 +6,7 @@
  * 待办 tab 数据源=S10 角标同源（assignee=me 列表——状态派生非快照）。
  */
 import { formatDateTime } from '@/utils/datetime'
+import { compareInt64Desc } from '@/utils/int64'
 import { computed, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import {
@@ -65,7 +66,7 @@ const todosQuery = useQuery({
       fetchTop({ status: 'in_progress', assignee: 'me' }, budget),
     ])
     // 严格弱序比较器（相等返回 0）；归并键=后端排序键 id DESC
-    const merged = [...assigned, ...inProgress].sort((a, b) => Number(b.id) - Number(a.id))
+    const merged = [...assigned, ...inProgress].sort((a, b) => compareInt64Desc(a.id, b.id))
     const start = (todoPage.value - 1) * TODO_PAGE_SIZE
     return { list: merged.slice(start, start + TODO_PAGE_SIZE), total: assignedTotal + inProgressTotal }
   },

@@ -195,7 +195,7 @@ async function refreshCC() {
   await queryClient.invalidateQueries({ queryKey: ['ticket', 'cc'] })
 }
 
-async function doAddCC(userIds: number[]) {
+async function doAddCC(userIds: string[]) {
   ccSaving.value = true
   try {
     await addTicketCCApi({ ticket_id: ticketId.value, user_ids: userIds })
@@ -212,7 +212,7 @@ async function doAddCC(userIds: number[]) {
 
 function addCC() {
   if (!ccForm.userId) return
-  void doAddCC([Number(ccForm.userId)])
+  void doAddCC([ccForm.userId])
 }
 
 /** 抄送我：读可见面动作（无需 update 权） */
@@ -223,7 +223,7 @@ function addSelfCC() {
     ElMessage.info('你已在抄送列表中')
     return
   }
-  void doAddCC([Number(me)])
+  void doAddCC([me])
 }
 
 async function removeCC(cc: TicketCCRow) {
@@ -581,7 +581,7 @@ async function submitRelation() {
 
     <el-card shadow="hover" class="mb-4">
       <template #header><span class="font-semibold">描述</span></template>
-      <pre class="whitespace-pre-wrap text-sm">{{ ticket?.description || '（无描述）' }}</pre>
+      <pre class="ticket-description whitespace-pre-wrap text-sm" data-testid="ticket-description">{{ ticket?.description || '（无描述）' }}</pre>
     </el-card>
 
     <!-- B1-5 自定义字段回显（01 号 §3.5——"填了看不见"痛点收口件） -->
@@ -811,6 +811,7 @@ async function submitRelation() {
 </template>
 
 <style scoped>
+.ticket-description { overflow-wrap: anywhere; }
 .richtext-view :deep(img) { max-width: 100%; border-radius: 4px; }
 .richtext-view :deep(code) { background: var(--el-fill-color-light); padding: 1px 4px; border-radius: 2px; font-size: 0.9em; }
 .richtext-view :deep(pre) { background: var(--el-fill-color-light); padding: 8px; border-radius: 4px; overflow-x: auto; }

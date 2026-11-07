@@ -13,7 +13,7 @@
 import type { RouteRecordRaw } from 'vue-router'
 import NProgress from 'nprogress'
 import router from './router'
-import { isLoggedIn } from '@/common/auth/tokenStorage'
+import { isLoggedIn, getSessionGeneration, SessionChangedError } from '@/common/auth/tokenStorage'
 import { NO_REDIRECT_WHITE_LIST } from './constants'
 import { checkRoutePermission } from './router/routePermission'
 import { classifySessionLoadError } from './router/sessionError'
@@ -106,8 +106,10 @@ export const setupPermission = () => {
 
     // 3. session 未加载（首跳/刷新）→ 三件并行
     if (!userStore.sessionLoaded) {
+      const generation = getSessionGeneration()
       try {
         await userStore.loadSession()
+        if (generation !== getSessionGeneration()) { next(false); return }
         await ensureDynamicRoutes()
         // 重新导航到目标（addRoute 后路由表已变，需 replace 触发匹配）。
         // ⚠ 必须按 path 重导航：`{...to}` 会保留 to.name——若初始解析在动态路由
@@ -116,6 +118,7 @@ export const setupPermission = () => {
         next({ path: to.fullPath, replace: true })
         return
       } catch (err) {
+        if (err instanceof SessionChangedError || generation !== getSessionGeneration()) { next(false); return }
         // §3.3 分段（classifySessionLoadError，与请求层 refreshAccessToken 同一哲学）：
         //  - 403+20007 → 跳改密页，绝不清会话（resetState 连 token 一起清，改密接口会 401）
         //  - 无响应/5xx/429 → 保留会话（axios 的 5xx **带** response，旧实现「有响应=终态」误清）

@@ -29,6 +29,8 @@ test('P5-S2：画布/JSON 双模式回显 + 添加孤立状态触发图检查告
     await row.getByRole('button', { name: '编辑' }).click()
     const dlg = page.locator('.el-dialog').filter({ hasText: '编辑类型' })
     await expect(dlg).toBeVisible()
+    await expect(dlg.getByText('状态图决定可选流转；实际可执行动作还受权限、转换条件与校验器限制。审批节点能力尚未启用。')).toBeVisible()
+    await expect(dlg).not.toContainText('三态经 API 不可达')
 
     // 画布态：默认六状态图干净 → 图检查通过
     await expect(dlg.getByTestId('graph-mode')).toBeVisible()

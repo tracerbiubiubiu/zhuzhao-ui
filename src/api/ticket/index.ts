@@ -7,6 +7,7 @@
  * Ticket 行无 version（乐观锁三件套=用户/组织/角色，工单除外）。
  */
 import request from '@vea/request'
+import type { components } from '@/api/__generated__/schema'
 
 /** 工单行（= model.Ticket 的 JSON 投影；assigned_to 可空——创建即未分派；
  * created_by_name/assignee_name 为 W4 后端回填字段（03 S9——real_name 优先/空回退
@@ -42,6 +43,10 @@ export interface TicketRow {
 export interface TicketListQuery {
   type_code?: string
   status?: string
+  /** 多状态集合，逗号分隔，与 status/exclude_statuses 互斥。 */
+  statuses?: string
+  /** 排除状态集合；角标非终态含自定义状态，列表与导出同源过滤。 */
+  exclude_statuses?: string
   priority?: number
   assignee?: 'me'
   created_by?: 'me'
@@ -225,18 +230,12 @@ export async function getTicketTypeFieldsApi(typeCode: string): Promise<TicketTy
   return ((data as unknown as { fields?: TicketTypeFieldDef[] })?.fields ?? [])
 }
 
-/** 发起工单入参（CreateTicketRequest——custom_data 生成类型标 number[] 失真，按实况
- * 覆写为字段键值对象；assigned_to 拒收[W0 P0-5]前端发起不传） */
-export interface CreateTicketInput {
-  type_code: string
-  title: string
-  org_id: string
-  priority?: number
-  description?: string
-  template_code?: string
+type GeneratedCreateTicketInput = components['schemas']['github_com_tracerbiubiubiu_zhuzhao_internal_model.CreateTicketRequest']
+
+/** 发起沿generated契约；仍不暴露assigned_to。Swag无additionalProperties的
+ * RawMessage object生成Record<string,never>，只此自由字段做窄适配，不放宽其他schema。 */
+export type CreateTicketInput = Omit<GeneratedCreateTicketInput, 'assigned_to' | 'custom_data'> & {
   custom_data?: Record<string, unknown>
-  /** 催办上级·人工指定（S10 B10-4——dd §31 基线档；数字——[]int64 不可 string 化） */
-  escalation_supervisor_id?: number
 }
 
 /** 创建成功返回完整 Ticket 对象（含 id/status/org_path 等——非 {id} 窄形，调用方按需解构） */
@@ -245,8 +244,8 @@ export async function createTicketApi(input: CreateTicketInput): Promise<TicketR
   return data as unknown as TicketRow
 }
 
-/** 工单状态（03 S11：六态；in_progress/pending_verify/rejected 经 API 流转不可达——
- * 列表筛选仍可列（历史数据/关闭前曾流转），流转按钮只做分派/取消/关闭/更新/删除 */
+/** 常见状态筛选标签。Phase5 S3a已提供配置流转入口；实际可执行动作由后端
+ * available-transitions按类型图、权限、条件与校验器决定。审批节点仍属S3b。 */
 export const TICKET_STATUSES: Array<{ value: string; label: string }> = [
   { value: 'open', label: '待处理' },
   { value: 'assigned', label: '已分派' },
@@ -302,8 +301,8 @@ export async function listTicketCCApi(id: string): Promise<TicketCCRow[]> {
   return ((data as unknown as { cc?: TicketCCRow[] })?.cc ?? [])
 }
 
-/** 添加抄送（POST /tickets/cc——仅本人=读可见；含他人=update 权；幂等；user_ids 出站为数字数组） */
-export async function addTicketCCApi(input: { ticket_id: string; user_ids: number[] }): Promise<TicketCCRow[]> {
+/** 添加抄送（POST /tickets/cc——仅本人=读可见；含他人=update 权；幂等；ID数组元素保持精确字符串） */
+export async function addTicketCCApi(input: { ticket_id: string; user_ids: string[] }): Promise<TicketCCRow[]> {
   const data = await request.post('/api/v1/tickets/cc', input, { _silentError: true })
   return ((data as unknown as { cc?: TicketCCRow[] })?.cc ?? [])
 }
@@ -457,15 +456,25 @@ export async function closeTicketApi(id: string, comment?: string): Promise<void
   await request.post('/api/v1/tickets/close', { id, ...(comment ? { comment } : {}) }, { _silentError: true })
 }
 
-/** 分派/取消分派（assignedTo=null 取消分派；open→assigned/assigned→open 自动推状态；
- * assigned_to 用户存在性校验属后端随手项池——传错 ID 500 兜底，前端仅格式预检） */
-export async function assignTicketApi(id: string, assignedTo: string | null, escalationSupervisorId?: string): Promise<void> {
-  await request.post('/api/v1/tickets/assign', {
+type GeneratedAssignTicketInput = components['schemas']['github_com_tracerbiubiubiu_zhuzhao_internal_model.AssignTicketRequest']
+
+/** Swagger2的nullable生成边界仅在assigned_to补null；supervisor完全沿generated。 */
+export type AssignTicketInput = Omit<GeneratedAssignTicketInput, 'assigned_to'> & {
+  assigned_to?: GeneratedAssignTicketInput['assigned_to'] | null
+}
+
+/** 分派/取消分派；assignedTo=null取消分派，open/assigned按后端状态机推进。 */
+export async function assignTicketApi(
+  id: AssignTicketInput['id'],
+  assignedTo: NonNullable<AssignTicketInput['assigned_to']> | null,
+  escalationSupervisorId?: AssignTicketInput['escalation_supervisor_id'],
+): Promise<void> {
+  const input = {
     id,
     ...(assignedTo ? { assigned_to: assignedTo } : { assigned_to: null }),
-    // 催办上级·人工指定（S10 B10-4——dd §31 基线档；nil=保持不动；数字出站）
-    ...(escalationSupervisorId ? { escalation_supervisor_id: Number(escalationSupervisorId) } : {}),
-  }, { _silentError: true })
+    ...(escalationSupervisorId ? { escalation_supervisor_id: escalationSupervisorId } : {}),
+  } satisfies AssignTicketInput
+  await request.post('/api/v1/tickets/assign', input, { _silentError: true })
 }
 
 /** 删除工单（软删） */

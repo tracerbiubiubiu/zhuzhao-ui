@@ -172,7 +172,7 @@ export interface paths {
                     end?: string;
                     /** @description 工号 */
                     employee_no?: string;
-                    /** @description HTTP 方法（GET/POST/PUT/DELETE 等） */
+                    /** @description HTTP 方法（单值或逗号分隔多值，如 GET,POST） */
                     method?: string;
                 };
                 header?: never;
@@ -2135,6 +2135,47 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/system/settings/reset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 恢复默认（删除运行时覆盖回出厂值；幂等） */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            /** @description 设置键 */
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["github_com_tracerbiubiubiu_zhuzhao_internal_model.ResetSettingRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["response.Response"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/system/settings/update": {
         parameters: {
             query?: never;
@@ -2629,7 +2670,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** 删除工单类型（有工单禁删 → 409） */
+        /** 删除工单类型（有工单/模板引用禁删 → 409） */
         post: {
             parameters: {
                 query?: never;
@@ -2877,6 +2918,10 @@ export interface paths {
                     type_code?: string;
                     /** @description 工单状态 */
                     status?: string;
+                    /** @description 状态集合，逗号分隔，与status互斥（例assigned,in_progress） */
+                    statuses?: string;
+                    /** @description 排除状态集合，逗号分隔，与status/statuses互斥 */
+                    exclude_statuses?: string;
                     /** @description 优先级（1紧急/2高/3中/4低） */
                     priority?: number;
                     /** @description 处理人过滤，仅支持 me（当前用户——工作台待办/已办卡数据源） */
@@ -3322,6 +3367,10 @@ export interface paths {
                     type_code?: string;
                     /** @description 工单状态 */
                     status?: string;
+                    /** @description 状态集合，逗号分隔，与status互斥（例assigned,in_progress） */
+                    statuses?: string;
+                    /** @description 排除状态集合，逗号分隔，与status/statuses互斥 */
+                    exclude_statuses?: string;
                     /** @description 优先级 */
                     priority?: number;
                     /** @description 标签（S10 B10-2） */
@@ -4665,7 +4714,7 @@ export interface components {
         "github_com_tracerbiubiubiu_zhuzhao_internal_model.AddTicketCCRequest": {
             /** @example 0 */
             ticket_id: string;
-            user_ids: number[];
+            user_ids: string[];
         };
         "github_com_tracerbiubiubiu_zhuzhao_internal_model.AddTicketTagsRequest": {
             tags: string[];
@@ -4770,7 +4819,7 @@ export interface components {
              *     （内嵌图 ticket_richtext 不可经该端点删——随工单生命周期，A.7）
              */
             attachments?: string[];
-            custom_data?: number[];
+            custom_data?: Record<string, never>;
             description?: string;
             /**
              * @description EscalationSupervisor 催办上级·人工指定（S10 B10-4——dd §31 基线档；可后续 Assign 改）
@@ -4956,8 +5005,8 @@ export interface components {
             code: string;
             fields?: components["schemas"]["github_com_tracerbiubiubiu_zhuzhao_internal_model.TicketTypeFieldInput"][];
             /**
-             * @description Version 可选乐观锁：以父类型 ticket_types.version 做 CAS；nil = 不做 CAS。
-             *     须 > 0，否则 400。
+             * @description Version 为可选客户端期望版本；缺省时使用旧字段预检前的父类型快照CAS。
+             *     预检后配置改变返回409；非nil须>0，否则400。
              */
             version?: number;
         };
@@ -4965,6 +5014,9 @@ export interface components {
             password: string;
             /** @example 0 */
             user_id: string;
+        };
+        "github_com_tracerbiubiubiu_zhuzhao_internal_model.ResetSettingRequest": {
+            key: string;
         };
         "github_com_tracerbiubiubiu_zhuzhao_internal_model.RoleIDRequest": {
             /** @example 0 */
@@ -4997,6 +5049,8 @@ export interface components {
             user_id: string;
         };
         "github_com_tracerbiubiubiu_zhuzhao_internal_model.SettingView": {
+            /** @description config 出厂默认（前端 恢复默认/已自定义 判定用） */
+            default_value?: number[];
             description?: string;
             key?: string;
             /** @description superadmin | admin */
@@ -5097,7 +5151,7 @@ export interface components {
              *     值为 null 的键删除（清空字段）；合并后整体按类型字段 schema G2 重校验；仅非终态可改。
              *     字段级 diff（D20 changes[]）随 S6 B6-1 事件面统一落地——请求体已入通用审计行。
              */
-            custom_data?: number[];
+            custom_data?: Record<string, never>;
             description?: string;
             /** @example 0 */
             id: string;
@@ -5131,8 +5185,8 @@ export interface components {
             transition_meta?: number[];
             transitions?: number[];
             /**
-             * @description Version 可选乐观锁：nil = 不做 CAS（保持旧 patch 行为）；非 nil = 命中
-             *     ticket_types.version 才写，否则 409。须 > 0，否则 400。
+             * @description Version 为可选客户端期望版本；非nil须命中ticket_types.version，否则409。
+             *     缺省时图/meta写由服务端快照CAS；普通属性patch兼容原路径。须>0，否则400。
              */
             version?: number;
         };

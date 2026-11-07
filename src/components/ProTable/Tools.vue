@@ -5,7 +5,7 @@
  * 并入筛选行右端（不设孤行）> 独占行（皆无时兜底，当前仓内无此页型）。
  */
 import { ElButton, ElTooltip } from 'element-plus'
-import { Icon } from '@iconify/vue'
+import { Icon } from '@iconify/vue/offline'
 
 defineProps<{ density: 'default' | 'small'; focused: boolean; showFocus: boolean }>()
 defineEmits<{ (e: 'toggle-density'): void; (e: 'toggle-focus'): void }>()
@@ -13,14 +13,16 @@ defineEmits<{ (e: 'toggle-density'): void; (e: 'toggle-focus'): void }>()
 
 <template>
   <div class="flex shrink-0 items-center gap-1">
-    <el-tooltip :content="density === 'small' ? '切换为舒适' : '切换为紧凑'" placement="top">
+    <el-tooltip :content="density === 'small' ? '切换为舒适' : '切换为紧凑'" placement="top" :trigger-keys="[]">
       <el-button size="small" text bg :data-testid="`pt-density-${density}`" @click="$emit('toggle-density')">
         <Icon icon="mdi:format-line-spacing" :height="14" class="mr-1" />
         {{ density === 'small' ? '舒适' : '紧凑' }}
       </el-button>
     </el-tooltip>
-    <el-tooltip v-if="showFocus" content="聚焦模式（整卡满屏，Esc 退出）" placement="top">
-      <el-button size="small" text bg :data-testid="`pt-focus-${focused}`" @click="$emit('toggle-focus')">
+    <el-tooltip v-if="showFocus" content="聚焦模式（整卡满屏，Esc 退出）" placement="top" :trigger-keys="[]">
+      <el-button size="small" text bg :data-testid="`pt-focus-${focused}`"
+        :aria-label="focused ? '退出表格聚焦' : '表格聚焦'" :aria-pressed="focused"
+        @click="$emit('toggle-focus')">
         <Icon :icon="focused ? 'mdi:fullscreen-exit' : 'mdi:fullscreen'" :height="16" />
       </el-button>
     </el-tooltip>

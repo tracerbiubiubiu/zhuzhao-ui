@@ -5,7 +5,7 @@
  * 末尾以 API 复核落库状态（非前端乐观更新）。
  */
 import { test, expect } from '@playwright/test'
-import { api, apiLogin, loadState, mustData, tempTicketType } from './helpers'
+import { api, apiLogin, loadState, mustData, tempTicketType, waitUserRateBudget } from './helpers'
 import { uiLogin } from './ui'
 
 test('P5-S3a：转换按钮按 available 渲染并驱动 open→assigned→in_progress', async ({ page }) => {
@@ -27,6 +27,7 @@ test('P5-S3a：转换按钮按 available 渲染并驱动 open→assigned→in_pr
   const tid = created.env!.data.id
 
   try {
+    await waitUserRateBudget() // 夹具与浏览器共用user_id桶，先补满再开始业务旅程
     await uiLogin(page, state.admin.employeeNo, state.admin.password)
     await page.waitForURL(/#\/home/, { timeout: 30_000 })
     await page.goto(`/#/tickets/${tid}`)
@@ -50,6 +51,7 @@ test('P5-S3a：转换按钮按 available 渲染并驱动 open→assigned→in_pr
     // 分派给 admin（API）→ 成为处理人 → in_progress 可达 → 点击推进
     const assign = await api('/api/v1/tickets/assign', { ...h, method: 'POST', body: { id: tid, assigned_to: me.id } })
     expect(assign.env?.code).toBe(0)
+    await waitUserRateBudget() // APIassign后紧接强制reload会叠加详情整组刷新，预先补桶
     await page.reload()
     await expect(statusTag).toHaveText('已分派', { timeout: 20_000 })
     await expect(page.getByTestId('btn-transition-in_progress')).toBeVisible({ timeout: 10_000 })
