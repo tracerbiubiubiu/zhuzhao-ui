@@ -8,10 +8,13 @@
  * zhuzhao gateway target 指向 127.0.0.1:18081（分配表迁移后）（compose 形态天然可达）。
  */
 import { test, expect } from '@playwright/test'
-import { api, apiLogin, loadState } from './helpers'
+import { api, apiLogin, loadState, waitUserRateBudget } from './helpers'
 import { uiLogin } from './ui'
 
 test.setTimeout(120_000)
+
+// Node 夹具与浏览器共用账号限流桶；先消除前一用例的额度占用。
+test.beforeEach(async () => { await waitUserRateBudget() })
 
 test('W5 冒烟：al 类型注册/数据写入/cursor 分页/软删恢复', async ({ page }) => {
   const state = loadState()
@@ -36,6 +39,8 @@ test('W5 冒烟：al 类型注册/数据写入/cursor 分页/软删恢复', asyn
   }
 
   try {
+    // 25 行夹具消耗了同一账号的额度，给首次 profile/permissions/menu 加载留足预算。
+    await waitUserRateBudget()
     await uiLogin(page, state.admin.employeeNo, state.admin.password)
     // al 页是动态菜单路由：等菜单加载+动态路由注册完成（uiLogin 点完即返——静态路由 spec
     // 无感，动态路由竞态会弹回登录）。「活动类型」是折叠子菜单（hidden）——等父级项
@@ -119,6 +124,7 @@ test('活动列表：废弃类型只读视图（分组可选/写入隐藏/导出
   const dep = await api('/al/api/v1/admin/types/deprecate', { ...h, method: 'POST', body: { type_name: typeName } })
   expect(dep.env!.code).toBe(0)
 
+  await waitUserRateBudget()
   await uiLogin(page, state.admin.employeeNo, state.admin.password)
   await expect(page.getByRole('menuitem', { name: '活动列表' })).toBeVisible({ timeout: 15_000 })
   await page.goto('/#/al/data')
