@@ -42,3 +42,8 @@ e2e/.state.json
 # 后端会把 data/*.db、logs/ 撒在这里；*.log 挡不住 .db 二进制，故根锚定整目录）
 /data/
 /logs/
+
+.VSCodeCounter
+
+# Local audit workspace
+.codex/
