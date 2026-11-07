@@ -7,7 +7,7 @@
  * 注：全部已读会清掉 admin 既有未读（E2E 专属账号的测试数据，可接受）。
  */
 import { test, expect } from '@playwright/test'
-import { api, apiLogin, loadState, mustData } from './helpers'
+import { api, apiLogin, loadState, mustData, waitUserRateBudget } from './helpers'
 import { uiLogin } from './ui'
 
 test('P5-S6：分派事件入站 → 铃铛未读 → 消息中心全部已读 → 待办派生', async ({ page }) => {
@@ -30,6 +30,7 @@ test('P5-S6：分派事件入站 → 铃铛未读 → 消息中心全部已读 �
   expect(assign.env?.code, '分派须成功（触发 ticket.assigned → inbox）').toBe(0)
 
   try {
+    await waitUserRateBudget()
     await uiLogin(page, state.admin.employeeNo, state.admin.password)
     await page.waitForURL(/#\/home/, { timeout: 30_000 })
 
@@ -47,9 +48,14 @@ test('P5-S6：分派事件入站 → 铃铛未读 → 消息中心全部已读 �
     await expect(page.locator('#pane-notifications').getByText(title).first()).toBeVisible()
     await expect(page.locator('.msg-dot--unread').first()).toBeVisible()
 
-    // 全部已读 → 未读点清零
+    // 全部已读 → 主动失效 badges；无需 reload 或等待 60s 后台轮询。
+    const badgesAfterRead = page.waitForResponse((response) =>
+      response.url().includes('/api/v1/badges') && response.request().method() === 'GET' && response.status() === 200,
+    { timeout: 5000 })
     await page.getByTestId('read-all').click()
     await expect(page.locator('.msg-dot--unread')).toHaveCount(0, { timeout: 10_000 })
+    await badgesAfterRead
+    await expect(page.getByTestId('badge-unread').locator('.el-badge__content')).toBeHidden({ timeout: 5000 })
 
     // 待办 tab：状态派生（assignee=me 且非终态）含本单
     await page.getByRole('tab', { name: /待办/ }).click()

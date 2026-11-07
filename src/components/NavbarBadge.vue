@@ -2,36 +2,25 @@
 /**
  * NavbarBadge 全局待办角标（S10 B10-3——10 号附录 A.4）：
  * 60s 轮询 GET /badges（sections 开放 map——未知 section 忽略向前兼容）；
- * 待办跳工单列表 assignee=me + exclude_statuses=closed,rejected，与角标计数同口径。轮询失败静默（角标是提示面，不弹错）。
+ * 消息写操作失效 ['badge'] 后立即重取；后台仍按 60s 同步。
+ * 待办跳工单列表 assignee=me + exclude_statuses=closed,rejected，与角标计数同口径。
+ * 请求错误沿用统一请求层提示；重取失败保留上次成功数据。
  */
-import { onMounted, onUnmounted, ref } from 'vue'
+import { computed } from 'vue'
+import { useQuery } from '@tanstack/vue-query'
 import { useRouter } from 'vue-router'
 import { ElBadge } from 'element-plus'
 import { Icon } from '@iconify/vue/offline'
 import { getBadgesApi } from '@/api/ticket'
 
 const router = useRouter()
-const todo = ref(0)
-const unread = ref(0)
-let timer: number | undefined
-
-async function refresh() {
-  try {
-    const sections = await getBadgesApi()
-    if (typeof sections.todo === 'number') todo.value = sections.todo
-    if (typeof sections.unread === 'number') unread.value = sections.unread
-  } catch {
-    // 提示面——静默（下轮重试）
-  }
-}
-
-onMounted(() => {
-  void refresh()
-  timer = window.setInterval(() => void refresh(), 60_000)
+const badges = useQuery({
+  queryKey: ['badge'],
+  queryFn: getBadgesApi,
+  refetchInterval: 60_000,
 })
-onUnmounted(() => {
-  if (timer !== undefined) window.clearInterval(timer)
-})
+const todo = computed(() => typeof badges.data.value?.todo === 'number' ? badges.data.value.todo : 0)
+const unread = computed(() => typeof badges.data.value?.unread === 'number' ? badges.data.value.unread : 0)
 
 function goTodo() {
   void router.push({ path: '/tickets', query: { assignee: 'me', exclude_statuses: 'closed,rejected' } })

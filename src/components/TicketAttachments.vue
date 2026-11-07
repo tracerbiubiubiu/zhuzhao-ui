@@ -14,8 +14,11 @@
         </el-button>
       </el-upload>
     </div>
-    <el-empty v-if="!attachments.length && !loading" description="暂无附件" :image-size="48" />
-    <div v-else class="attachments-list">
+    <el-alert v-if="loadError" :title="loadError" type="error" show-icon :closable="false" data-testid="attachments-load-error">
+      <el-button size="small" :loading="loading" @click="refresh">重试</el-button>
+    </el-alert>
+    <el-empty v-if="!loadError && !attachments.length && !loading" description="暂无附件" :image-size="48" />
+    <div v-if="attachments.length" v-loading="loading" class="attachments-list">
       <div v-for="att in attachments" :key="att.id" class="attachment-item">
         <span class="att-icon">📄</span>
         <div class="att-info">
@@ -44,9 +47,11 @@
  * TicketAttachments B5-3 工单附件区（05 号 §5）——列表/上传/删除/下载（代理端点稳定 URL）。
  * L2 由后端 handler 编排（附件属 ticket:update 面）；cookie 自动带无需手动 auth。
  */
-import { ref, onMounted } from 'vue'
-import { ElButton, ElEmpty, ElUpload, ElMessage, ElMessageBox } from 'element-plus'
+import { ref, watch, onBeforeUnmount } from 'vue'
+import { isAxiosError } from 'axios'
+import { ElAlert, ElButton, ElEmpty, ElUpload, ElMessage, ElMessageBox } from 'element-plus'
 import type { UploadFile } from 'element-plus'
+import { SessionChangedError } from '@/common/auth/tokenStorage'
 import {
   listAttachments,
   deleteAttachment,
@@ -62,36 +67,57 @@ const props = defineProps<{
 
 const attachments = ref<AttachmentView[]>([])
 const loading = ref(false)
+const loadError = ref('')
 const uploading = ref(false)
 const deletingKey = ref('')
+let loadSequence = 0
+let disposed = false
 
-async function refresh() {
+async function refresh(): Promise<boolean | undefined> {
+  const sequence = ++loadSequence
+  const ticketId = props.ticketId
   loading.value = true
+  loadError.value = ''
   try {
-    attachments.value = await listAttachments(props.ticketId)
+    const rows = await listAttachments(ticketId)
+    if (disposed || sequence !== loadSequence || ticketId !== props.ticketId) return undefined
+    attachments.value = rows
+    return true
   } catch {
-    // 附件区非关键路径——静默降级（列表空+无报错弹窗；后端异常时用户可通过重开详情页重试）
+    if (!disposed && sequence === loadSequence && ticketId === props.ticketId) {
+      loadError.value = '附件列表加载失败，请重试'
+      return false
+    }
+    // HTTP/网络错误已由统一请求层提示；这里保留旧列表并提供原位重试。
+    return undefined // 被较新的刷新替代，不把过时响应显示为当前失败
   } finally {
-    loading.value = false
+    if (!disposed && sequence === loadSequence) loading.value = false
   }
 }
 
 async function onUpload(file: UploadFile) {
   if (!file.raw) return
+  const ticketId = props.ticketId
   uploading.value = true
   try {
-    await uploadAndConfirm(file.raw, 'ticket_attachment', props.ticketId)
-    await refresh()
-    ElMessage.success('附件已上传')
+    await uploadAndConfirm(file.raw, 'ticket_attachment', ticketId)
+    if (disposed || ticketId !== props.ticketId) return
+    const refreshed = await refresh()
+    if (disposed || ticketId !== props.ticketId) return
+    if (refreshed) ElMessage.success('附件已上传')
+    else if (refreshed === false) loadError.value = '附件已上传，但列表刷新失败，请重试'
   } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : '上传失败'
-    ElMessage.error(msg)
+    // presign/confirm 的 Axios 错误由请求层负责；直传 PUT 不经过该层，仍需本地提示。
+    if (!disposed && ticketId === props.ticketId && !isAxiosError(e) && !(e instanceof SessionChangedError)) {
+      ElMessage.error(e instanceof Error ? e.message : '上传失败')
+    }
   } finally {
     uploading.value = false
   }
 }
 
 async function onDelete(att: AttachmentView) {
+  const ticketId = props.ticketId
   try {
     await ElMessageBox.confirm(`确定删除附件「${att.file_name}」？`, '删除附件', {
       confirmButtonText: '删除',
@@ -101,14 +127,19 @@ async function onDelete(att: AttachmentView) {
   } catch {
     return
   }
+  if (disposed || ticketId !== props.ticketId) return
   deletingKey.value = att.object_key
   try {
-    await deleteAttachment({ ticket_id: props.ticketId, object_key: att.object_key })
-    await refresh()
-    ElMessage.success('附件已删除')
+    await deleteAttachment({ ticket_id: ticketId, object_key: att.object_key })
+    if (disposed || ticketId !== props.ticketId) return
+    const refreshed = await refresh()
+    if (disposed || ticketId !== props.ticketId) return
+    if (refreshed) ElMessage.success('附件已删除')
+    else if (refreshed === false) loadError.value = '附件已删除，但列表刷新失败，请重试'
   } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : '删除失败'
-    ElMessage.error(msg)
+    if (!disposed && ticketId === props.ticketId && !isAxiosError(e) && !(e instanceof SessionChangedError)) {
+      ElMessage.error(e instanceof Error ? e.message : '删除失败')
+    }
   } finally {
     deletingKey.value = ''
   }
@@ -126,7 +157,11 @@ function formatTime(iso: string): string {
   return formatDateTime(iso)
 }
 
-onMounted(refresh)
+watch(() => props.ticketId, () => {
+  attachments.value = []
+  void refresh()
+}, { immediate: true })
+onBeforeUnmount(() => { disposed = true; loadSequence++ })
 defineExpose({ refresh })
 </script>
 

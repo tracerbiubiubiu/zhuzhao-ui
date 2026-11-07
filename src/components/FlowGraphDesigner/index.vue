@@ -140,6 +140,9 @@ function ensureLf(): LogicFlow {
   inst.on('node:delete', recompute)
   inst.on('edge:add', recompute)
   inst.on('edge:delete', recompute)
+  // undo/redo 整图替换；重复 load 后 history 栈可能含相同快照，
+  // history:change 不保证触发。用实际渲染更新重算，invalid 保持幂等以保留 redo。
+  inst.on('graph:updated', recompute)
   inst.on('node:drop', () => savePositions(graphData()))
   inst.on('connection:not-allowed', ({ msg }) => ElMessage.warning(msg ?? '不允许的连线'))
   resizeObserver = new ResizeObserver(() => inst.resize())

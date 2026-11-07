@@ -4,7 +4,7 @@
  * → 添加孤立状态 → 角标翻告警（不阻断，仅提示）。只读走查，取消关闭；收尾删类型。
  */
 import { test, expect } from '@playwright/test'
-import { api, apiLogin, loadState } from './helpers'
+import { api, apiLogin, loadState, waitUserRateBudget } from './helpers'
 import { uiLogin } from './ui'
 
 test('P5-S2：画布/JSON 双模式回显 + 添加孤立状态触发图检查告警', async ({ page }) => {
@@ -19,6 +19,7 @@ test('P5-S2：画布/JSON 双模式回显 + 添加孤立状态触发图检查告
   expect(created.env?.code, '建类型须成功').toBe(0)
 
   try {
+    await waitUserRateBudget()
     await uiLogin(page, state.admin.employeeNo, state.admin.password)
     await page.waitForURL(/#\/home/, { timeout: 30_000 })
     await page.goto('/#/tickets/types')
@@ -50,6 +51,23 @@ test('P5-S2：画布/JSON 双模式回显 + 添加孤立状态触发图检查告
     await expect(dlg.getByTestId('fg-lint-badge')).toBeVisible({ timeout: 10_000 })
     await expect(dlg.getByTestId('fg-lint-ok')).toHaveCount(0)
     await expect(dlg.getByRole('button', { name: '保存' })).toBeEnabled() // 不阻断
+
+    // LogicFlow 历史以 100ms debounce 记快照；退出文本编辑并留足一次快照窗口。
+    const canvas = dlg.getByTestId('fg-canvas')
+    await canvas.click({ position: { x: 20, y: 300 } })
+    await page.waitForTimeout(200)
+    for (let round = 0; round < 2; round++) {
+      await page.keyboard.press('ControlOrMeta+z')
+      await expect(canvas.getByText('state_1', { exact: true })).toHaveCount(0)
+      await expect(dlg.getByTestId('fg-lint-ok')).toBeVisible()
+      await expect(dlg.getByTestId('fg-lint-badge')).toHaveCount(0)
+      await page.waitForTimeout(200)
+      await page.keyboard.press('ControlOrMeta+y')
+      await expect(canvas.getByText('state_1', { exact: true })).toBeVisible()
+      await expect(dlg.getByTestId('fg-lint-badge')).toBeVisible()
+      await expect(dlg.getByTestId('fg-lint-ok')).toHaveCount(0)
+      await page.waitForTimeout(200)
+    }
 
     await dlg.getByRole('button', { name: '取消' }).click()
     await expect(dlg).not.toBeVisible({ timeout: 10_000 })
