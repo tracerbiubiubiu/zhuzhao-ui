@@ -4,7 +4,7 @@
 name: ci
 on:
   push:
-    branches: [main, "phase5", "feature/**"]
+    branches: [main, "phase5", "feature/**", "codex/**"]
   pull_request:
 jobs:
   lint:
