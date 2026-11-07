@@ -10,6 +10,7 @@
  */
 
 import request from '@vea/request'
+import type { components } from '@/api/__generated__/schema'
 
 // ─── 类型 ───
 
@@ -21,31 +22,19 @@ export interface PresignResponse {
   expires_at: string
 }
 
-export interface ConfirmResponse {
-  id: string
-  bucket: string
-  object_key: string
-  purpose: string
-  status: string
-  file_name: string
-  mime_type: string
-  size_bytes?: string
-  etag?: string
-  confirmed_at?: string
-  owner_kind?: string
-  owner_id?: string
-}
+// Response fields follow the generated wire contract; the required keys below
+// reflect fields always emitted by the Go models (Swagger marks them optional).
+type FileObjectSchema = components['schemas']['github_com_tracerbiubiubiu_zhuzhao_internal_model.FileObject']
+type AttachmentSchema = components['schemas']['github_com_tracerbiubiubiu_zhuzhao_internal_model.TicketAttachmentView']
 
-export interface AttachmentView {
-  id: string
-  ticket_id: string
-  object_key: string
-  file_name: string
-  mime_type: string
-  size_bytes?: string
-  uploaded_by: string
-  uploaded_by_name?: string // 后端回填（real_name 优先）
-  created_at: string
+export type ConfirmResponse = FileObjectSchema & Required<Pick<FileObjectSchema,
+  'id' | 'bucket' | 'object_key' | 'purpose' | 'status' | 'file_name' | 'mime_type' | 'created_by' | 'created_at'
+>>
+
+export type AttachmentView = AttachmentSchema & Required<Pick<AttachmentSchema,
+  'id' | 'ticket_id' | 'object_key' | 'file_name' | 'mime_type' | 'uploaded_by' | 'created_at'
+>> & {
+  uploaded_by_name?: string // 展示回填可缺省，未回填时降级为 uploaded_by
 }
 
 export type PresignPurpose =

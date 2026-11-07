@@ -4880,7 +4880,8 @@ export interface components {
             created_by?: string;
             etag?: string;
             file_name?: string;
-            id?: number;
+            /** @example 0 */
+            id?: string;
             mime_type?: string;
             object_key?: string;
             owner_id?: string;
@@ -5067,7 +5068,8 @@ export interface components {
         "github_com_tracerbiubiubiu_zhuzhao_internal_model.TicketAttachmentView": {
             created_at?: string;
             file_name?: string;
-            id?: number;
+            /** @example 0 */
+            id?: string;
             mime_type?: string;
             object_key?: string;
             /** @example 0 */
