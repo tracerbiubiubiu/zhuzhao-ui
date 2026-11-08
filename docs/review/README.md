@@ -4,7 +4,9 @@
 
 ## 当前状态应怎样核查
 
-Phase 4 已收官，Phase 5 修复与门禁的最新状态由主仓[项目控制台](../../../zhuzhao/docs/review/11-project-control.md)和[2026-11-08 followup](../../../zhuzhao/docs/review/reports/zhuzhao-report-followup-2026-11-08.md)记录；后续合 main/部署/远端 CI 以实际授权与固定收据为准。UI 本次文档整理尚不代表全门禁已完成，不能把下列旧报告的绿色结果外推到今天。
+Phase 4 已收官，Phase 5 修复与门禁的最新状态由主仓[项目控制台](../../../zhuzhao/docs/review/11-project-control.md)和[2026-11-08 followup](../../../zhuzhao/docs/review/reports/zhuzhao-report-followup-2026-11-08.md)记录；后续合 main/部署/远端 CI 以实际授权与固定收据为准。
+
+2026-11-08首次五仓文档整理已完成本地验证，结果与限制见[整理记录](../../../zhuzhao/docs/review/reports/documentation-reorganization-2026-11-08.md)：UI原样六件门禁通过，241单测、41 E2E、无跳过或实际重试。该结果绑定当轮源码快照，不证明后续候选、远端CI或生产部署已经验证；本页是证据导航，不能把下列历史报告的绿色结果外推到今天。
 
 ## 建议阅读顺序
 
