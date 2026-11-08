@@ -490,3 +490,7 @@ FilterBar的`data-ignore`为布尔存在标记（`data-ignore`值为空字符串
 ## 工单详情富文本缓存（2026-11-08 复核修复）
 
 详情页的`useRenderedRichtext`只缓存服务端消毒HTML，以字段键和源内容复用结果；数据清空或schema移除字段时立即撤销旧HTML及在途结果的写入资格。每次渲染用独立请求身份，A→B→A、移除后同源重新加入均不得接纳第一次A的晚响应；字段之间独立处理，组件scope销毁后全部失效。这里撤销的是回写资格，HTTP请求无需新增取消契约；失败仍由请求层提示，不把Markdown或HTML源作为`v-html`回退。回归见`useRenderedRichtext.test.ts`，同一详情组件刷新后的数据与缓存同步，不依赖路由重建。
+
+## 消息管理面清欠登记（2026-11-08 RR-DOC-01）
+
+既有`6a95fd2a`的M-2 API封装、M-4两状态top-K待办分页、richtext源指纹降级项已补登记于主仓`docs/phase5/06-s6-message-notification.md`的A.9；详情缓存余项以RR-UI-01和上述缓存合同为准。通知配置的`EVENT_OPTIONS`继续手维护，完整事件键集合由跨仓契约守卫对照后端`validEventActions`，不得只比较数量。`ops.storage_usage_high`是本轮发现并补齐的现有事件选项，不是新增事件/接口。原“07号§3.4件18”实为visible_when，注释改指真实A.9；事件元数据端点仍未实现，主仓07号仅作触发登记。

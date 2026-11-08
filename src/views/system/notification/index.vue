@@ -200,9 +200,9 @@ import {
 // 顶层菜单页路由名=`${code}_page`（permissionRoutes）；原 'SystemNotification' 与路由名不符致 keep-alive 恒不命中
 defineOptions({ name: 'system_notification_page' })
 
-/** 事件词表——与后端 message_admin_service.validEventActions 同源（手工同步，改一头改两头）。
- * ⚠ 后端无词表端点（GET /message-events 缺）——无法拉取消除手工同步（外部审计 m-2），
- * 后端补端点后本数组切换为拉取式；登记见 07 号 §3.4 件 18 同批追记 */
+/** 事件词表——与后端 message_admin_service.go 的 validEventActions 手工同步，
+ * eventOptions.test.ts 跨仓比较完整集合；未来词表端点演进登记见主仓
+ * docs/phase5/06-s6-message-notification.md 的 A.9（RR-DOC-01）。 */
 const EVENT_OPTIONS: Array<{ value: string; label: string }> = [
   { value: 'ticket.created', label: '工单创建' },
   { value: 'ticket.assigned', label: '工单分派' },
@@ -217,6 +217,7 @@ const EVENT_OPTIONS: Array<{ value: string; label: string }> = [
   { value: 'ticket.action_notify', label: 'notify 动作（流程提醒）' },
   { value: 'ops.cron_failed', label: '定时任务失败（ops）' },
   { value: 'ops.action_failed', label: '流程动作失败（ops）' },
+  { value: 'ops.storage_usage_high', label: '存储用量告警（ops）' },
 ]
 
 const activeTab = ref('templates')
