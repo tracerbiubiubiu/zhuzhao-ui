@@ -16,6 +16,22 @@ zhuzhao（Go 模块化单体 IAM + 工单系统）的前端控制台。**全部�
 
 **Phase 4 收官后小批直提 main**：门禁全绿 + 推送后核实 CI run 转绿即合（2026-09-29 收官起的既成实践，2026-10-08 口径更新）。大批量或有风险改动恢复 Wave 短分支制（`feat-…`/`fix-…`，合入即删）。对齐主仓 standards §12.7 单主干精神。当前 **Phase 5 建设期**即按此制走 `phase5` 分支（2026-10-13 起，CI 触发分支已含 phase5；合入 main 时机随收官拍板）。
 
+## 提交规范与机械检查
+
+采用主仓 [standards.md §12-9](../zhuzhao/docs/standards.md) 的硬规则①–⑤：Conventional Commit（可省 scope，单 scope）、说明部分 ≤50 个 Unicode 字符、不以句号结尾、主题与正文空行分隔、正文非空。中文说明包含改动、影响与验证证据。所有新提交包含 merge 均检查；本仓与四个 Go 仓使用同字节 `scripts/commit-policy.py`，复验见主仓 [RR-GIT-01](../zhuzhao/deliverables/software-company/zhuzhao-report-followup-2026-11-08.md)。协作纪律见 [AGENTS「提交规范」](./AGENTS.md)。
+
+```bash
+pnpm hooks             # 新环境/当前worktree安装三钩；Python 3 + Git，零新增npm依赖
+pnpm test:commit-lint   # 35项黑盒；Git写操作只发生在临时fixture
+# 推送前三件流程仍须执行；窗口检查前先刷新远端引用：
+git fetch origin
+pnpm commit-lint        # 当前分支实际待推窗口，非猜测HEAD~N
+```
+
+`commit-msg` 拦不合规新消息，保留跨主题重题守卫；`pre-commit` 提示其他在途文件，提交仍须显式路径；`pre-push` 按 Git 实际提供的全部 refs 再核待推提交。安装只写 worktree scope，保留 common hooksPath，避免改动其他工作树。CI 独立 `commit-policy` job 拉完整历史、读取 push/PR 事件载荷复用同核，缺对象失败；CI 仅可按完整 OID 补取对象。
+
+`scripts/commit-policy-baseline` 固定为接入前 `bebfe523d2a84f7d017bc46fcaf05d38e883844c`，其祖先保留历史豁免，不能随 HEAD 滚动；严格历史审计用 `python3 scripts/commit-policy.py range --strict --before <完整旧SHA> --after <完整新SHA>`。原 `pnpm gate` 六件保持不变。
+
 ## 设计文档（不随本仓，指回主仓）
 
 - **工程设计 SSOT**：`zhuzhao/docs/phase4/01-frontend-design.md`（技术栈/壳层四件/状态分界/范例页/门禁/里程碑）

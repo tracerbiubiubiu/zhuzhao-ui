@@ -24,7 +24,10 @@
     "audit:prod": "pnpm audit --prod --registry=https://registry.npmjs.org",
     "gate": "pnpm run lint && pnpm run typecheck && pnpm run test && pnpm run audit:prod && pnpm run build && pnpm run test:e2e",
     "codegen": "bash scripts/codegen.sh",
-    "clean": "rimraf dist dist-pro dist-dev dist-test node_modules/.cache"
+    "clean": "rimraf dist dist-pro dist-dev dist-test node_modules/.cache",
+    "hooks": "sh scripts/install-git-hooks.sh",
+    "commit-lint": "python3 scripts/commit-policy.py pending",
+    "test:commit-lint": "python3 scripts/test-commit-policy.py"
   },
   "dependencies": {
     "@iconify-icons/mdi": "^1.2.48",

@@ -7,6 +7,16 @@ on:
     branches: [main, "phase5", "feature/**", "codex/**"]
   pull_request:
 jobs:
+  commit-policy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - run: python3 scripts/test-commit-policy.py
+      # 使用push before/after或PR base/head载荷；不能改成checkout HEAD或HEAD~N。
+      - run: python3 scripts/commit-policy.py ci --fetch-missing
   lint:
     runs-on: ubuntu-latest
     steps:
