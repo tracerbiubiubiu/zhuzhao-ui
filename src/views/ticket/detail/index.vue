@@ -33,6 +33,7 @@ import { getTicketTypeFieldsApi, type TicketTypeFieldDef , renderRichtextApi } f
 import { getDictItemsByCodeApi } from '@/api/system/dict'
 import UserPicker from '@/components/UserPicker/index.vue'
 import TicketAttachments from '@/components/TicketAttachments.vue'
+import { useRenderedRichtext } from './useRenderedRichtext'
 
 // keep-alive 契约：name=静态路由名（参数路由——同工单不同 ID 依赖 :key 路由 fullPath 分实例）
 defineOptions({ name: 'TicketDetail' })
@@ -86,29 +87,18 @@ const typeFieldsQuery = useQuery({
 })
 const customFields = computed(() => typeFieldsQuery.data.value ?? [])
 
-// F-E-1 修复：richtext 字段经服务端 render 端点消毒出站 HTML——不直接注入 MD 源
-// 缓存记 {src, html} 指纹：同单内字段内容变更（转换采集更新 custom_data）即重渲染，
-// 只按 key 判重会命中旧缓存显示陈旧内容（2026-10-31 审计降级项修复；跨单无泄漏——
-// AppView :key=fullPath 按单分实例）
-const renderedHtml = ref<Record<string, { src: string; html: string }>>({})
-watch(
-  () => customFields.value.filter((f) => f.field_type === 'richtext').map((f) => ({
-    key: f.field_key,
-    src: String(customValue(f.field_key) ?? ''),
-  })).filter((x) => x.src),
-  async (items: Array<{ key: string; src: string }>) => {
-    for (const { key, src } of items) {
-      if (renderedHtml.value[key]?.src === src) continue
-      renderedHtml.value[key] = { src, html: '' } // 占位防重复请求
-      renderedHtml.value[key] = { src, html: await renderRichtextApi(src).catch(() => '') }
-    }
-  },
-  { immediate: true },
-)
 const customValue = (key: string): unknown => {
   const cd = (ticket.value?.custom_data ?? {}) as Record<string, unknown>
   return cd[key]
 }
+// richtext 只展示服务端消毒 HTML；同单内容变化由字段缓存统一跟进。
+const renderedHtml = useRenderedRichtext(
+  () => customFields.value.filter((f) => f.field_type === 'richtext').map((f) => ({
+    key: f.field_key,
+    src: String(customValue(f.field_key) ?? ''),
+  })),
+  renderRichtextApi,
+)
 const formatCustomValue = (f: TicketTypeFieldDef): string => {
   const v = customValue(f.field_key)
   if (v === undefined || v === null) return '—'
