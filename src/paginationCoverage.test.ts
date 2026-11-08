@@ -59,9 +59,9 @@ describe('分页覆盖哨兵（防超阈值全量渲染再犯）', () => {
       if (f.endsWith(join('components', 'ProTable', 'index.vue'))) continue
       const src = readFileSync(f, 'utf-8')
       const hasPager = /el-pagination|ProTable|nextCursor|next_cursor/.test(src)
-      if (!hasPager) violations.push(`${f}: 含 <el-table> 但无任何分页设施（ProTable/el-pagination/cursor）——会增长的数据面禁用全量渲染，见 frontend-standard 分页统一约定`)
+      if (!hasPager) violations.push(`${f}: 含 <el-table> 但无任何分页设施（ProTable/el-pagination/cursor）——会增长的数据面禁用全量渲染，见 docs/design/frontend-ui.md 分页统一约定`)
     }
 
-    expect(violations.join('\n'), '分页缺失（frontend-standard「全量内滚 ≤50 行且不增长」豁免外的表必须分页）').toBe('')
+    expect(violations.join('\n'), '分页缺失（frontend-ui「全量内滚 ≤50 行且不增长」豁免外的表必须分页）').toBe('')
   })
 })

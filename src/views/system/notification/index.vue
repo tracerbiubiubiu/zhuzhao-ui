@@ -256,7 +256,7 @@ useTableFit(logTable, () => logs.value)
 async function fetchTemplates() {
   tplLoading.value = true
   try {
-    // page_size:100 拉全豁免（frontend-standard 分页口径）：管理面配置数据量小且近乎不增长
+    // page_size:100 拉全豁免（docs/design/frontend-ui.md 分页口径）：管理面配置数据量小且近乎不增长
     templates.value = (await listMessageTemplatesApi({ page: 1, page_size: 100 })).list
   } catch { /* 403=无权限 */ } finally { tplLoading.value = false }
 }

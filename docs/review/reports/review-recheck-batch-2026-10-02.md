@@ -1,5 +1,7 @@
 # 复核报告-复检真修批 — 2026-10-02
 
+> 历史时点报告：保留原提交、失败、计数与验证范围；当前操作规范及后续关系见[审查入口](../README.md)。文中非链接的旧路径/命令属于当时记录。
+
 - **对象**：zhuzhao-ui `main` @ `d70cebb3`（工作树干净，与 `origin/main` 同步）
 - **批次**：`b25beafc`（+ 合并 `526fcf4b`）→ `eb5ffb24` / `d70cebb3`
 - **对照**：`deliverables/archive/audit-recheck-4rounds-2026-10-01.md` 的建议第一批（P1-2 真修 / viewNames 种子派生 / 视图图标扫描）

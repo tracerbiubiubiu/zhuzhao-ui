@@ -78,7 +78,7 @@ async function handleSubmit() {
 
 // ─── P4-6 PAT（个人 API 凭据——脚本/CI 调用）───
 const pats = ref<PatRow[]>([])
-/** PAT 表列宽自适应（frontend-standard.md 踩坑⑦口径——手动 el-table 必须自行挂接） */
+/** PAT 表列宽自适应（docs/design/frontend-ui.md “踩过的坑”的表格列宽项口径——手动 el-table 必须自行挂接） */
 const patsTable = ref()
 useTableFit(patsTable, () => pats.value)
 const patLoading = ref(false)

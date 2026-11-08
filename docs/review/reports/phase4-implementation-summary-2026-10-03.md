@@ -1,8 +1,10 @@
 # Phase 4 实现整理 — W2–W5 四波+穿插池全貌与审计清账终态
 
+> 历史时点报告：保留原提交、失败、计数与验证范围；当前操作规范及后续关系见[审查入口](../README.md)。文中非链接的旧路径/命令属于当时记录。
+
 - **日期**：2026-10-03
 - **基线**：`zhuzhao-ui` @ `main` / `c534889e`（工作树干净，与 `origin/main` 同步）
-- **性质**：实现视角的时点整理（**是什么/有什么/怎么验**）；审计问题链视角见 [audit-recheck-4rounds-2026-10-01.md](./audit-recheck-4rounds-2026-10-01.md)（31 项台账 SSOT），设计依据见主仓 `docs/phase4/01–03` 号
+- **性质**：实现视角的时点整理（**是什么/有什么/怎么验**）；审计问题链视角见 [audit-recheck-4rounds-2026-10-01.md](audit-recheck-4rounds-2026-10-01.md)（31 项台账 SSOT），设计依据见主仓 `docs/phase4/01–03` 号
 - **方法**：数字均为本日实测（`pnpm test` / `grep` 逐 spec 计数 / 目录清点），非转抄
 
 ---
@@ -81,5 +83,5 @@ Phase 4（前端控制台单仓单 SPA）**完成定义已达成**：2026-09-29 
 ## 文档索引
 
 - 设计 SSOT：主仓 `zhuzhao/docs/phase4/01-frontend-design.md` / `02-implementation-plan.md` / `03-scenarios-and-tests.md`
-- 审计台账：[audit-recheck-4rounds-2026-10-01.md](./audit-recheck-4rounds-2026-10-01.md)（基线）+ [archive/](./archive/)（八份跟进复核）
+- 审计台账：[audit-recheck-4rounds-2026-10-01.md](audit-recheck-4rounds-2026-10-01.md)（基线）+ [原archive跟进报告，现审查索引](../README.md)（八份跟进复核）
 - 随仓操作文档：`README.md`（状态/门禁/E2E 运行前提）、`AGENTS.md`（协作协议/契约速查）

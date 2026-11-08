@@ -2,7 +2,7 @@ import { nextTick, onBeforeUnmount, onMounted, watch } from 'vue'
 import type { Ref } from 'vue'
 
 /**
- * useTableFit——el-table 列宽自适应兜底（frontend-standard.md 踩坑⑦）
+ * useTableFit——el-table 列宽自适应兜底（docs/design/frontend-ui.md “踩过的坑”的表格列宽项）
  *
  * EP 2.14 已知缺陷：容器尺寸在表格挂载后发生变化（侧栏异步收起/窗口与面板调整/
  * 数据晚到触发的重排），列宽拟合不自动重排——表格保持首次拟合宽度，右侧残留死区

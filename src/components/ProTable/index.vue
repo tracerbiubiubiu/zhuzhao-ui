@@ -44,11 +44,11 @@ const { state, actions } = useCrud<{ [key: string]: any }>({
 })
 
 // EP 2.14 缺陷兜底：容器尺寸变化（侧栏收起/窗口面板调整/数据晚到）列宽不自动重排——
-// ResizeObserver+resize 触发 doLayout（frontend-standard.md 踩坑⑦）
+// ResizeObserver+resize 触发 doLayout（docs/design/frontend-ui.md “踩过的坑”的表格列宽项）
 const tableEl = ref<{ doLayout: () => void; setScrollTop?: (top: number) => void; $el?: HTMLElement }>()
 useTableFit(tableEl, () => state.items.value)
 
-// ─── 数据面三件（frontend-standard.md「数据密度与聚焦模式」节）——分页行左侧内置，页面零接线 ───
+// ─── 数据面三件（docs/design/frontend-ui.md「数据密度与聚焦模式」节）——分页行左侧内置，页面零接线 ───
 
 /** 切页/每页条数变更与重查（resetPage）后内滚回顶；写操作后的原位刷新不回顶（保滚动上下文） */
 function scrollToTop() {

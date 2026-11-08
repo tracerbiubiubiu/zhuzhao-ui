@@ -111,9 +111,9 @@ describe('EP 组件导入完整性（防静默失效）', () => {
   })
 })
 
-describe('手动 el-table 挂接 useTableFit（列宽兜底防漏网，frontend-standard.md 踩坑⑦）', () => {
+describe('手动 el-table 挂接 useTableFit（列宽兜底防漏网，docs/design/frontend-ui.md “踩过的坑”的表格列宽项）', () => {
   it('全仓含 <el-table 的 .vue 宿主文件均挂接 useTableFit（或列入豁免）', () => {
-    // EP 2.14 列宽不随容器变化重排（踩坑⑦）——ProTable 内置兜底，手动 el-table 必须自行挂接。
+    // EP 2.14 列宽不随容器变化重排（“踩过的坑”的表格列宽项）——ProTable 内置兜底，手动 el-table 必须自行挂接。
     // 静态门禁（eslint/tsc/build/现有单测）全绿也抓不到漏挂——2026-10-08 useTableFit 批
     // 自检报告 P1-2 实证 Profile 漏网。本用例为该类的自动捕获层（与 epImports 同型）。
     // 豁免：对话框/抽屉内定宽表（容器恒定，无重排需求），须在此显式登记。

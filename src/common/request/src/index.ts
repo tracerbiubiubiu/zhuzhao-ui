@@ -139,7 +139,7 @@ service.interceptors.response.use(
     const status = error.response?.status
     let body = error.response?.data as { code?: number; message?: string } | undefined
     // blob 端点（如 al 导出）的错误体也是 Blob——先转文本解析出信封 code/message，
-    // 否则 401 分码（20002 静默刷新/20003 跳登录）与业务提示全部失明（frontend-standard 踩坑同期批）
+    // 否则 401 分码（20002 静默刷新/20003 跳登录）与业务提示全部失明（docs/design/frontend-ui.md 踩坑同期批）
     if (error.config?.responseType === 'blob' && body instanceof Blob) {
       try {
         body = JSON.parse(await body.text())

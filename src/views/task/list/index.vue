@@ -18,7 +18,7 @@
  *   （原类型臆测：action/error/attempts/failed_at 字段实际不存在，列表 3/4 列恒空；
  *   dev 实测真实形状=type/state/last_error/retried/max_retry/last_failed_at）
  * - 同日弹层形态批：任务详情/死信详情 dialog→右抽屉 620px（详情=抽屉/动作=对话框
- *   全仓统一，frontend-standard §弹层形态；表单类 提交任务/新建任务定义 仍 dialog）
+ *   全仓统一，docs/design/frontend-ui.md §弹层形态；表单类 提交任务/新建任务定义 仍 dialog）
  * - 同日定义管理批：任务定义行补详情抽屉（行数据直显零请求——GET 单查端点前后端均无，
  *   04 号 §3.7 拆页前最小闭环）+编辑对话框（updateJob patch 全字段：cron/params/
  *   description/dept/timeout_secs；action_id/trigger_type 上游无改口只读展示）；
@@ -717,7 +717,7 @@ useTableFit(deadTable, () => deadList.value)
       </el-tabs>
     </el-card>
 
-    <!-- 任务详情（job_runs 快照 + live_state）——详情=右抽屉统一形态（frontend-standard §弹层形态，长文档 620px） -->
+    <!-- 任务详情（job_runs 快照 + live_state）——详情=右抽屉统一形态（docs/design/frontend-ui.md §弹层形态，长文档 620px） -->
     <el-drawer v-model="detailVisible" title="任务详情" size="620px">
       <div v-loading="detailLoading">
         <template v-if="detail">
@@ -752,7 +752,7 @@ useTableFit(deadTable, () => deadList.value)
 
     <!-- 死信详情（2026-11-03 排障批——行数据直显零请求；真实字段 type/state/重试账 + last_error 全文；
          原臆测字段 request_id/job_id/dept/params 在 asynq archived 投影中不存在，dev 实测取证后删除。
-         形态=右抽屉 620px（frontend-standard §弹层形态长文档，与审计请求详情/Panic 详情齐平）） -->
+         形态=右抽屉 620px（docs/design/frontend-ui.md §弹层形态长文档，与审计请求详情/Panic 详情齐平）） -->
     <el-drawer v-model="deadDetailVisible" title="死信详情" size="620px">
       <template v-if="deadDetail">
         <el-descriptions :column="2" border>

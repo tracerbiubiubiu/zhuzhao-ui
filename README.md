@@ -2,91 +2,23 @@
 
 [![CI](https://github.com/tracerbiubiubiu/zhuzhao-ui/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/tracerbiubiubiu/zhuzhao-ui/actions/workflows/ci.yml?query=branch%3Amain)
 
-zhuzhao（Go 模块化单体 IAM + 工单系统）的前端控制台。**全部页面唯一家**（单仓单 SPA）：system（用户/角色/菜单/组织）、ticket（工单）、task（任务管理）、al（活动列表，走网关反代 `/al/api/v1`）、audit（审计）。
+zhuzhao（Go 模块化单体 IAM + 工单系统）的 Vue 控制台。单仓单 SPA 承载系统管理、工单、任务、活动列表、消息与审计；所有业务请求经 zhuzhao 网关，浏览器不直连内部服务。
 
-## 状态
+## 开始使用
 
-**Phase 4 完成定义达成（2026-09-29 收官，四轮审计后 2026-09-30 终态）**——主仓 02 §5.2 四条终验全绿：四波（W2 壳层/W3 system/W4 ticket/W5 三域）+P4-9 部署件+穿插池点名五件（通知/字典/导出/验证码/P2 小件）+加成交付（PAT/P4-8 四件套/cron 收归 B-1 根治）。四轮审计 31 项处置：27 解决（10-01 补修批 P1-1/2/3+P3-8；10-03 快赢批 P3-5/6/7/11、用户价值批 P2-7/11/12、卫生批 P2-8/9/10、收尾批 P2-5+P3-4 定性+P3-12）/ 3 设计取舍 / 0 遗留 / 1 撤回——**全部清账**——逐项基线见 `deliverables/audit-recheck-4rounds-2026-10-01.md`（E2E 断言加固为真数据级）。E2E 20 spec / 24 用例打真实栈全绿（W5 场景五栈），Vitest 15 文件 / 118 用例（Phase 4 收官时点计数，现行计数以「前端门禁」段为准）。i18n 英文面显式暂不启用（2026-10-02 拍板，触发器=英文用户出现；locales 为预留基建——详见主仓 02 §5.4）。
-
-**后续批次（2026-10-08~12，收官后持续迭代）**：多账号权限测试发现并修复非 admin 工单筛选占位符 500（主仓 4a18789）+任务定义 Tab 403 门控（ce13f5d7）+组织树读权限放开（主仓 000041/000042）；测试规范成文（docs/testing-standard.md）+FE4 非 admin 哨兵；三角色账号就绪（operator E2E9020 / viewer E2E9030 由 globalSetup 幂等补建，角色种子 000002）；活动列表（al 域）改名「活动列表」+排版改版（类型上下文头/行详情抽屉/空态引导/废弃类型只读视图/软删恢复闭环，配套主仓迁移 000040 与 activelist include_deleted）；用户列表操作列「主操作+更多」下拉；工单列表筛选栏重排+勾选型筛选即时生效；组织/菜单树填充链补齐+Profile PAT 表 useTableFit 补挂+第三道闸（el-table 漏挂扫描）；提交归属审计与 useTableFit 报告复核入档 `deliverables/`（归属审计结论：交叉污染 2 笔双向各一、内容零错位、不重写共享 main）；活动列表两栏改版（左类型清单取代下拉）。
-
-**Phase 5 建设期（2026-10-13 起，`phase5` 分支）**：E2E 五件补齐——消息中心（S6）/流程画布（S2）/工单转换+规则（S3a）/CC 标签（S10）/通知配置管理面（2026-10-25/26，phase5 曾全程未落浏览器）；任务中心三 Tab 改版+动作下拉；组织树交互两批（默认收起+滚动联动层级面包屑；可点回跳/层级参考线/按级展开/悬停全路径）；al 域连续批（字段级上限/唯一键多选/数据页筛选栏）；走查反馈批（空态引导三件/时间工具/错误码收口，覆盖 19 页）；apiPaths 网关前缀门禁（storage 六端点漏前缀类缺陷的静态捕获层）；codegen 生成物对齐后端 107 端点（2026-10-28）；幽灵分派后端校验+审计抽屉复制+发送记录筛选（2026-10-28/29，跨仓联动）；分页四形态统一+分页覆盖哨兵+UI 惯例哨兵+FilterBar 筛选折叠+卡片头收敛+日期快捷段 useDatePresetRange（2026-10-29/30 细节收敛周）；页签栏业界对齐批（刷新持久化+权限过滤恢复+中键关闭+表单弹窗禁遮罩关闭+语言切换器闸门隐藏，2026-11-03）。**现行计数：E2E 30 spec / 41 用例、Vitest 31 文件 / 241 用例**（与 AGENTS 同口径）。
-
-## 分支纪律
-
-**Phase 4 收官后小批直提 main**：门禁全绿 + 推送后核实 CI run 转绿即合（2026-09-29 收官起的既成实践，2026-10-08 口径更新）。大批量或有风险改动恢复 Wave 短分支制（`feat-…`/`fix-…`，合入即删）。对齐主仓 standards §12.7 单主干精神。当前 **Phase 5 建设期**即按此制走 `phase5` 分支（2026-10-13 起，CI 触发分支已含 phase5；合入 main 时机随收官拍板）。
-
-## 提交规范与机械检查
-
-采用主仓 [standards.md §12-9](../zhuzhao/docs/standards.md) 的硬规则①–⑤：Conventional Commit（可省 scope，单 scope）、说明部分 ≤50 个 Unicode 字符、不以句号结尾、主题与正文空行分隔、正文非空。中文说明包含改动、影响与验证证据。所有新提交包含 merge 均检查；本仓与四个 Go 仓使用同字节 `scripts/commit-policy.py`，复验见主仓 [RR-GIT-01](../zhuzhao/deliverables/software-company/zhuzhao-report-followup-2026-11-08.md)。协作纪律见 [AGENTS「提交规范」](./AGENTS.md)。
+需要 Node.js ≥20.19 和仓库 `package.json` 钉定的 pnpm；在本仓根目录执行：
 
 ```bash
-pnpm hooks             # 新环境/当前worktree安装三钩；Python 3 + Git，零新增npm依赖
-pnpm test:commit-lint   # 35项黑盒；Git写操作只发生在临时fixture
-# 推送前三件流程仍须执行；窗口检查前先刷新远端引用：
-git fetch origin
-pnpm commit-lint        # 当前分支实际待推窗口，非猜测HEAD~N
+corepack enable
+pnpm install --frozen-lockfile
+pnpm hooks
+pnpm dev
 ```
 
-`commit-msg` 拦不合规新消息，保留跨主题重题守卫；`pre-commit` 提示其他在途文件，提交仍须显式路径；`pre-push` 按 Git 实际提供的全部 refs 再核待推提交。安装只写 worktree scope，保留 common hooksPath，避免改动其他工作树。CI 独立 `commit-policy` job 拉完整历史、读取 push/PR 事件载荷复用同核，缺对象失败；CI 仅可按完整 OID 补取对象。
+前端地址为 `http://127.0.0.1:4000`，后端及真实上游的启动顺序见[开发与联调](docs/guides/development.md)。进入改动前先读[协作协议](AGENTS.md)，交付运行 `pnpm gate` 六件门禁。
 
-`scripts/commit-policy-baseline` 固定为接入前 `bebfe523d2a84f7d017bc46fcaf05d38e883844c`，其祖先保留历史豁免，不能随 HEAD 滚动；严格历史审计用 `python3 scripts/commit-policy.py range --strict --before <完整旧SHA> --after <完整新SHA>`。原 `pnpm gate` 六件保持不变。
+## 文档入口
 
-## 设计文档（不随本仓，指回主仓）
+从[任务导读](docs/README.md)选择阅读路径：贡献与提交、页面/组件开发、测试、请求契约、部署发布和历史审计。UI 自身指南与设计维护在本仓 `docs/`；跨服务工程/API/IAM 和阶段决策仍回链主仓权威文档。
 
-- **工程设计 SSOT**：`zhuzhao/docs/phase4/01-frontend-design.md`（技术栈/壳层四件/状态分界/范例页/门禁/里程碑）
-- **Phase 5 设计**：`zhuzhao/docs/phase5/`（建设期各批设计，README 为索引）
-- 实施计划：`zhuzhao/docs/phase4/02-implementation-plan.md`（P4-W2..W5 + 穿插池）
-- 场景与测试矩阵：`zhuzhao/docs/phase4/03-scenarios-and-tests.md`
-- 权限矩阵：`zhuzhao/docs/review/12-b13-permission-matrix-2026-09-26.md`
-
-> 口径：Phase 文档统一住主仓 `zhuzhao/docs/`（文档驱动约定）；本仓只放**随仓操作文档**（AGENTS.md + 构建说明）。审计/复检类时点报告住 `deliverables/`，命名 `<topic-kebab>-<YYYY-MM-DD>.md`。
-
-## 技术栈（已拍板）
-
-Vue 3 + TypeScript strict + Vite 8 ｜ Element Plus 2.14 ｜ Pinia 4（客户端态）+ vue-query（服务端态，W3 接入）｜ Playwright 1.63（E2E）｜ 类型生成 swagger2openapi + openapi-typescript ｜ 底座 = vue-element-plus-admin v3 种子拷入（degit 不 fork；上游锚点 `.seed-commit`）
-
-## 前端门禁
-
-> 测试策略 SSOT：[docs/testing-standard.md](./docs/testing-standard.md)（分层职责/不 mock 决策/防漂移闸/非 admin 哨兵）。
-
-```bash
-pnpm lint        # ESLint（纯检查；修复用 pnpm lint:fix）
-pnpm typecheck   # vue-tsc --noEmit（codegen 类型**部分接线**：入参5/16、出参storage 1/16，合计6/16文件——漂移仅接线面报错，与 AGENTS 同口径）
-pnpm test        # Vitest（动态路由/请求层/keep-alive 防漂移等——31 文件 / 241 用例）
-pnpm build       # 生产构建
-pnpm audit --prod # npm 供应链
-pnpm test:e2e    # Playwright（S1–S8/S10/S12/S16–S17/FE3·FE4/W4·W5/P4/P5 穿插池——30 spec / 41 用例，运行前提见下）
-pnpm gate        # 六件门禁一键串行（lint → typecheck → test → audit:prod → build → test:e2e）
-```
-
-### E2E 运行前提（打标准三栈，不用 stub）
-
-```bash
-# ① 后端栈：主仓 dev PG/Redis + app（宿主进程）
-cd ../zhuzhao && bash scripts/dev-stack.sh up
-INTERNAL_JOBS_SK=dev-e2e-callback-sk make dev        # app @33333
-# ② activelist 上游（W5 al 场景需四栈）：PG + 服务（验签 SK 须与主仓 gateway.sk 一致）
-cd ../activelist && docker compose -f deploy/compose.dev.yaml up -d
-ACTIVELIST_PG_PORT=15432 ACTIVELIST_CALLER_ZHUZHAO_SK=dev-gateway-sk go run ./cmd/apiserver  # @18081（自身 config 默认，11-02 迁移后）
-#    + 主仓 make dev 自动注入 GATEWAY_AL_TARGET=http://127.0.0.1:18081（宿主形态 /al 上游
-#    免改 config——2026-11-02 env 注入治理；compose 形态读 config 默认服务名，天然可达）
-# ③ taskrunner 上游（W5 task 场景需五栈；Redis 复用 dev 栈 6379、SQLite 零依赖）
-cd ../taskrunner && TASKRUNNER_HTTP_ADDR=:18080 TASKRUNNER_REDIS_PASSWORD=zhuzhao_dev \
-  TASKRUNNER_CALLER_ZHUZHAO_SK=dev-taskrunner-sk TASKRUNNER_SELF_SK=dev-callback-sk \
-  TASKRUNNER_CALLBACK_TARGET_URL=http://127.0.0.1:33333/internal/jobs/callback go run ./cmd/taskrunner
-#    + ① 的 make dev 带 env：TASKRUNNER_BASE_URL=http://127.0.0.1:18080 TASKRUNNER_SK=dev-taskrunner-sk
-# ④ 前端 dev server（vite @4000，/api、/al 反代 33333）由 Playwright webServer 自动拉起
-cd ../zhuzhao-ui && pnpm test:e2e
-```
-
-globalSetup 幂等建号（admin 凭据闭环首跑改密、operator/viewer 预设绑定、S1 重置）——可无限重放；凭据可用 `E2E_ADMIN_PASSWORD` 等 env 覆盖。
-
-### 类型生成（codegen）
-
-```bash
-# 主仓侧改动 API 后：先 make swag（主仓），再：
-pnpm codegen     # scripts/codegen.sh：swagger 2.0 → openapi 3.0 → src/api/__generated__/
-```
-
-生成物随仓提交、不手改（01 §3.3 纪律）；主仓路径非 `../zhuzhao` 时设 `ZHUZHAO_REPO`。
+Phase 4 已收官；Phase 5 的交付范围、修复与未合 main 的边界见[审查入口](docs/review/README.md)及所链接的主仓当前台账。历史报告只证明其注明的提交和环境，CI badge 也不替代本次门禁收据。

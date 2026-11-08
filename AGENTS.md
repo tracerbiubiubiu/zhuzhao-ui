@@ -14,12 +14,12 @@
 
 ## 前端门禁（每批交付前必跑）
 
-> 测试策略与纪律（分层职责/不 mock 决策/变异验牙/FE4 哨兵/豁免登记/独占跑）SSOT = [docs/testing-standard.md](./docs/testing-standard.md)。
+> 测试策略与纪律（分层职责/不 mock 决策/变异验牙/FE4 哨兵/豁免登记/独占跑）SSOT = [docs/guides/testing.md](./docs/guides/testing.md)。
 
 ```bash
 pnpm lint          # ESLint（纯检查；自动修复用 pnpm lint:fix，修复后重跑 lint）
 pnpm typecheck     # vue-tsc --noEmit（codegen 类型**部分接线**：入参 5/16 api 文件引 __generated__（user/role/profile/selfService/ticket；2026-11-06 按调用 request.* 的 api 文件口径，ticket仅Create/Assign两路）、出参 storage 1/16 接线生成schema（合计6/16文件有接线）——漂移仅接线面编译期报错，勿视为全量守卫；改 API 形状后先 pnpm codegen，补接线随域渐进）
-pnpm test          # Vitest（动态路由解析/请求层单飞刷新/keep-alive 防漂移断言等——31 文件 / 241 用例，含六哨兵矩阵：apiPaths 前缀/viewNames/epImports 导入/tableFit/分页覆盖/uiConventions——全表见 frontend-standard「防漂移哨兵矩阵」）
+pnpm test          # Vitest（动态路由解析/请求层单飞刷新/keep-alive 防漂移断言等——31 文件 / 241 用例，含六哨兵矩阵：apiPaths 前缀/viewNames/epImports 导入/tableFit/分页覆盖/uiConventions——全表见 docs/guides/testing.md「防漂移哨兵矩阵」）
 pnpm audit --prod  # npm 供应链（对称 Go 侧 govulncheck；镜像源无 audit 端点时加 --registry=https://registry.npmjs.org）
 pnpm build         # 产物构建
 pnpm test:e2e      # Playwright（S1–S8/S10/S12/S16–S17/FE3·FE4/W4·W5/P4/P5 穿插池——30 spec / 41 用例；打真实栈不用 stub——W5 需 activelist/taskrunner 上游，前提见下）
@@ -28,9 +28,11 @@ pnpm gate          # 六件门禁一键串行（lint → typecheck → test → 
 
 **E2E 运行前提**：主仓 `bash scripts/dev-stack.sh up`（dev PG/Redis）+ `INTERNAL_JOBS_SK=xxx make dev`（app @33333）；W5 场景另需两上游：activelist（compose.dev PG@15432 + `ACTIVELIST_CALLER_ZHUZHAO_SK=dev-gateway-sk go run ./cmd/apiserver`——监听地址随其自身 config 默认 :18081（11-02 迁移后），无需 addr env + 主仓 `make dev` 自动注入 `GATEWAY_AL_TARGET=http://127.0.0.1:18081` 免改 config（2026-11-02 env 注入治理））+ taskrunner（@18080：TASKRUNNER_HTTP_ADDR=:18080 + TASKRUNNER_REDIS_PASSWORD=zhuzhao_dev + CALLER_ZHUZHAO_SK=dev-taskrunner-sk/SELF_SK + CALLBACK_TARGET_URL=http://127.0.0.1:33333/internal/jobs/callback，app 侧带 TASKRUNNER_BASE_URL=http://127.0.0.1:18080/TASKRUNNER_SK=dev-taskrunner-sk）；vite dev server 由 Playwright webServer 自动拉起。globalSetup 幂等建号（admin 凭据闭环/operator·viewer 预设/S1 重置），可无限重放。浏览器下载被墙时：`PLAYWRIGHT_DOWNLOAD_HOST=https://cdn.npmmirror.com/binaries/playwright pnpm exec playwright install chromium`。
 
+**测试账号纪律**：E000001（superadmin种子号）密码终态恒为`admin12345`；人工/agent多账号测试一律用专属E000002+，禁止修改E000001。仅acceptance/globalSetup既定幂等例外流或主仓break-glass复原可收敛其值，权威见主仓runbook §4。
+
 **纪律**：门禁不全绿不得标记完成；E2E 打真后端（菜单可见性/权限码必须打真实数据）；CI（`.github/workflows/ci.yml`）跑 lint/typecheck/build/audit/test——E2E 与 Go 仓 acceptance 同口径走本地人工验收；**推送后核实 CI run 转绿才算交付闭环**（`gh run list`/`gh run watch`——本地绿≠CI 绿：CI 单仓 checkout/全新安装等环境差曾致挂（2026-10-02 三连挂教训），README badge 仅为被动入口，跨仓依赖的测试改动合入前先过一遍「CI 无同级仓」假设）。
 
-**i18n 口径（2026-10-02 拍板，主仓 02 §5.4 检查点结论文）**：英文面**显式暂不启用**——触发器=外部协作者/英文用户出现（未命中）。`src/locales/` 骨架与 en 词包为**预留基建勿删**（含 `login.*Placeholder` 闲置键）；新页面文案直接中文，勿新增半成品键。**切换器已随 2026-11-03 批隐藏**（`appConfig.ui.locale=false` 闸门——ToolHeader/Login 双挂载点同源，露出即承诺而 en 词包仅骨架；翻案时回 `true` 即恢复）。翻案时方案见 02 §5.4（key 映射层），需连带迁移 `e2e/ui.ts` 登录锚点（26 spec 依赖）。
+**i18n 口径（2026-10-02 拍板，主仓 02 §5.4 检查点结论文）**：英文面**显式暂不启用**——触发器=外部协作者/英文用户出现（未命中）。`src/locales/` 骨架与 en 词包为**预留基建勿删**（含 `login.*Placeholder` 闲置键）；新页面文案直接中文，勿新增半成品键。**切换器已随 2026-11-03 批隐藏**（`appConfig.ui.locale=false` 闸门——ToolHeader/Login 双挂载点同源，露出即承诺而 en 词包仅骨架；翻案时回 `true` 即恢复）。翻案时方案见 02 §5.4（key 映射层），需连带迁移 `e2e/ui.ts` 登录锚点（共用登录锚点的spec须同步核对）。
 
 ## 类型生成（codegen，随契约批）
 
@@ -38,12 +40,12 @@ pnpm gate          # 六件门禁一键串行（lint → typecheck → test → 
 
 ## 提交规范
 
-- 中文提交信息，描述改动+原因+验证证据；**主题行 `type(scope): ` 后 ≤50 字**（对齐主仓 [standards.md §12-9](../zhuzhao/docs/standards.md)；硬规则①–⑤已由 `scripts/commit-policy.py` 同核守卫，2026-11-08 落地，复验登记 [RR-GIT-01](../zhuzhao/deliverables/software-company/zhuzhao-report-followup-2026-11-08.md)）
+- 中文提交信息，描述改动+原因+验证证据；**主题行 `type(scope): ` 后 ≤50 字**（对齐主仓 [standards.md §12-9](../zhuzhao/docs/standards.md)；硬规则①–⑤已由 `scripts/commit-policy.py` 同核守卫，2026-11-08 落地，复验登记 [RR-GIT-01](../zhuzhao/docs/review/reports/zhuzhao-report-followup-2026-11-08.md)）
 - 分支：Phase 4 收官后小批直提 main（门禁绿+推送后核实 CI；2026-10-08 口径更新——收官后 40+ 笔既成实践）；大批量/风险改动恢复建设期 Wave 短分支制（p4-w2-shell…，合入即删）——本仓 main 即集成分支（**对主仓 02 §5.1 phase4 拓扑的显式豁免**，2026-09-28 注记；主仓侧同日已注记）
 
 - 开工先 `pnpm hooks`：只为当前 worktree 安装 `.githooks`，保留 common hooksPath；`pre-commit` 在途显影、`commit-msg` 先校验消息再拦跨主题重题、`pre-push` 按实际推送 refs 检查新提交。需要 Python 3 + Git，无新增 npm 依赖。
-- `git fetch origin` 后 `pnpm commit-lint` 核对当前分支待推送窗口；`pnpm test:commit-lint` 跑 35 项隔离黑盒。CI 独立 `commit-policy` job 以事件载荷的 before/after 或 PR base/head 复用同核，包含新 merge 提交；历史采用 `scripts/commit-policy-baseline` 固定接入点 `bebfe523d2a84f7d017bc46fcaf05d38e883844c` 的祖先豁免，禁止滚动基线隐藏新违规。历史不改写，严格追溯用 `range --strict`。
-- 提交只带本批显式路径，禁止 `git add -A`、`git commit -a` 或无路径裸提交；提交后核对 `git show --stat`。原 `pnpm gate` 六件不变，提交规范检查独立运行，详见 [README「提交规范与机械检查」](./README.md)。
+- `git fetch origin` 后 `pnpm commit-lint` 核对当前分支待推送窗口；`pnpm test:commit-lint` 跑 42 项隔离黑盒（2026-11-08；后续以测试源码/实际输出为准）。CI 独立 `commit-policy` job 以事件载荷的 before/after 或 PR base/head 复用同核，包含新 merge 提交；历史采用 `scripts/commit-policy-baseline` 固定接入点 `152258638abaa3bd3daa656255a794c5422a0e58` 的祖先豁免，禁止滚动基线隐藏新违规。历史不改写，严格追溯用 `range --strict`。
+- 提交只带本批显式路径，禁止 `git add -A`、`git commit -a` 或无路径裸提交；提交后核对 `git show --stat`。原 `pnpm gate` 六件不变，提交规范检查独立运行，详见 [贡献指南「提交规范与机械检查」](./docs/contributing.md#提交规范与机械检查)。
 
 ## 变更评审三节（前端适配）
 
@@ -60,12 +62,12 @@ pnpm gate          # 六件门禁一键串行（lint → typecheck → test → 
 - **日期**：一律 `YYYY-MM-DD`
 - **标题**：H1 = `# <文档名> — <一句话定位>`，章节用 H2、不编号
 - **计数口径**（随实际增长同步，禁止两处不同值）：E2E「30 spec / 41 用例」（P5 六件=CC 标签/S2 画布/S6 消息中心/S3a 转换+规则/通知配置管理面，2026-10-25/26 补齐——phase5 曾全程未落浏览器，见主仓 11 号同日批次行）、单测「31 文件 / 241 用例」、E2E 范围串「S1–S8/S10/S12/S16–S17/FE3·FE4/W4·W5/P4/P5 穿插池」、门禁统称「六件门禁」（lint/typecheck/test/audit/build/test:e2e，一键=`pnpm gate`）
-- **存放**：Phase 设计文档住主仓 `zhuzhao/docs/`（SSOT）；本仓放操作文档（README/AGENTS/子模块说明）；时点报告住 `deliverables/`，命名 `<topic-kebab>-<YYYY-MM-DD>.md`（对齐主仓 deliverables/ 惯例）
-- **计数/状态声明须与实测一致**：改 E2E/单测数量或修复状态时，同批更新 README 与 AGENTS 两处；「全部修复」类表述须有逐项证据（deliverables/ 报告为凭）
+- **存放**：五仓各自维护 `docs/`、统一分类；UI自身设计/规范/指南归本仓，跨服务工程/API/IAM/迁移与阶段决策仍回链主仓唯一权威。根README为入口、AGENTS保留机器协议；正式时点报告住 `docs/review/reports/`，命名 `<topic-kebab>-<YYYY-MM-DD>.md`，原日志/执行卡等留 `.codex/`。`doc/`为本地参考，旧deliverables/outputs/audit-reports不再受控入口，Git与Docker均忽略。
+- **计数/状态声明须与实测一致**：改 E2E/单测数量或修复状态时，以实际输出和本节快照核对，README只保留入口不复制数字；「全部修复」类表述须有逐项证据（docs/review/reports/或主仓当轮收据为凭）
 
 ## 前端 UI 规范（2026-10-08 制定）
 
-**新增/改动任何页面前必读 [docs/frontend-standard.md](docs/frontend-standard.md)**——铁律：**页面不动，所有页面锁定视口，一切滚动条都在内部元素上**（列表页=表格内滚+分页钉底；内容页=内容区容器内滚）；**详情=右抽屉/动作=对话框**（详情类禁开 dialog——2026-11-03 七处详情全抽屉归位，宽度两档：键值 560/长文 620，§弹层形态）。文档含三种页面骨架配方、表格列宽（内容列 `minWidth`，全固定宽=宽屏右侧死区）、分页口径（ProTable 统一 `[10,20,50,100]` 默认 20；cursor/面板型见文档）、弹层形态纪律、滚动归属（Backtop 盯 `.v-app-view`）、踩坑记录（数量随事故增长，以文档为准勿引死数）与新增页 checklist。
+**新增/改动任何页面前必读 [docs/design/frontend-ui.md](docs/design/frontend-ui.md)**——铁律：**页面不动，所有页面锁定视口，一切滚动条都在内部元素上**（列表页=表格内滚+分页钉底；内容页=内容区容器内滚）；**详情=右抽屉/动作=对话框**（详情类禁开 dialog——2026-11-03 七处详情全抽屉归位，宽度两档：键值 560/长文 620，§弹层形态）。文档含三种页面骨架配方、表格列宽（内容列 `minWidth`，全固定宽=宽屏右侧死区）、分页口径（ProTable 统一 `[10,20,50,100]` 默认 20；cursor/面板型见文档）、弹层形态纪律、滚动归属（Backtop 盯 `.v-app-view`）、踩坑记录（数量随事故增长，以文档为准勿引死数）与新增页 checklist。
 
 ## 前端契约速查（详细见主仓 01 号）
 

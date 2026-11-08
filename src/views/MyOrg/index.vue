@@ -155,7 +155,7 @@ useTableFit(rosterTable, () => roster.value)
 </script>
 
 <template>
-  <!-- 填充链(docs/frontend-standard.md):组织卡 flex-none 不参与拉伸,名册卡吃满剩余高度内滚 -->
+  <!-- 填充链(docs/design/frontend-ui.md):组织卡 flex-none 不参与拉伸,名册卡吃满剩余高度内滚 -->
   <div class="fill-page p-4">
     <el-card shadow="never" class="mb-4 !flex-none">
       <template #header><span class="font-semibold">我的组织</span></template>

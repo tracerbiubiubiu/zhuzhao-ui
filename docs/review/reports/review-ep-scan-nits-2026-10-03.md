@@ -1,5 +1,7 @@
 # 复核 `eea5b8e5`（epImports 扫描 nit①②）— nit① 真实生效；nit② 口径已纠正并补闸（已闭环）
 
+> 历史时点报告：保留原提交、失败、计数与验证范围；当前操作规范及后续关系见[审查入口](../README.md)。文中非链接的旧路径/命令属于当时记录。
+
 - 复核对象：`eea5b8e5`（HEAD = `origin/main`，工作树干净）
 - 复核方式：读 diff + 变异测试 + 出处溯源 + 全量门禁
 
@@ -66,4 +68,3 @@ src/App.vue: <el-zzz-probe> 需要 import ElZzzProbe（缺失 → 运行时静�
 | `App.vue` 插 `<el-zzz-probe />`（上例） | 报警并点名 | ✅ `src/App.vue: <el-zzz-probe> 需要 import ElZzzProbe` |
 
 门禁：`eslint .` 0 / `vue-tsc --noEmit --skipLibCheck` 0 / `vitest run` **14 文件 / 108 用例**。
-

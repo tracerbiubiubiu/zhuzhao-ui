@@ -26,7 +26,7 @@ const types = ref<DictTypeRow[]>([])
 const typesLoading = ref(false)
 const selectedType = ref<DictTypeRow | null>(null)
 // 豁免登记（分页约定 §禁伪装全量）：双表 page_size=100 拉近全量——字典量级
-// 设计为小（类型/项各 ≤ 数十）；超 100 静默截断属异常场景可接受（frontend-standard
+// 设计为小（类型/项各 ≤ 数十）；超 100 静默截断属异常场景可接受（docs/design/frontend-ui.md
 // 分页统一约定在册豁免，量级增长时改真分页）。
 const keyword = ref('')
 // 客户端触发即时化（2026-10-28 筛选 v2 整改）：输入 300ms 防抖即查——
@@ -199,7 +199,7 @@ useTableFit(itemsTable, () => items.value)
 </script>
 
 <template>
-  <!-- 填充链(docs/frontend-standard.md):双栏等高,两表各自内部滚动 -->
+  <!-- 填充链(docs/design/frontend-ui.md):双栏等高,两表各自内部滚动 -->
   <div class="fill-page p-4">
     <div class="flex flex-1 gap-4 min-h-0">
       <!-- 左：类型 -->
@@ -305,7 +305,7 @@ useTableFit(itemsTable, () => items.value)
 </template>
 
 <style scoped>
-/* 双栏等高填充(docs/frontend-standard.md):卡片弹性列,卡片体弹性化,表格区由页内 wrap 控高 */
+/* 双栏等高填充(docs/design/frontend-ui.md):卡片弹性列,卡片体弹性化,表格区由页内 wrap 控高 */
 .dict-pane {
   display: flex;
   flex: 1;

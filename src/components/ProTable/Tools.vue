@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
  * ProTable 数据面工具组（密度/聚焦）——纯展示组件，状态与切换逻辑在 ProTable 本体。
- * 落位规则（frontend-standard.md「数据密度与聚焦模式」节）：toolbar 槽行右端 >
+ * 落位规则（docs/design/frontend-ui.md「数据密度与聚焦模式」节）：toolbar 槽行右端 >
  * 并入筛选行右端（不设孤行）> 独占行（皆无时兜底，当前仓内无此页型）。
  */
 import { ElButton, ElTooltip } from 'element-plus'

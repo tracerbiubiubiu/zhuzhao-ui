@@ -6,7 +6,7 @@
  * 三例同型事故的拦截层；③ 为形态纪律层，同型于六哨兵矩阵的防漂移定位）：
  *
  * ① 空态引导覆盖：主列表页 <el-table> 必须挂 #empty 槽（空态引导三件——行动
- *    出口 CTA/指引文案），默认「暂无数据」裸空态违反 frontend-standard §空态与加载。
+ *    出口 CTA/指引文案），默认「暂无数据」裸空态违反 docs/design/frontend-ui.md §空态与加载。
  * ② placeholder 长度：静态串 >14 可见字符 → 高概率被控件宽度截断显示不全
  *    （审计工号「如 E000001（含已删用户）」17 字符挤 176px 实测；规范 §筛选 v2
  *    控件细节③——≤8 中文字符，附注挪 title）。动态表达式（${}）豁免——
@@ -96,7 +96,7 @@ describe('UI 惯例哨兵矩阵', () => {
     for (const r of hosts) {
       const src = stripComments(readFileSync(join(ROOT, r), 'utf-8'))
       if (!/<el-table[\s>]/.test(src)) continue
-      if (!/#empty/.test(src)) violations.push(`${r}: 含 <el-table> 未挂 #empty 空态引导（frontend-standard §空态与加载）`)
+      if (!/#empty/.test(src)) violations.push(`${r}: 含 <el-table> 未挂 #empty 空态引导（docs/design/frontend-ui.md §空态与加载）`)
     }
     expect(violations.join('\n'), '主列表空态引导缺失').toBe('')
   })
@@ -133,7 +133,7 @@ describe('UI 惯例哨兵矩阵', () => {
         checked++
         const tag = extractTag(src, m.index)
         if (!tag.includes(':controls="false"')) {
-          violations.push(`${rel(f)}: el-input-number 未显式 :controls="false"（frontend-standard §数字输入形态——微调走键盘 ↑↓）`)
+          violations.push(`${rel(f)}: el-input-number 未显式 :controls="false"（docs/design/frontend-ui.md §数字输入形态——微调走键盘 ↑↓）`)
         }
       }
     }
