@@ -338,6 +338,16 @@ rules「新建规则」参照实现；org 页层级面包屑随工具行挪卡�
     弹层皮肤/宽度 CSS 选择器永不匹配，EP 默认 `min-width:200px` 裸奔（弹层 202px vs
     一级项 102px）。**传非空 popperClass 是样式生效前提**；弹层宽度随内容收紧用
     `min-width:0` + 项 padding 收敛，勿与后端 OFFSET 分页公式混淆（那是另一坑）。
+12. **keep-alive 缓存页组件订阅全局 route = 隐形重渲染发错请求**（2026-11-09 空 id 附件
+    400 事故，e2ea7171）：页签栏存在任一「工单详情」页签即令 cachedViews 含 TicketDetail
+    （cachedViews 按组件名聚合，含参数路由），实例离开视口后仍存活且 render effect 继续
+    订阅全局 route——导航时被隐形重渲染，route 派生值 patch 成新值或 `''`，watch 自动
+    请求跟着发（缓存 N 个详情页签 = 多发 N 份请求；patch 成 `''` 即
+    `GET /tickets//attachments` 400「参数错误」toast，每次进出详情必弹）。Vue 对
+    `isDeactivated` **无 scheduler 守卫**——「看不见」不等于「不渲染」。守则：凡缓存页
+    内 route 派生值驱动的自动请求面必须有空值/归属守卫（正面样板：detail 五路 query 的
+    `enabled`、`loadAvailableTransitions` 空 id 早退、TicketAttachments `refresh()` 守卫）；
+    回归由运行时哨兵锁死（见 [testing.md 哨兵矩阵](../guides/testing.md#防漂移哨兵矩阵)）。
 
 ## 页面布局快照（2026-10-08 立，10-30 修订）
 

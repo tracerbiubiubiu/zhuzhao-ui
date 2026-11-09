@@ -44,6 +44,8 @@ E2E 打真实五栈（PG/Redis/app/activelist/taskrunner）、断言真数据级
 
 新增防漂移闸（扫描/契约断言类）合入前**必须变异证明**：故意制造目标缺陷→测试变红→还原。先例：epImports（删模板 import→红）、useTableFit 扫描（摘 Profile 挂接→红）。未验牙的闸视同不存在。
 
+E2E **运行时**负向断言闸同纪律（2026-11-09 增补）：s5 B5-3「离开详情零空 id 附件请求」哨兵合入前，checkout 缺陷版组件跑 spec 验证精确变红再还原——运行时闸与静态扫描闸同一标准，未验牙视同不存在。
+
 ## 非 admin 盲区教训（2026-10-12 双例）
 
 两例缺陷均为 admin 单账号 E2E 的盲区：① 工单列表筛选占位符冲突 500（`4a18789`——viewer/operator 任意筛选即 500）；② 任务定义 Tab 急切拉 `/jobs` 403 toast（`ce13f5d7`——Tab 未按 task:manage 门控）。由此固化：
@@ -128,6 +130,8 @@ vite webServer 自动拉起（Playwright 探测 127.0.0.1:4000——strictPort �
 
 ## 防漂移哨兵矩阵
 
+**静态扫描层（六哨兵）**：
+
 | 哨兵 | 文件 | 拦截什么 |
 |---|---|---|
 | EP 导入完整性 | `src/epImports.test.ts` | 模板 el-* 缺 import（运行时静默失效）+字符串 prefix-icon 死图标 |
@@ -136,6 +140,12 @@ vite webServer 自动拉起（Playwright 探测 127.0.0.1:4000——strictPort �
 | UI 惯例 | `src/uiConventions.test.ts` | 主列表缺 #empty 空态引导/placeholder 超宽截断/el-input-number 漏 `:controls="false"` |
 | 图标注册 | `src/icons.test.ts` | 视图直写未注册图标（死图标） |
 | apiPaths 前缀 | `src/api/apiPaths.test.ts` | API 路径漏网关前缀 |
+
+**运行时层（E2E 内嵌断言，静态扫描看不见订阅关系类缺陷）**：
+
+| 哨兵 | 文件 | 拦截什么 |
+|---|---|---|
+| 空 id 附件请求 | `e2e/s5-storage-smoke.spec.ts` B5-3 结尾断言 | keep-alive 缓存详情实例被隐形重渲染后，route 派生自动请求面发空/发错请求（2026-11-09 空 id 400 事故——`/tickets//attachments` 每次进出详情必弹，e2ea7171 修+哨兵，变异验牙已过） |
 
 
 
