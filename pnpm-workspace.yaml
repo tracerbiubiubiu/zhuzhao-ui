@@ -16,3 +16,6 @@ overrides:
   # uuid moderate 漏洞（GHSA-w5hq-g745-h8pq——LogicFlow 传递依赖 <11.1.1
   # 缺 buffer 边界检查）；钉 >=11.1.1（CI audit --prod 守卫）
   uuid: ^11.1.1
+  # follow-redirects high 漏洞（GHSA-mrwp-f3q8-3g9p，<1.16.2）。原 package.json pnpm 段的同名钉
+  # 在 pnpm 12 下已不生效（且写死 1.16.1，若被重新启用会降级）——2026-11-09 迁入此处并上提下限
+  follow-redirects: ^1.16.2

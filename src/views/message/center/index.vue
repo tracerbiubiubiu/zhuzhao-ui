@@ -48,8 +48,8 @@ async function fetchTop(q: TicketListQuery, n: number): Promise<{ rows: TicketRo
   const size = Math.min(100, n) // 逐页固定——offset 连续不重不漏
   const rows: TicketRow[] = []
   let total = 0
-  for (let page = 1; rows.length < n; page++) {
-    const r = await listTicketsApi({ ...q, page, page_size: size })
+  for (let pageNo = 1; rows.length < n; pageNo++) {
+    const r = await listTicketsApi({ ...q, page: pageNo, page_size: size })
     total = r.total
     rows.push(...r.list)
     if (r.list.length < size) break // 不足页=源耗尽

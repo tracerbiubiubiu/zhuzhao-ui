@@ -117,7 +117,7 @@ describe('手动 el-table 挂接 useTableFit（列宽兜底防漏网，docs/desi
     // 静态门禁（eslint/tsc/build/现有单测）全绿也抓不到漏挂——2026-10-08 useTableFit 批
     // 自检报告 P1-2 实证 Profile 漏网。本用例为该类的自动捕获层（与 epImports 同型）。
     // 豁免：对话框/抽屉内定宽表（容器恒定，无重排需求），须在此显式登记。
-    const EXEMPT = new Set([
+    const TABLE_FIT_EXEMPT = new Set([
       join(ROOT, 'views/ticket/type/index.vue'), // 字段编辑器对话框内定宽 860px 表
     ])
     // 去 HTML 注释（文档性提及 <el-table 不算宿主）
@@ -126,7 +126,7 @@ describe('手动 el-table 挂接 useTableFit（列宽兜底防漏网，docs/desi
 
     const violations: string[] = []
     for (const f of hosts) {
-      if (EXEMPT.has(f)) continue
+      if (TABLE_FIT_EXEMPT.has(f)) continue
       if (f.endsWith(join('components', 'ProTable', 'index.vue'))) continue // 兜底内置组件本体
       const src = readFileSync(f, 'utf-8')
       if (!/useTableFit\(/.test(src)) violations.push(`${f}: 含 <el-table> 但未挂 useTableFit`)

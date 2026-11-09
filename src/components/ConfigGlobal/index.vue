@@ -12,8 +12,8 @@
   // 监听窗口变化
   watch(
     () => width.value,
-    (width: number) => {
-      if (width < 768) {
+    (w: number) => {
+      if (w < 768) {
         if (!appStore.mobile) {
           appStore.mobile = true
           appStore.collapse = true

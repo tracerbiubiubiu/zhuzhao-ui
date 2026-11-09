@@ -15,7 +15,7 @@ export async function primaryButtonStates(page: Page, button: Locator) {
       }
       throw new Error('按钮动画未稳定，不能测量最终颜色')
     })
-    return button.evaluate((el, state) => {
+    return button.evaluate((el, stateName) => {
       const style = getComputedStyle(el)
       const luminance = (color: string) => color.match(/[\d.]+/g)!.slice(0, 3).map(Number).map((v) => {
         const c = v / 255
@@ -23,7 +23,7 @@ export async function primaryButtonStates(page: Page, button: Locator) {
       }).reduce((sum, c, i) => sum + c * [0.2126, 0.7152, 0.0722][i], 0)
       const foreground = luminance(style.color), background = luminance(style.backgroundColor)
       return {
-        state, color: style.color, background: style.backgroundColor,
+        state: stateName, color: style.color, background: style.backgroundColor,
         ratio: (Math.max(foreground, background) + 0.05) / (Math.min(foreground, background) + 0.05),
         hover: el.matches(':hover'), active: el.matches(':active'),
         disabled: (el as HTMLButtonElement).disabled, opacity: style.opacity,

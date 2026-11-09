@@ -49,7 +49,7 @@ interface ApiOptions {
  * 仅在密集夹具完成或API分派后强制reload前，预留完整补桶窗40/20s+100ms。
  * 不是失败后重试；不改变真实限流，改测试栈规则时须同批核此预算。 */
 export async function waitUserRateBudget(): Promise<void> {
-  await new Promise((resolve) => setTimeout(resolve, 2100))
+  await new Promise((done) => setTimeout(done, 2100))
 }
 
 /** 裸 API 调用（Node fetch；信封与 HTTP 状态原样透出，由调用方分流）。
