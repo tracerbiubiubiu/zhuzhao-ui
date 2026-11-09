@@ -123,6 +123,25 @@ test.describe('S5 存储面冒烟', () => {
       await card.getByRole('button', { name: '重试' }).click()
       await expect(card.getByText('暂无附件')).toBeVisible()
       await expect(card.locator('.attachment-item')).toHaveCount(0)
+
+      // 空 id 附件请求哨兵（2026-11-09）：详情页进 keep-alive 缓存后仍跟踪全局 route
+      // （Vue isDeactivated 无 scheduler 守卫），离开详情时 TicketAttachments 曾被隐形
+      // 重渲染 patch 到 ticketId='' 并发 GET /tickets//attachments（400「参数错误」toast
+      // 每次进出详情必弹）。refresh() 已加空 id 守卫——此处锁死回归。
+      const attachmentRequests: string[] = []
+      page.on('request', (req) => {
+        if (req.url().includes('/attachments')) attachmentRequests.push(req.url())
+      })
+      await page.goto('/#/tickets')
+      await expect(
+        page.getByRole('navigation', { name: '面包屑' }).getByRole('link', { name: '工单列表' }),
+      ).toBeVisible({ timeout: 15_000 })
+      // 空 id fire 与路由变更同拍（watch→refresh 同步发出）——留缓冲使负向断言可信
+      await page.waitForTimeout(500)
+      expect(
+        attachmentRequests.filter((u) => u.includes('/tickets//attachments')),
+        `离开详情后出现空 id 附件请求: ${attachmentRequests.join(', ')}`,
+      ).toEqual([])
     } finally {
       await api('/api/v1/tickets/delete', { ...h, method: 'POST', body: { id: ticketId } }).catch(() => {})
     }

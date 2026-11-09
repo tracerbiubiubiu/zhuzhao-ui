@@ -74,8 +74,14 @@ let loadSequence = 0
 let disposed = false
 
 async function refresh(): Promise<boolean | undefined> {
-  const sequence = ++loadSequence
   const ticketId = props.ticketId
+  // 空 id 守卫（2026-11-09 根因修复）：详情页进 keep-alive 缓存（cachedViews 按组件名聚合，
+  // 页签栏有任一详情页签即缓存）后仍跟踪全局 route——Vue 对 isDeactivated 无 scheduler 守卫，
+  // 离开详情时本组件被隐形重渲染 patch 到 ticketId=''，watch 触发本函数曾致
+  // GET /tickets//attachments 400「参数错误」toast 每次进出详情必弹。
+  // 返回 undefined=「未刷新」，与「被较新刷新替代」的既有调用方语义一致（静默）。
+  if (!ticketId) return undefined
+  const sequence = ++loadSequence
   loading.value = true
   loadError.value = ''
   try {
