@@ -179,7 +179,7 @@ async function onToggleItem(row: DictItemRow, enabled: boolean) {
 
 async function onDeleteItem(row: DictItemRow) {
   try {
-    await ElMessageBox.confirm(`确认删除字典项「${row.label}」？`, '删除', { type: 'warning' })
+    await ElMessageBox.confirm(`确认删除字典项「${row.label}」？已选用该项的存量工单将只显示原始编码（建议改用「停用」——存量值不受影响）`, '删除', { type: 'warning' })
   } catch { return }
   try {
     await deleteDictItemApi(row.id)

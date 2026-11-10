@@ -241,7 +241,7 @@ watch(
     }
     for (const code of codes) {
       if (dictCache.value[code]) continue
-      const items = (await getDictItemsByCodeApi(code).catch(() => [])) ?? []
+      const items = (await getDictItemsByCodeApi(code, true).catch(() => [])) ?? []
       dictCache.value[code] = items.map((i) => ({ value: i.code, label: i.label }))
     }
   },
