@@ -30,6 +30,7 @@
       :selected="d.selected.value"
       :key-err="d.selected.value >= 0 ? d.keyError(d.selected.value) : ''"
       :regex-err="d.selected.value >= 0 ? d.regexError(d.selected.value) : ''"
+      @change-type="d.update(d.selected.value, { field_type: $event })"
       @add-option="d.addOption"
       @remove-option="d.removeOption"
     />
@@ -42,8 +43,7 @@
  *
  * 三层分离：画布交互（CanvasPane·sortablejs）/ 属性面板（PropertyPane）/
  * schema 适配与状态机（schemaAdapter + useDesigner——纯逻辑 vitest 直测）。
- * 与专家模式（type 页表格编辑器）共存：本组件经 defineExpose 暴露
- * loadFromDefs / serialize / saveBlocked，保存走同一 replaceTicketTypeFields
+ * 与专家模式（type 页表格编辑器）共享编辑状态，保存走同一 replaceTicketTypeFields
  * 全量替换管线（危险确认在调用方）。预览=真渲染器渲染真 schema 由调用方
  * 复用发起页 DynamicFormField（B1-1 后续接入预览 Tab）。
  *
@@ -53,12 +53,10 @@
 import { computed } from 'vue'
 import CanvasPane from './CanvasPane.vue'
 import PropertyPane from './PropertyPane.vue'
-import { createDesignerState } from './useDesigner'
+import type { DesignerState } from './useDesigner'
 import { FIELD_CATALOG } from './types'
-import type { TicketTypeFieldDef, TicketTypeFieldInput } from '@/api/ticket'
 
-// 命令式接口：dialog 打开时调用方 loadFromDefs(后端字段) 初始化
-const d = createDesignerState()
+const { state: d } = defineProps<{ state: DesignerState }>()
 
 const current = computed(() => (d.selected.value >= 0 ? d.fields.value[d.selected.value] ?? null : null))
 const errMap = computed(() => {
@@ -71,19 +69,6 @@ const errMap = computed(() => {
   return m
 })
 
-defineExpose<{
-  loadFromDefs: (defs: TicketTypeFieldDef[]) => void
-  serialize: () => TicketTypeFieldInput[]
-  saveBlocked: () => boolean
-  validate: () => ReturnType<typeof d.validate>
-  fields: typeof d.fields
-}>({
-  loadFromDefs: d.loadFromDefs,
-  serialize: d.serialize,
-  saveBlocked: d.saveBlocked,
-  validate: d.validate,
-  fields: d.fields,
-})
 </script>
 
 <style scoped>

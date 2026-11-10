@@ -2,7 +2,7 @@
  * transition_meta 载荷拆分/重组（纯函数——类型编辑弹窗与单测共用）
  *
  * 双形键共存（S10 B10-4 state 级 × S3a B3-1 转换级，03 号「校验分层」）：
- * - state 级键（"open"）= 超时/催办行，表单化编辑面消费；
+ * - state 级键（"open"）= 超时/催办行，SLA 等未编辑属性原样保留；
  * - 转换级键（"open>assigned"，含 ">"）= condition/validator/post_actions，
  *   无编辑面——**原样透传**（审计 A-6：此前 load/serialize 双侧不识别该键形，
  *   一次 UI 保存即静默清掉 API 侧配好的转换级配置）。
@@ -21,7 +21,28 @@ export function isTransitionKey(key: string): boolean {
   return key.includes('>')
 }
 
-/** meta 对象 → 表单行 + 转换级键透传桶（非对象段跳过，同旧口径） */
+interface StateMeta {
+  timeout_minutes?: number
+  escalation?: {
+    notify?: string[]
+    reminder_interval_minutes?: number
+    max_reminders?: number
+  }
+}
+
+function readStateRow(state: string, meta: StateMeta): MetaDraft {
+  const escalation = meta.escalation
+  return {
+    state,
+    timeout: meta.timeout_minutes,
+    notifyAssignee: !escalation?.notify || escalation.notify.includes('assignee'),
+    notifySupervisor: escalation?.notify?.includes('supervisor') ?? false,
+    interval: escalation?.reminder_interval_minutes,
+    max: escalation?.max_reminders,
+  }
+}
+
+/** 保留完整元数据。只有配置了超时分钟的状态进入超时编辑表格。 */
 export function splitTransitionMeta(raw: unknown): { stateRows: MetaDraft[]; preserved: Record<string, unknown> } {
   const stateRows: MetaDraft[] = []
   const preserved: Record<string, unknown> = {}
@@ -31,16 +52,10 @@ export function splitTransitionMeta(raw: unknown): { stateRows: MetaDraft[]; pre
       preserved[key] = seg
       continue
     }
-    if (typeof seg !== 'object' || seg === null) continue
-    const m = seg as { timeout_minutes?: number; escalation?: { notify?: string[]; reminder_interval_minutes?: number; max_reminders?: number } }
-    stateRows.push({
-      state: key,
-      timeout: m.timeout_minutes,
-      notifyAssignee: !m.escalation?.notify || m.escalation.notify.includes('assignee'),
-      notifySupervisor: m.escalation?.notify?.includes('supervisor') ?? false,
-      interval: m.escalation?.reminder_interval_minutes,
-      max: m.escalation?.max_reminders,
-    })
+    if (typeof seg !== 'object' || seg === null || Array.isArray(seg)) continue
+    preserved[key] = seg
+    const row = readStateRow(key, seg as StateMeta)
+    if (row.timeout != null) stateRows.push(row)
   }
   return { stateRows, preserved }
 }
@@ -53,36 +68,62 @@ export type BuildMetaResult =
 export function buildTransitionMeta(rows: MetaDraft[], states: string[], preserved: Record<string, unknown>): BuildMetaResult {
   const stateSet = new Set(states)
   const out: Record<string, unknown> = {}
-  let droppedRows = 0
+  const droppedRows = new Set<string>()
+  const droppedTransitions: string[] = []
+  for (const [key, value] of Object.entries(preserved)) {
+    if (isTransitionKey(key)) {
+      const parts = key.split('>')
+      if (parts.length === 2 && parts.every((p) => stateSet.has(p))) out[key] = value
+      else droppedTransitions.push(key)
+    } else if (stateSet.has(key)) {
+      const seg = { ...(value as Record<string, unknown>) }
+      // 超时行被删除时只去掉由该行管理的属性。
+      if (seg.timeout_minutes != null && !rows.some((row) => row.state === key)) {
+        delete seg.timeout_minutes
+        delete seg.escalation
+      }
+      if (Object.keys(seg).length) out[key] = seg
+    } else {
+      droppedRows.add(key)
+    }
+  }
   for (const r of rows) {
     if (!r.state) return { ok: false, error: '节点超时配置存在未选状态的行' }
     if (!stateSet.has(r.state)) {
-      droppedRows++
+      droppedRows.add(r.state)
       continue
     }
     if (r.timeout === undefined || r.timeout < 1) return { ok: false, error: `节点「${r.state}」超时分钟须 ≥1` }
     if (r.interval !== undefined && r.interval < 5) {
       return { ok: false, error: `节点「${r.state}」催办间隔须 ≥5 分钟（小于通知节流窗会被吞）` }
     }
-    const seg: Record<string, unknown> = { timeout_minutes: r.timeout }
+    const original = (out[r.state] ?? {}) as Record<string, unknown> & StateMeta
+    const seg = { ...original, timeout_minutes: r.timeout }
+    const previous = readStateRow(r.state, original)
+    const escalationChanged = r.notifyAssignee !== previous.notifyAssignee
+      || r.notifySupervisor !== previous.notifySupervisor || r.interval !== previous.interval || r.max !== previous.max
+    if (!escalationChanged) {
+      out[r.state] = seg
+      continue
+    }
     const hasEsc = r.notifySupervisor || r.interval !== undefined || r.max !== undefined
+    const escalation: Record<string, unknown> = { ...original.escalation }
+    delete escalation.notify
+    delete escalation.reminder_interval_minutes
+    delete escalation.max_reminders
     if (hasEsc) {
       const notify: string[] = []
       if (r.notifyAssignee) notify.push('assignee')
       if (r.notifySupervisor) notify.push('supervisor')
-      seg.escalation = {
+      Object.assign(escalation, {
         notify: notify.length ? notify : ['assignee'],
         ...(r.interval !== undefined ? { reminder_interval_minutes: r.interval } : {}),
         ...(r.max !== undefined ? { max_reminders: r.max } : {}),
-      }
+      })
     }
+    if (Object.keys(escalation).length) seg.escalation = escalation
+    else delete seg.escalation
     out[r.state] = seg
   }
-  const droppedTransitions: string[] = []
-  for (const [key, value] of Object.entries(preserved)) {
-    const parts = key.split('>')
-    if (parts.length === 2 && parts.every((p) => stateSet.has(p))) out[key] = value
-    else droppedTransitions.push(key)
-  }
-  return { ok: true, meta: out, droppedRows, droppedTransitions }
+  return { ok: true, meta: out, droppedRows: droppedRows.size, droppedTransitions }
 }

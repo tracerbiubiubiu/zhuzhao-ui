@@ -19,10 +19,10 @@
 ```bash
 pnpm lint          # ESLint（纯检查；自动修复用 pnpm lint:fix，修复后重跑 lint）
 pnpm typecheck     # vue-tsc --noEmit（codegen 类型**部分接线**：入参 5/16 api 文件引 __generated__（user/role/profile/selfService/ticket；2026-11-06 按调用 request.* 的 api 文件口径，ticket仅Create/Assign两路）、出参 storage 1/16 接线生成schema（合计6/16文件有接线）——漂移仅接线面编译期报错，勿视为全量守卫；改 API 形状后先 pnpm codegen，补接线随域渐进）
-pnpm test          # Vitest（动态路由解析/请求层单飞刷新/keep-alive 防漂移断言等——31 文件 / 241 用例，含六哨兵矩阵：apiPaths 前缀/viewNames/epImports 导入/tableFit/分页覆盖/uiConventions——全表见 docs/guides/testing.md「防漂移哨兵矩阵」）
+pnpm test          # Vitest（动态路由解析/请求层单飞刷新/keep-alive 防漂移断言等——31 文件 / 244 用例，含六哨兵矩阵：apiPaths 前缀/viewNames/epImports 导入/tableFit/分页覆盖/uiConventions——全表见 docs/guides/testing.md「防漂移哨兵矩阵」）
 pnpm audit --prod  # npm 供应链（对称 Go 侧 govulncheck；镜像源无 audit 端点时加 --registry=https://registry.npmjs.org）
 pnpm build         # 产物构建
-pnpm test:e2e      # Playwright（S1–S8/S10/S12/S16–S17/FE3·FE4/W4·W5/P4/P5 穿插池——30 spec / 41 用例；打真实栈不用 stub——W5 需 activelist/taskrunner 上游，前提见下）
+pnpm test:e2e      # Playwright（S1–S8/S10/S12/S16–S17/FE3·FE4/W4·W5/P4/P5 穿插池——30 spec / 42 用例；打真实栈不用 stub——W5 需 activelist/taskrunner 上游，前提见下）
 pnpm gate          # 六件门禁一键串行（lint → typecheck → test → audit:prod → build → test:e2e）——交付前跑这一条；任一红即停，E2E 不得再被「本地人工验收」口径静默跳过（2026-10-25 E2E 补齐批教训）
 ```
 
@@ -61,7 +61,7 @@ pnpm gate          # 六件门禁一键串行（lint → typecheck → test → 
 - **语言**：中文（代码标识符/命令/路径除外）；子模块 README 同口径
 - **日期**：一律 `YYYY-MM-DD`
 - **标题**：H1 = `# <文档名> — <一句话定位>`，章节用 H2、不编号
-- **计数口径**（随实际增长同步，禁止两处不同值）：E2E「30 spec / 41 用例」（P5 六件=CC 标签/S2 画布/S6 消息中心/S3a 转换+规则/通知配置管理面，2026-10-25/26 补齐——phase5 曾全程未落浏览器，见主仓 11 号同日批次行）、单测「31 文件 / 241 用例」、E2E 范围串「S1–S8/S10/S12/S16–S17/FE3·FE4/W4·W5/P4/P5 穿插池」、门禁统称「六件门禁」（lint/typecheck/test/audit/build/test:e2e，一键=`pnpm gate`）
+- **计数口径**（随实际增长同步，禁止两处不同值）：E2E「30 spec / 42 用例」（P5 六件=CC 标签/S2 画布/S6 消息中心/S3a 转换+规则/通知配置管理面，2026-10-25/26 补齐——phase5 曾全程未落浏览器，见主仓 11 号同日批次行）、单测「31 文件 / 244 用例」、E2E 范围串「S1–S8/S10/S12/S16–S17/FE3·FE4/W4·W5/P4/P5 穿插池」、门禁统称「六件门禁」（lint/typecheck/test/audit/build/test:e2e，一键=`pnpm gate`）
 - **存放**：五仓各自维护 `docs/`、统一分类；UI自身设计/规范/指南归本仓，跨服务工程/API/IAM/迁移与阶段决策仍回链主仓唯一权威。根README为入口、AGENTS保留机器协议；正式时点报告住 `docs/review/reports/`，命名 `<topic-kebab>-<YYYY-MM-DD>.md`，原日志/执行卡等留 `.codex/`。`doc/`为本地参考，旧deliverables/outputs/audit-reports不再受控入口，Git与Docker均忽略。
 - **计数/状态声明须与实测一致**：改 E2E/单测数量或修复状态时，以实际输出和本节快照核对，README只保留入口不复制数字；「全部修复」类表述须有逐项证据（docs/review/reports/或主仓当轮收据为凭）
 

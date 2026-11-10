@@ -1,3 +1,5 @@
+import type { TicketTypeFieldDef } from '@/api/ticket'
+
 /**
  * FormDesigner 类型目录（B1-1 设计器壳——01 号 §3.1「先目录后包」三层分离）。
  *
@@ -12,12 +14,16 @@ export type FieldType11 = FieldType8 | 'radio' | 'rating' | 'file'
 export interface DesignerOption {
   label: string
   value: string
+  /** 对象形式的旧选项可包含额外属性。 */
+  source?: Record<string, unknown>
 }
 
 /** 设计器内部字段模型（schemaAdapter 负责 ↔ API 形态双向转换） */
 export interface DesignerField {
   /** 画布 v-for key（实例内唯一，不参与序列化） */
   _uid: number
+  /** 已加载的字段定义，保留编辑器未承载的配置。 */
+  source?: TicketTypeFieldDef
   field_key: string
   field_label: string
   field_type: FieldType11

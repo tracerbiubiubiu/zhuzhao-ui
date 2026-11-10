@@ -42,6 +42,14 @@ test('S12：类型/字段/模板三件套全流程 + admin 专属边界', async 
   const row = fieldsDialog.locator('.el-table__row').first()
   await row.getByPlaceholder('英文键').fill('contact')
   await row.locator('input').nth(1).fill('联系方式')
+  await row.locator('.el-select').click()
+  await page.getByRole('option', { name: '单选下拉', exact: true }).click()
+  const optionsInput = row.getByPlaceholder('选项1,选项2')
+  await optionsInput.fill('')
+  await optionsInput.pressSequentially('email,phone')
+  await optionsInput.press('Tab')
+  await expect(optionsInput).toHaveValue('email,phone')
+  await row.getByPlaceholder('可选', { exact: true }).fill('(?i)^(email|phone)$')
   await fieldsDialog.getByRole('button', { name: '保存（整体替换）' }).click()
   // S12/S23 硬要求：全量替换前必现危险确认弹窗
   const confirmBox = page.locator('.el-message-box').filter({ hasText: '全量替换' })
@@ -52,6 +60,8 @@ test('S12：类型/字段/模板三件套全流程 + admin 专属边界', async 
   await typeRow.getByRole('button', { name: '字段配置' }).click()
   await fieldsDialog.getByRole('tab', { name: '专家模式（表格）' }).click()
   await expect(fieldsDialog.getByPlaceholder('英文键')).toHaveValue('contact', { timeout: 10_000 }) // 替换已落库
+  await expect(fieldsDialog.getByPlaceholder('选项1,选项2')).toHaveValue('email,phone')
+  await expect(fieldsDialog.getByPlaceholder('可选', { exact: true })).toHaveValue('(?i)^(email|phone)$')
   await fieldsDialog.getByRole('button', { name: '取消' }).click()
 
   // ── 类型：编辑（patch + version CAS——断表格描述列更新）──

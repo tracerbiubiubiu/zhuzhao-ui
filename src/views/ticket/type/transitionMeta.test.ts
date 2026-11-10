@@ -25,10 +25,7 @@ describe('splitTransitionMeta', () => {
     expect(stateRows).toEqual([
       { state: 'open', timeout: 30, notifyAssignee: true, notifySupervisor: true, interval: 10, max: 3 },
     ])
-    expect(preserved).toEqual({
-      'open>assigned': rawWithTransitionMeta['open>assigned'],
-      'assigned>open': rawWithTransitionMeta['assigned>open'],
-    })
+    expect(preserved).toEqual(rawWithTransitionMeta)
   })
 
   it('escalation 缺省=仅通知处理人；非对象段跳过；null/标量整体安全', () => {
@@ -45,6 +42,25 @@ describe('splitTransitionMeta', () => {
 })
 
 describe('buildTransitionMeta', () => {
+  it('仅有 SLA 的状态不生成超时行，编辑或删除超时不动同状态 SLA', () => {
+    const raw = {
+      open: { sla_due_hours: 1 },
+      assigned: { sla_due_hours: 2, timeout_minutes: 30, escalation: { notify: ['assignee'] } },
+    }
+    const { stateRows, preserved } = splitTransitionMeta(raw)
+    const states = ['open', 'assigned']
+    expect(stateRows.map(({ state }) => state)).toEqual(['assigned'])
+    expect(buildTransitionMeta(stateRows, states, preserved)).toMatchObject({ ok: true, meta: raw })
+
+    stateRows[0].timeout = 90
+    expect(buildTransitionMeta(stateRows, states, preserved)).toMatchObject({
+      ok: true, meta: { open: raw.open, assigned: { ...raw.assigned, timeout_minutes: 90 } },
+    })
+    expect(buildTransitionMeta([], states, preserved)).toEqual({
+      ok: true, meta: { open: raw.open, assigned: { sla_due_hours: 2 } }, droppedRows: 0, droppedTransitions: [],
+    })
+  })
+
   it('往返：拆了再建，转换级键原值保留、state 行重组一致', () => {
     const { stateRows, preserved } = splitTransitionMeta(rawWithTransitionMeta)
     const r = buildTransitionMeta(stateRows, ['open', 'assigned', 'in_progress'], preserved)

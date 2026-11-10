@@ -5,7 +5,7 @@
  * - 菜单内页（ticket_type_manage，route:/tickets/types）——admin 专属（B 案：页面=4 共享
  *   GET、7 写端点挂 ticket_type_write_btn 同码 ticket:type:manage，000031 词表重排）
  * - 字段编辑=**全量替换语义**（POST /ticket-types/fields/replace）——保存前危险确认弹窗
- *   （S12/S23 硬要求）；field_options 归一为字符串数组（后端 optionValues 双形态兼容）
+ *   （S12/S23 硬要求）；两种编辑模式共享草稿并保留选项值与未编辑配置
  * - states/transitions=**画布模式（S2 B2-2，默认）+ JSON 源码模式（专家兜底）共存**——同一
  *   typeForm.statesText/transitionsText 为单一数据源，切模式时双向同步；保存前镜像后端
  *   validateTypeGraph 预检（A.3 双保险）+ **改图在途单告警（B2-3）**：被删/失去全部出边的
@@ -27,11 +27,14 @@ import {
   createTicketTemplateApi, createTicketTypeApi, deleteTicketTemplateApi, deleteTicketTypeApi,
   getTicketTypeFieldsApi, listTicketsApi, listTicketTemplatesApi, listTicketTypesApi,
   replaceTicketTypeFieldsApi, STATUS_LABEL, updateTicketTemplateApi, updateTicketTypeApi,
-  type TicketTypeFieldDef, type TicketTypeFieldInput, type TicketTypeFullRow,
+  type TicketTypeFullRow,
   type TicketTemplateRow,
 } from '@/api/ticket'
 import { getOrgTreeApi, type OrgTreeNode } from '@/api/system/org'
 import FormDesigner from '@/components/FormDesigner/index.vue'
+import { isOptionType } from '@/components/FormDesigner/schemaAdapter'
+import { FIELD_CATALOG, type DesignerField } from '@/components/FormDesigner/types'
+import { createDesignerState } from '@/components/FormDesigner/useDesigner'
 import FlowGraphDesigner from '@/components/FlowGraphDesigner/index.vue'
 import { validateTypeGraph } from '@/components/FlowGraphDesigner/mapper'
 import { stuckStates } from '@/components/FlowGraphDesigner/lint'
@@ -42,15 +45,6 @@ import { buildTransitionMeta, splitTransitionMeta, type MetaDraft } from './tran
 defineOptions({ name: 'ticket_type_manage' })
 
 const queryClient = useQueryClient()
-const FIELD_TYPES: Array<{ value: TicketTypeFieldInput['field_type']; label: string }> = [
-  { value: 'input', label: '单行文本' },
-  { value: 'textarea', label: '多行文本' },
-  { value: 'number', label: '数字' },
-  { value: 'date', label: '日期' },
-  { value: 'select', label: '下拉（单选）' },
-  { value: 'multi_select', label: '下拉（多选）' },
-  { value: 'tips', label: '说明块' },
-]
 
 // ─── 类型 Tab ───
 const typesQuery = useQuery({ queryKey: ['ticket', 'types'], queryFn: listTicketTypesApi })
@@ -333,117 +327,86 @@ async function onDeleteType(row: TicketTypeFullRow) {
 }
 
 // ─── 字段编辑器（全量替换——危险确认）───
-interface FieldDraft {
-  field_key: string
-  field_label: string
-  field_type: TicketTypeFieldInput['field_type']
-  optionsText: string
-  required: boolean
-  validate_regex: string
-  sort_order: number
-}
-
-const fieldsDialog = reactive({ visible: false, loading: false, saving: false, error: '', code: '', name: '', version: 0, mode: 'designer' as 'designer' | 'expert' })
-const designerRef = ref<InstanceType<typeof FormDesigner>>()
-const fieldRows = ref<FieldDraft[]>([])
-
-function draftOf(f: TicketTypeFieldDef): FieldDraft {
-  // field_options 双形态归一展示：字符串数组直取；{value,label} 数组取 label（回传时
-  // 统一产字符串数组——后端 optionValues 两形态都收，展示以 label 为准）
-  const raw = f.field_options
-  let optionsText = ''
-  if (Array.isArray(raw)) {
-    optionsText = raw
-      .map((o) => (typeof o === 'object' && o !== null ? String((o as Record<string, unknown>).label ?? (o as Record<string, unknown>).value) : String(o)))
-      .join(',')
-  }
-  return {
-    field_key: f.field_key, field_label: f.field_label, field_type: f.field_type,
-    optionsText, required: f.required, validate_regex: f.validate_regex ?? '', sort_order: f.sort_order,
-  }
-}
+const fieldsDialog = reactive({
+  visible: false, loading: false, ready: false, saving: false,
+  error: '', code: '', name: '', version: 0, mode: 'designer' as 'designer' | 'expert',
+})
+const fieldEditor = createDesignerState()
+const fieldRows = fieldEditor.fields
+let fieldsSession = 0
 
 async function openFields(row: TicketTypeFullRow) {
-  Object.assign(fieldsDialog, { visible: true, loading: true, error: '', code: row.code, name: row.name, version: row.version })
+  const session = ++fieldsSession
+  Object.assign(fieldsDialog, {
+    visible: true, loading: true, ready: false, saving: false, error: '',
+    code: row.code, name: row.name, version: 0,
+  })
+  fieldEditor.loadFromDefs([])
   try {
+    // 先读当前父版本，再取字段。两次读取间发生的写入仍由服务端 CAS 拒绝。
+    const types = (await listTicketTypesApi()) as TicketTypeFullRow[]
+    if (session !== fieldsSession || !fieldsDialog.visible) return
+    const current = types.find((type) => type.id === row.id && type.code === row.code)
+    if (!current || !Number.isSafeInteger(current.version) || current.version < 1) throw new Error('类型版本不可用')
+
     const fields = await getTicketTypeFieldsApi(row.code)
-    fieldRows.value = fields.map(draftOf)
-    designerRef.value?.loadFromDefs(fields)
+    if (session !== fieldsSession || !fieldsDialog.visible) return
+    if (fields.some((field) => field.type_code !== row.code)) throw new Error('字段与类型不匹配')
+    fieldEditor.loadFromDefs(fields)
+    Object.assign(fieldsDialog, { name: current.name, version: current.version, ready: true })
   } catch {
-    fieldsDialog.error = '字段加载失败，请关闭后重试'
+    if (session === fieldsSession && fieldsDialog.visible) fieldsDialog.error = '字段加载失败，请关闭后重试'
   } finally {
-    fieldsDialog.loading = false
+    if (session === fieldsSession) fieldsDialog.loading = false
   }
 }
 
-function addFieldRow() {
-  const nextSort = fieldRows.value.reduce((m, r) => Math.max(m, r.sort_order), 0) + 1
-  fieldRows.value.push({ field_key: '', field_label: '', field_type: 'input', optionsText: '', required: false, validate_regex: '', sort_order: nextSort })
+/** 简单字符串选项仍用逗号编辑。复杂选项使用设计模式的独立标签和值控件。 */
+function canEditExpertOptions(row: DesignerField): boolean {
+  return isOptionType(row.field_type) && !row.dictRef && (row.field_options ?? []).every(({ source, label, value }) => {
+    const simpleValue = value || label
+    return !source && label === simpleValue && !simpleValue.includes(',') && simpleValue.trim() === simpleValue
+  })
 }
 
-function removeFieldRow(idx: number) {
-  fieldRows.value.splice(idx, 1)
+function updateExpertOptions(row: DesignerField, value: string) {
+  if (!canEditExpertOptions(row)) return
+  row.field_options = value.split(',').map((option) => option.trim()).filter(Boolean)
+    .map((option) => ({ label: option, value: option }))
 }
-
-const fieldHasOptions = (t: TicketTypeFieldInput['field_type']) => t === 'select' || t === 'multi_select'
 
 async function saveFields() {
-  // 设计模式：设计器序列化（保存前闸在设计器内——saveBlocked 时此按钮已禁用）
-  if (fieldsDialog.mode === 'designer') {
-    const d = designerRef.value
-    if (!d) return
-    if (d.saveBlocked()) {
-      fieldsDialog.error = d.validate().map((e: { field_index: number; message: string }) => `第 ${e.field_index + 1} 项：${e.message}`).join('；')
-      return
-    }
-    await doReplace(d.serialize())
+  if (!fieldsDialog.visible || !fieldsDialog.ready || fieldsDialog.saving) return
+  // 专家模式沿用服务端 Go 正则校验，保留 JavaScript 不支持的写法。
+  const errors = fieldEditor.validate(fieldsDialog.mode === 'designer')
+  if (errors.length > 0) {
+    fieldsDialog.error = errors.map((e) => `第 ${e.field_index + 1} 项：${e.message}`).join('；')
     return
   }
-  const fields: TicketTypeFieldInput[] = []
-  for (const [i, r] of fieldRows.value.entries()) {
-    if (!r.field_key.trim() || !r.field_label.trim()) {
-      fieldsDialog.error = `第 ${i + 1} 行的 field_key/label 不能为空`
-      return
-    }
-    if (fieldHasOptions(r.field_type) && !r.optionsText.trim()) {
-      fieldsDialog.error = `第 ${i + 1} 行（${r.field_label}）为选项类型，须填选项（逗号分隔）`
-      return
-    }
-    fields.push({
-      field_key: r.field_key.trim(), field_label: r.field_label.trim(), field_type: r.field_type,
-      ...(fieldHasOptions(r.field_type) ? { field_options: r.optionsText.split(',').map((s) => s.trim()).filter(Boolean) } : {}),
-      required: r.required,
-      ...(r.validate_regex.trim() ? { validate_regex: r.validate_regex.trim() } : {}),
-      sort_order: r.sort_order,
-    })
-  }
-  await doReplace(fields)
-}
 
-/** 全量替换共用管线（设计/专家两模式同路——危险确认 + replace + 回填） */
-async function doReplace(fields: TicketTypeFieldInput[]) {
-  // S12/S23 硬要求：全量替换语义——保存前危险确认（存量字段将被整组覆盖）
-  try {
-    await ElMessageBox.confirm(
-      `字段保存为「全量替换」：类型「${fieldsDialog.name}」的字段组将被以下 ${fields.length} 行整体覆盖（含删除未列出的字段）。确认？`,
-      '危险操作', { type: 'warning', confirmButtonText: '整体替换', confirmButtonClass: 'el-button--danger' },
-    )
-  } catch {
-    return
-  }
+  const session = fieldsSession
+  const { code, name, version } = fieldsDialog
+  const fields = fieldEditor.serialize()
   fieldsDialog.saving = true
   fieldsDialog.error = ''
   try {
-    const saved = await replaceTicketTypeFieldsApi({ code: fieldsDialog.code, fields, version: fieldsDialog.version })
-    fieldRows.value = saved.map(draftOf)
+    const confirmed = await ElMessageBox.confirm(
+      `字段保存为「全量替换」：类型「${name}」的字段组将被以下 ${fields.length} 行整体覆盖（含删除未列出的字段）。确认？`,
+      '危险操作', { type: 'warning', confirmButtonText: '整体替换', confirmButtonClass: 'el-button--danger' },
+    ).catch(() => false)
+    if (!confirmed || session !== fieldsSession || !fieldsDialog.visible) return
+
+    await replaceTicketTypeFieldsApi({ code, fields, version })
+    if (session !== fieldsSession || !fieldsDialog.visible) return
     ElMessage.success('字段已替换')
     fieldsDialog.visible = false
     await queryClient.invalidateQueries({ queryKey: ['ticket', 'types'] })
   } catch (err: unknown) {
+    if (session !== fieldsSession || !fieldsDialog.visible) return
     const resp = (err as { response?: { data?: { code?: number; message?: string } } })?.response?.data
     fieldsDialog.error = resp?.code === 10006 ? '类型已被他人修改（版本冲突），请关闭后重开再改' : resp?.message ?? '保存失败'
   } finally {
-    fieldsDialog.saving = false
+    if (session === fieldsSession) fieldsDialog.saving = false
   }
 }
 
@@ -747,20 +710,24 @@ useTableFit(tplTable, () => pagedTplRows.value)
     </el-dialog>
 
     <!-- 字段编辑器（全量替换——危险确认） -->
-    <el-dialog :close-on-click-modal="false" v-model="fieldsDialog.visible" :title="`字段配置 — ${fieldsDialog.name}`" width="960px">
-      <el-tabs v-model="fieldsDialog.mode">
+    <el-dialog
+      v-model="fieldsDialog.visible" :close-on-click-modal="false" :close-on-press-escape="!fieldsDialog.saving"
+      :show-close="!fieldsDialog.saving" :title="`字段配置 — ${fieldsDialog.name}`" width="960px"
+    >
+      <div v-if="fieldsDialog.loading" v-loading="true" class="h-20">正在加载字段配置</div>
+      <el-tabs v-if="fieldsDialog.ready" v-model="fieldsDialog.mode" v-loading="fieldsDialog.saving">
         <el-tab-pane label="设计模式" name="designer">
-          <div v-loading="fieldsDialog.loading" class="mb-1 text-xs text-gray-400">
+          <div class="mb-1 text-xs text-gray-400">
             拖拽排序 / 属性面板编辑；保存为「全量替换」（与专家模式同一管线）。
           </div>
-          <FormDesigner ref="designerRef" />
+          <FormDesigner :state="fieldEditor" />
         </el-tab-pane>
         <el-tab-pane label="专家模式（表格）" name="expert">
           <div class="mb-2 flex items-center justify-between">
-            <span class="text-xs text-gray-400">保存为「全量替换」：未列出的存量字段将被删除。字段类型八枚举：input/textarea/number/date/select/multi_select/tips/richtext。</span>
-            <el-button v-permission="'ticket:type:manage'" size="small" @click="addFieldRow">添加字段</el-button>
+            <span class="text-xs text-gray-400">保存为「全量替换」。带独立值的选项和字典请在设计模式编辑。</span>
+            <el-button v-permission="'ticket:type:manage'" size="small" @click="fieldEditor.add('input')">添加字段</el-button>
           </div>
-          <el-table v-loading="fieldsDialog.loading" :data="fieldRows" size="small" border>
+          <el-table :data="fieldRows" row-key="_uid" size="small" border>
         <el-table-column label="field_key" width="150">
           <template #default="{ row }"><el-input v-model="row.field_key" size="small" placeholder="英文键" maxlength="50" /></template>
         </el-table-column>
@@ -768,15 +735,22 @@ useTableFit(tplTable, () => pagedTplRows.value)
           <template #default="{ row }"><el-input v-model="row.field_label" size="small" maxlength="100" /></template>
         </el-table-column>
         <el-table-column label="类型" width="130">
-          <template #default="{ row }">
-            <el-select v-model="row.field_type" size="small">
-              <el-option v-for="t in FIELD_TYPES" :key="t.value" :label="t.label" :value="t.value" />
+          <template #default="{ row, $index }">
+            <el-select :model-value="row.field_type" size="small" @change="fieldEditor.update($index, { field_type: $event })">
+              <el-option v-for="t in FIELD_CATALOG" :key="t.type" :label="t.label" :value="t.type" />
             </el-select>
           </template>
         </el-table-column>
         <el-table-column label="选项(逗号分隔)" min-width="150">
-          <template #default="{ row }">
-            <el-input v-if="fieldHasOptions(row.field_type)" v-model="row.optionsText" size="small" placeholder="选项1,选项2" />
+          <template #default="{ row, $index }">
+            <el-input
+              v-if="canEditExpertOptions(fieldRows[$index])"
+              :model-value="fieldRows[$index].field_options?.map(({ value, label }) => value || label).join(',') ?? ''"
+              :model-modifiers="{ lazy: true }"
+              size="small" placeholder="选项1,选项2" @change="updateExpertOptions(fieldRows[$index], $event)"
+            />
+            <span v-else-if="row.dictRef" class="text-gray-500">字典 {{ row.dictRef }}（设计模式编辑）</span>
+            <span v-else-if="isOptionType(row.field_type)" class="text-gray-500">共 {{ row.field_options?.length ?? 0 }} 项（设计模式编辑）</span>
             <span v-else class="text-gray-300">—</span>
           </template>
         </el-table-column>
@@ -791,7 +765,7 @@ useTableFit(tplTable, () => pagedTplRows.value)
         </el-table-column>
         <el-table-column label="操作" width="70" align="center">
           <template #default="{ $index }">
-            <el-button link type="danger" size="small" @click="removeFieldRow($index)">删除</el-button>
+            <el-button link type="danger" size="small" @click="fieldEditor.remove($index)">删除</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -799,8 +773,8 @@ useTableFit(tplTable, () => pagedTplRows.value)
       </el-tabs>
       <el-alert v-if="fieldsDialog.error" :title="fieldsDialog.error" type="error" show-icon class="mt-2" :closable="false" />
       <template #footer>
-        <el-button @click="fieldsDialog.visible = false">取消</el-button>
-        <el-button type="primary" :loading="fieldsDialog.saving" @click="saveFields">保存（整体替换）</el-button>
+        <el-button :disabled="fieldsDialog.saving" @click="fieldsDialog.visible = false">取消</el-button>
+        <el-button type="primary" :disabled="!fieldsDialog.ready" :loading="fieldsDialog.saving" @click="saveFields">保存（整体替换）</el-button>
       </template>
     </el-dialog>
 

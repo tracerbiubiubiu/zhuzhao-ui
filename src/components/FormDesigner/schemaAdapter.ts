@@ -2,7 +2,7 @@
  * schema 适配层（B1-1 三层分离之一——纯函数，vitest 直测）。
  *
  * TicketTypeFieldDef（后端 GET）→ DesignerField（设计器）→ TicketTypeFieldInput[]（replace 管线）。
- * 语义对齐专家模式既有口径：field_options 双形态归一（label 为准）；空 regex 不产字段（omitempty）。
+ * 两种编辑模式共享同一份草稿。保留稳定选项值和编辑器未承载的配置。
  */
 import type { TicketTypeFieldDef, TicketTypeFieldInput } from '@/api/ticket'
 import { KEY_PATTERN, type DesignerField, type FieldType11 } from './types'
@@ -15,7 +15,7 @@ function normalizeOptions(raw: unknown): DesignerField['field_options'] {
       const rec = o as Record<string, unknown>
       const label = String(rec.label ?? rec.value ?? '')
       const value = String(rec.value ?? rec.label ?? '')
-      return { label, value }
+      return { label, value, source: rec }
     }
     const s = String(o)
     return { label: s, value: s }
@@ -42,6 +42,7 @@ export function defToDraft(f: TicketTypeFieldDef): DesignerField {
   const dictRef = parseDictRef(f.field_options)
   return {
     _uid: nextUid(),
+    source: f,
     dictRef,
     field_key: f.field_key ?? '',
     field_label: f.field_label ?? '',
@@ -58,31 +59,62 @@ export function defToDraft(f: TicketTypeFieldDef): DesignerField {
   }
 }
 
-/** 设计器模型 → replace 管线 Input（选项产 label 字符串数组——与专家模式一致） */
+export function draftKey(f: DesignerField): string {
+  return f.field_key === f.source?.field_key ? f.field_key : f.field_key.trim()
+}
+
+function fieldOptions(f: DesignerField): unknown {
+  if (isOptionType(f.field_type)) {
+    if (f.dictRef) return [`${DICT_PREFIX}${f.dictRef}`]
+    return (f.field_options ?? [])
+      .filter(({ label, value, source }) => source !== undefined || label.trim() || value.trim())
+      .map(({ label, value, source }) => {
+        if (source) {
+          const previousLabel = String(source.label ?? source.value ?? '')
+          const previousValue = String(source.value ?? source.label ?? '')
+          return {
+            ...source,
+            ...(label === previousLabel ? {} : { label }),
+            ...(value === previousValue ? {} : { value }),
+          }
+        }
+        const nextValue = value.trim() ? value : label
+        return label === nextValue ? nextValue : { label, value: nextValue }
+      })
+  }
+  // 数字和评分的 GET 会带默认空数组，替换接口要求省略该属性。
+  if (f.field_type === 'number' || f.field_type === 'rating') return undefined
+  return f.field_type === f.source?.field_type ? f.source.field_options : undefined
+}
+
+/** 设计器模型 → replace 管线 Input */
 export function serialize(fields: DesignerField[]): TicketTypeFieldInput[] {
-  return fields.map((f, i) => ({
-    field_key: f.field_key.trim(),
-    field_label: f.field_label.trim(),
-    field_type: f.field_type,
-    ...(isOptionType(f.field_type)
-      ? f.dictRef
-        ? { field_options: [`${DICT_PREFIX}${f.dictRef}`] }
-        : { field_options: (f.field_options ?? []).map((o) => o.label).filter(Boolean) }
-      : {}),
-    required: f.required,
-    ...(f.validate_regex.trim() ? { validate_regex: f.validate_regex.trim() } : {}),
-    ...buildFieldMeta(f),
-    sort_order: i + 1,
-  }))
+  return fields.map((f) => {
+    const options = fieldOptions(f)
+    return {
+      field_key: draftKey(f),
+      field_label: f.field_label === f.source?.field_label ? f.field_label : f.field_label.trim(),
+      field_type: f.field_type,
+      ...(options === undefined ? {} : { field_options: options }),
+      required: f.required,
+      ...(f.validate_regex ? { validate_regex: f.validate_regex } : {}),
+      ...buildFieldMeta(f),
+      sort_order: f.sort_order ?? 0,
+    }
+  })
 }
 
 /** B1-6 批3：field_meta 合并构建（formula/col_span/group/visible_when 同列承载） */
 function buildFieldMeta(f: DesignerField): { field_meta?: Record<string, unknown> } {
-  const meta: Record<string, unknown> = {}
-  if (f.formula.trim()) meta.formula = f.formula.trim()
-  if (f.col_span && f.col_span >= 1 && f.col_span <= 24) meta.col_span = f.col_span
-  if (f.group?.trim()) meta.group = f.group.trim()
-  if (f.visible_when?.trim()) meta.visible_when = f.visible_when.trim()
+  const original = f.source?.field_meta
+  const meta = { ...original }
+  const edits = { formula: f.formula, col_span: f.col_span, group: f.group, visible_when: f.visible_when }
+  for (const [key, value] of Object.entries(edits)) {
+    const previous = original?.[key] ?? (key === 'col_span' ? undefined : '')
+    if (value === previous) continue
+    if (value === undefined || value === null || (typeof value === 'string' && !value.trim())) delete meta[key]
+    else meta[key] = value
+  }
   return Object.keys(meta).length ? { field_meta: meta } : {}
 }
 
@@ -92,15 +124,15 @@ export interface FieldError {
 }
 
 /** 保存前校验闸（即时校验的兜底——服务端 G2 仍为 SSOT） */
-export function validateDraft(fields: DesignerField[]): FieldError[] {
+export function validateDraft(fields: DesignerField[], checkBrowserRegex = true): FieldError[] {
   const errs: FieldError[] = []
   const seen = new Map<string, number>()
   fields.forEach((f, i) => {
     const isTips = f.field_type === 'tips'
     if (!isTips) {
-      const key = f.field_key.trim()
+      const key = draftKey(f)
       if (!key) errs.push({ field_index: i, message: '字段键不能为空' })
-      else if (!KEY_PATTERN.test(key)) errs.push({ field_index: i, message: `字段键「${key}」非法：字母开头 ASCII（字母/数字/下划线）` })
+      else if (key !== f.source?.field_key && !KEY_PATTERN.test(key)) errs.push({ field_index: i, message: `字段键「${key}」非法：字母开头 ASCII（字母/数字/下划线）` })
       else if (seen.has(key)) errs.push({ field_index: i, message: `字段键「${key}」与第 ${seen.get(key)! + 1} 个字段重复` })
       else seen.set(key, i)
     }
@@ -108,15 +140,17 @@ export function validateDraft(fields: DesignerField[]): FieldError[] {
     if (isOptionType(f.field_type)) {
       if (f.dictRef) {
         // 挂字典模式：引用 code 即合法（字典项存在性由删除守卫+消费端兜底）
-      } else if (!(f.field_options ?? []).some((o) => o.label.trim())) {
+      } else if (!(f.field_options ?? []).some((o) => o.value.trim() || (!o.source && o.label.trim()))) {
         errs.push({ field_index: i, message: `「${f.field_label || '未命名字段'}」为选项类型，须挂字典或至少一个静态选项` })
+      } else if ((f.field_options ?? []).some((o) => o.source && !o.value.trim())) {
+        errs.push({ field_index: i, message: `「${f.field_label}」的选项须填写值` })
       }
     }
     if (f.formula.trim() && f.field_type !== 'number' && f.field_type !== 'input') {
       errs.push({ field_index: i, message: `「${f.field_label || f.field_key}」formula 仅允许 number/input 型字段` })
     }
-    const re = f.validate_regex.trim()
-    if (re) {
+    const re = f.validate_regex
+    if (checkBrowserRegex && re && re !== f.source?.validate_regex) {
       try {
         new RegExp(re)
       } catch {

@@ -12,8 +12,8 @@
  * - 静态路由（§3.2④，菜单外——入口在列表页「详情」按钮，挂 ticket:read 码）
  */
 import { formatDateTime } from '@/utils/datetime'
-import { computed, reactive, ref, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { computed, onActivated, onDeactivated, reactive, ref, toRef, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import {
   ElAlert, ElButton, ElCard, ElCheckbox, ElDescriptions, ElDescriptionsItem, ElDialog,
   ElEmpty, ElForm, ElFormItem, ElInput, ElLink, ElMessage, ElMessageBox, ElOption, ElSelect, ElTag,
@@ -38,37 +38,42 @@ import { useRenderedRichtext } from './useRenderedRichtext'
 // keep-alive 契约：name=静态路由名（参数路由——同工单不同 ID 依赖 :key 路由 fullPath 分实例）
 defineOptions({ name: 'TicketDetail' })
 
-const route = useRoute()
+const props = defineProps<{ ticketId: string }>()
 const router = useRouter()
 const queryClient = useQueryClient()
 const userStore = useUserStoreWithOut()
 
-const ticketId = computed(() => String(route.params.id ?? ''))
+// AppView 按 fullPath 缓存实例。路由参数由 RouterView 传入，缓存页不跟随全局 route 换单。
+const ticketId = toRef(props, 'ticketId')
+const active = ref(true)
+onActivated(() => { active.value = true })
+onDeactivated(() => { active.value = false })
+const canQueryTicket = computed(() => active.value && !!ticketId.value && ticketId.value !== 'new')
 
 const ticketQuery = useQuery({
   queryKey: computed(() => ['ticket', 'detail', ticketId.value]),
   queryFn: () => getTicketApi(ticketId.value),
-  enabled: computed(() => ticketId.value !== '' && ticketId.value !== 'new'),
+  enabled: canQueryTicket,
 })
 const commentsQuery = useQuery({
   queryKey: computed(() => ['ticket', 'comments', ticketId.value]),
   queryFn: () => getTicketCommentsApi(ticketId.value),
-  enabled: computed(() => ticketId.value !== ''),
+  enabled: canQueryTicket,
 })
 const relationsQuery = useQuery({
   queryKey: computed(() => ['ticket', 'relations', ticketId.value]),
   queryFn: () => getTicketRelationsApi(ticketId.value),
-  enabled: computed(() => ticketId.value !== ''),
+  enabled: canQueryTicket,
 })
 const ccQuery = useQuery({
   queryKey: computed(() => ['ticket', 'cc', ticketId.value]),
   queryFn: () => listTicketCCApi(ticketId.value),
-  enabled: computed(() => ticketId.value !== ''),
+  enabled: canQueryTicket,
 })
 const tagsQuery = useQuery({
   queryKey: computed(() => ['ticket', 'tags', ticketId.value]),
   queryFn: () => listTicketTagsApi(ticketId.value),
-  enabled: computed(() => ticketId.value !== ''),
+  enabled: canQueryTicket,
 })
 const typesQuery = useQuery({ queryKey: ['ticket', 'types'], queryFn: listTicketTypesApi })
 
@@ -80,9 +85,9 @@ const isClosed = computed(() => ticket.value?.status === 'closed')
 
 // B1-5 自定义字段 schema + 回显（01 号 §3.5——"填了看不见"痛点收口件）
 const typeFieldsQuery = useQuery({
-  queryKey: ['ticket', 'typeFields', ticket.value?.type_code],
-  queryFn: () => getTicketTypeFieldsApi(ticket.value!.type_code),
-  enabled: computed(() => !!ticket.value?.type_code),
+  queryKey: computed(() => ['ticket', 'typeFields', ticket.value?.type_code ?? ''] as const),
+  queryFn: ({ queryKey }) => getTicketTypeFieldsApi(queryKey[2]),
+  enabled: computed(() => canQueryTicket.value && !!ticket.value?.type_code),
   staleTime: 60_000,
 })
 const customFields = computed(() => typeFieldsQuery.data.value ?? [])
@@ -110,19 +115,16 @@ const formatCustomValue = (f: TicketTypeFieldDef): string => {
 }
 
 // ─── S3a B3-1 统一转换（available 按用户过滤——condition 语义；叠加 Close/Assign 既有按钮）───
-const availableTransitions = ref<string[]>([])
+const availableTransitionsQuery = useQuery({
+  queryKey: computed(() => ['ticket', 'transitions', ticketId.value, ticket.value?.status] as const),
+  queryFn: ({ queryKey }) => listAvailableTransitionsApi(queryKey[2]),
+  enabled: computed(() => canQueryTicket.value && !!ticket.value && !isClosed.value),
+  retry: false,
+})
+const availableTransitions = computed(() =>
+  availableTransitionsQuery.isError.value ? [] : (availableTransitionsQuery.data.value ?? []),
+)
 const transitionLoading = ref(false)
-
-async function loadAvailableTransitions() {
-  if (!ticketId.value || isClosed.value) return
-  try {
-    availableTransitions.value = await listAvailableTransitionsApi(ticketId.value)
-  } catch {
-    availableTransitions.value = []
-  }
-}
-
-watch(() => [ticketId.value, ticketQuery.data.value?.status], () => void loadAvailableTransitions(), { immediate: true })
 
 async function doTransition(to: string) {
   transitionLoading.value = true
@@ -130,7 +132,6 @@ async function doTransition(to: string) {
     await transitionTicketApi({ id: ticketId.value, to })
     ElMessage.success(`已转换到 ${STATUS_LABEL[to] ?? to}`)
     await queryClient.invalidateQueries({ queryKey: ['ticket'] })
-    await loadAvailableTransitions()
   } catch (err: unknown) {
     const resp = (err as { response?: { data?: { message?: string } } })?.response?.data
     ElMessage.error(resp?.message ?? '转换失败（可能不满足前置条件）')
@@ -279,6 +280,7 @@ async function refreshAll() {
     queryClient.invalidateQueries({ queryKey: ['ticket', 'detail', ticketId.value] }),
     queryClient.invalidateQueries({ queryKey: ['ticket', 'comments', ticketId.value] }),
     queryClient.invalidateQueries({ queryKey: ['ticket', 'relations', ticketId.value] }),
+    queryClient.invalidateQueries({ queryKey: ['ticket', 'transitions', ticketId.value] }),
   ])
 }
 
@@ -591,7 +593,7 @@ async function submitRelation() {
             <!-- B1-7 批3（三路F-E-4）：字典项显示 label 而非 code -->
             <el-tag v-for="v in customValue(f.field_key) as string[]" :key="v" size="small" class="mr-1">{{ labelOf(f, v) }}</el-tag>
           </span>
-          <span v-else-if="f.field_type === 'select' && customValue(f.field_key) != null">{{
+          <span v-else-if="(f.field_type === 'select' || f.field_type === 'radio') && customValue(f.field_key) != null">{{
             labelOf(f, String(customValue(f.field_key)))
           }}</span>
           <!-- B1-6 批3 file 字段闭环（2026-10-30 审计补）：create 端 object_key 数组入

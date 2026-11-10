@@ -344,10 +344,9 @@ rules「新建规则」参照实现；org 页层级面包屑随工具行挪卡�
     订阅全局 route——导航时被隐形重渲染，route 派生值 patch 成新值或 `''`，watch 自动
     请求跟着发（缓存 N 个详情页签 = 多发 N 份请求；patch 成 `''` 即
     `GET /tickets//attachments` 400「参数错误」toast，每次进出详情必弹）。Vue 对
-    `isDeactivated` **无 scheduler 守卫**——「看不见」不等于「不渲染」。守则：凡缓存页
-    内 route 派生值驱动的自动请求面必须有空值/归属守卫（正面样板：detail 五路 query 的
-    `enabled`、`loadAvailableTransitions` 空 id 早退、TicketAttachments `refresh()` 守卫）；
-    回归由运行时哨兵锁死（见 [testing.md 哨兵矩阵](../guides/testing.md#防漂移哨兵矩阵)）。
+    `isDeactivated` **无 scheduler 守卫**。工单详情从 RouterView 接收本实例的工单 ID，
+    自动请求只在激活时运行。可用转换按工单和状态缓存，字段定义按类型缓存，
+    附件刷新仍检查空 ID。离页回归见 [testing.md 哨兵矩阵](../guides/testing.md#防漂移哨兵矩阵)。
 
 ## 页面布局快照（2026-10-08 立，10-30 修订）
 

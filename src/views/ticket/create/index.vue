@@ -62,15 +62,31 @@ const rules: FormRules = {
 // ─── 类型与字段定义 ───
 const typesQuery = useQuery({ queryKey: ['ticket', 'types'], queryFn: listTicketTypesApi })
 const fields = ref<TicketTypeFieldDef[]>([])
+const loadedType = ref('')
+const fieldsError = ref('')
+const fieldsReady = computed(() => !!loadedType.value && loadedType.value === form.type_code)
 let fieldsSeq = 0 // 快速切换类型时弃置过期响应（后到的旧 schema 不得覆盖新选中类型）
 
-watch(() => form.type_code, async (code) => {
-  form.custom = {}
+async function loadTypeFields(code: string) {
   const seq = ++fieldsSeq
-  const next = code ? await getTicketTypeFieldsApi(code).catch(() => []) : []
-  if (seq !== fieldsSeq) return
-  fields.value = next
-})
+  fields.value = []
+  loadedType.value = ''
+  fieldsError.value = ''
+  form.custom = {}
+  fileUploading.value = {}
+  fileErrors.value = {}
+  if (!code) return
+  try {
+    const next = await getTicketTypeFieldsApi(code)
+    if (seq !== fieldsSeq) return
+    fields.value = next
+    loadedType.value = code
+  } catch {
+    if (seq === fieldsSeq) fieldsError.value = '字段配置加载失败，请重试'
+  }
+}
+
+watch(() => form.type_code, loadTypeFields, { flush: 'sync' })
 
 // ── B1-6 批3：条件显隐（渲染端 watch 联动——服务端 G2 提交时兜底断言） ──
 function isVisibleField(f: TicketTypeFieldDef): boolean {
@@ -123,7 +139,8 @@ async function handleFileUpload(f: TicketTypeFieldDef, event: Event) {
   const input = event.target as HTMLInputElement
   const file = input.files?.[0]
   input.value = ''
-  if (!file) return
+  if (!file || !fieldsReady.value) return
+  const seq = fieldsSeq
   fileErrors.value[f.field_key] = ''
   if (!mimeAllowed(f, file)) {
     fileErrors.value[f.field_key] = `文件类型 ${file.type} 不在白名单内`
@@ -132,11 +149,11 @@ async function handleFileUpload(f: TicketTypeFieldDef, event: Event) {
   fileUploading.value[f.field_key] = true
   try {
     const result = await uploadAndConfirm(file, 'attachment_create')
-    setFileKeys(f, [...fileKeys(f), result.object_key])
+    if (seq === fieldsSeq) setFileKeys(f, [...fileKeys(f), result.object_key])
   } catch (e) {
-    fileErrors.value[f.field_key] = e instanceof Error ? e.message : '上传失败'
+    if (seq === fieldsSeq) fileErrors.value[f.field_key] = e instanceof Error ? e.message : '上传失败'
   } finally {
-    fileUploading.value[f.field_key] = false
+    if (seq === fieldsSeq) fileUploading.value[f.field_key] = false
   }
 }
 
@@ -245,8 +262,9 @@ const orgsLoading = ref(true)
 })()
 
 async function handleSubmit() {
+  const seq = fieldsSeq
   const valid = await formRef.value?.validate().catch(() => false)
-  if (!valid) return
+  if (!valid || seq !== fieldsSeq || !fieldsReady.value) return
   loading.value = true
   errorMsg.value = ''
   try {
@@ -282,10 +300,13 @@ async function handleSubmit() {
       <el-alert v-if="errorMsg" :title="errorMsg" type="error" show-icon class="mb-4" :closable="false" />
       <el-form ref="formRef" :model="form" :rules="rules" label-width="100px">
         <el-form-item label="工单类型" prop="type_code">
-          <el-select v-model="form.type_code" placeholder="选择类型" class="!w-full">
+          <el-select v-model="form.type_code" :disabled="loading" placeholder="选择类型" class="!w-full">
             <el-option v-for="t in typesQuery.data.value ?? []" :key="t.code" :label="t.name" :value="t.code" />
           </el-select>
         </el-form-item>
+        <el-alert v-if="fieldsError" :title="fieldsError" type="error" show-icon :closable="false" class="mb-4">
+          <el-button size="small" @click="loadTypeFields(form.type_code)">重试</el-button>
+        </el-alert>
         <el-form-item label="标题" prop="title">
           <el-input v-model="form.title" maxlength="200" show-word-limit placeholder="一句话描述问题或请求" />
         </el-form-item>
@@ -307,7 +328,7 @@ async function handleSubmit() {
         </el-form-item>
 
         <!-- 动态自定义字段（七类型渲染器；类型切换时重置） -->
-        <template v-for="f in visibleFields" :key="f.field_key">
+        <template v-for="f in visibleFields" :key="form.type_code + ':' + f.field_key">
           <!-- tips=说明块无值：脱离 label 列整行呈现（此前 label/内容双显同文案） -->
           <div v-if="f.field_type === 'tips'" class="text-xs text-gray-400 -mt-1 mb-3">
             {{ f.field_label }}
@@ -424,7 +445,7 @@ async function handleSubmit() {
           <span class="text-xs text-gray-400 ml-2">可选：工单超时催办时通知的上级（不填则只催处理人）</span>
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" :loading="loading" @click="handleSubmit">提交工单</el-button>
+          <el-button type="primary" :loading="loading" :disabled="!!form.type_code && !fieldsReady" @click="handleSubmit">提交工单</el-button>
           <el-button @click="router.back()">取消</el-button>
         </el-form-item>
       </el-form>

@@ -21,7 +21,7 @@ describe('defToDraft 归一', () => {
       { label: 'x', value: 'x' }, { label: 'y', value: 'y' },
     ])
     const b = defToDraft(def({ field_type: 'select', field_options: [{ value: 'h', label: '高' }] }))
-    expect(b.field_options).toEqual([{ label: '高', value: 'h' }])
+    expect(b.field_options).toMatchObject([{ label: '高', value: 'h' }])
   })
 
   it('八类型全覆盖（含 richtext——B5-4 第八种）', () => {
@@ -32,21 +32,29 @@ describe('defToDraft 归一', () => {
     }
   })
 
-  it('validate_regex 与 sort_order 保留；sort_order 按数组序重排', () => {
+  it('未重新排序时保留 validate_regex 和 sort_order', () => {
     const d1 = defToDraft(def({ validate_regex: '^\\d+$', sort_order: 9 }))
     expect(d1.validate_regex).toBe('^\\d+$')
     const list = [defToDraft(def({ sort_order: 9, field_key: 'a' })), defToDraft(def({ sort_order: 1, field_key: 'b' }))]
     const out = serialize(list)
-    expect(out.map((f) => f.sort_order)).toEqual([1, 2])
+    expect(out.map((f) => f.sort_order)).toEqual([9, 1])
   })
 })
 
 describe('serialize → TicketTypeFieldInput 形态', () => {
-  it('选项类型产 field_options 字符串数组（label 为准——与专家模式一致）', () => {
-    const out = serialize([
-      defToDraft(def({ field_type: 'select', field_options: [{ label: '高', value: 'h' }] })),
-    ])
-    expect(out[0].field_options).toEqual(['高'])
+  it('保留选项的值、对象形式和扩展属性，支持单独改标签', () => {
+    const options = [{ label: '高', value: 'h', color: 'red' }, '低']
+    const d = defToDraft(def({ field_type: 'select', field_options: options }))
+    expect(serialize([d])[0].field_options).toEqual(options)
+    d.field_options![0].label = '高风险'
+    expect(serialize([d])[0].field_options).toEqual([{ label: '高风险', value: 'h', color: 'red' }, '低'])
+  })
+
+  it('新选项可以仅填标签，显式填写的值独立保存', () => {
+    const d = defToDraft(def({ field_type: 'select' }))
+    d.field_options = [{ label: '仅标签', value: '' }, { label: '显示名', value: 'stable' }]
+    expect(validateDraft([d])).toEqual([])
+    expect(serialize([d])[0].field_options).toEqual(['仅标签', { label: '显示名', value: 'stable' }])
   })
 
   it('非选项类型不产 field_options；空 regex 不产 validate_regex（omitempty 语义）', () => {
@@ -63,8 +71,27 @@ describe('serialize → TicketTypeFieldInput 形态', () => {
     const out = serialize([defToDraft(src)])
     expect(out[0]).toMatchObject({
       field_key: 'sev', field_label: '级别', field_type: 'multi_select', required: true, validate_regex: '^a',
-      field_options: ['高'],
+      field_options: [{ value: 'h', label: '高' }],
     })
+  })
+
+  it('改一项仍保留文件白名单、未知元数据和未经修改的旧校验', () => {
+    const file = defToDraft(def({
+      field_key: '证据', field_type: 'file', field_options: ['image/png', 'application/pdf'], sort_order: 42,
+    }))
+    const number = defToDraft(def({
+      field_key: 'total', field_type: 'number', field_options: [], sort_order: 47,
+      field_meta: { formula: '1+2', visible_when: 'qty > 0', extension: { scale: 1 } },
+    }))
+    const input = defToDraft(def({ field_key: 'legacy', validate_regex: '(?i)old' }))
+    file.field_label = '新名称'
+    number.visible_when = ''
+    const out = serialize([file, number, input])
+    expect(validateDraft([file, number, input])).toEqual([])
+    expect(out[0]).toMatchObject({ field_key: '证据', field_label: '新名称', field_options: ['image/png', 'application/pdf'], sort_order: 42 })
+    expect(out[1].field_options).toBeUndefined()
+    expect(out[1].field_meta).toEqual({ formula: '1+2', extension: { scale: 1 } })
+    expect(out[2].validate_regex).toBe('(?i)old')
   })
 })
 

@@ -179,13 +179,62 @@ test('活动列表：导入为全量替换——强确认后替换且提示真�
     // 弹窗常驻替换警示；未勾选知晓前「导入（替换）」不可点
     await expect(dialog.getByText('导入为全量替换')).toBeVisible()
     const submit = dialog.getByRole('button', { name: '导入（替换）' })
+    const consent = dialog.getByRole('checkbox')
+    const consentLabel = dialog.getByText('我已知晓导入会')
+    const fileInput = dialog.locator('input[type=file]')
+    const payloadInput = dialog.locator('textarea')
     await expect(submit).toBeDisabled()
+
+    // 旧内容即使已确认，换成超限文件后也不能继续提交。空数组是服务端合法清表操作。
+    await payloadInput.fill('[]')
+    await consentLabel.click()
+    await expect(submit).toBeEnabled()
+    await fileInput.setInputFiles({
+      name: 'oversized.json', mimeType: 'application/json', buffer: Buffer.alloc(1024 * 1024 + 1, 32),
+    })
+    await expect(dialog.getByText('文件超过 1 MiB')).toBeVisible()
+    await expect(payloadInput).toHaveValue('')
+    await expect(consent).not.toBeChecked()
+    await expect(submit).toBeDisabled()
+
+    await payloadInput.fill('{}')
+    await expect(dialog.getByText('导入内容须为有效的 JSON 数组')).toBeVisible()
+    await expect(consent).toBeDisabled()
+
+    // 只延迟这一个文件的本地读取，后端请求和替换仍走真实网关。
+    await page.evaluate(() => {
+      const originalText = File.prototype.text
+      File.prototype.text = function () {
+        if (this.name !== 'delayed-import.json') return originalText.call(this)
+        File.prototype.text = originalText
+        return new Promise((resolve) => {
+          document.addEventListener('resolve-delayed-import', () => resolve('[]'), { once: true })
+        })
+      }
+    })
+    await fileInput.setInputFiles({
+      name: 'delayed-import.json', mimeType: 'application/json', buffer: Buffer.from('[]'),
+    })
+    await expect(dialog.getByRole('status')).toHaveText('正在读取文件…')
+    await expect(submit).toBeDisabled()
+
     // 导入格式=带 id/status 的完整行（全量替换保留源 id）——与导出对称
-    await dialog.locator('textarea').fill(JSON.stringify([
+    const payload = JSON.stringify([
       { id: '1', status: 'active', data: { name: 'new_1' } },
       { id: '2', status: 'active', data: { name: 'new_2' } },
-    ]))
-    await dialog.getByText('我已知晓导入会').click()
+    ])
+    await payloadInput.fill(payload)
+    await consentLabel.click()
+    await page.evaluate(() => document.dispatchEvent(new Event('resolve-delayed-import')))
+    await expect(payloadInput).toHaveValue(payload)
+    await expect(submit).toBeEnabled()
+
+    // 手动改动内容也要重新确认，即使随后改回原内容。
+    await payloadInput.fill('[]')
+    await expect(consent).not.toBeChecked()
+    await expect(submit).toBeDisabled()
+    await payloadInput.fill(payload)
+    await consentLabel.click()
     await expect(submit).toBeEnabled()
     await submit.click()
 

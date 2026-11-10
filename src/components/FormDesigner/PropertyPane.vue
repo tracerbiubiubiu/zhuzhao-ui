@@ -13,7 +13,7 @@
         </el-form-item>
 
         <el-form-item label="字段类型">
-          <el-select v-model="field.field_type" data-testid="fd-type">
+          <el-select :model-value="field.field_type" data-testid="fd-type" @change="emit('change-type', $event)">
             <el-option v-for="c in FIELD_CATALOG" :key="c.type" :label="c.label" :value="c.type" />
           </el-select>
         </el-form-item>
@@ -51,7 +51,7 @@
             <div class="fd-opts">
               <div v-for="(o, oi) in field.field_options" :key="oi" class="fd-opt-row">
                 <el-input v-model="o.label" placeholder="标签（回显用）" />
-                <el-input v-model="o.value" placeholder="值" />
+                <el-input v-model="o.value" placeholder="值（新选项留空时用标签）" />
                 <el-button link type="danger" @click="emit('remove-option', selected, oi)">删</el-button>
               </div>
               <el-button size="small" @click="emit('add-option', selected)">+ 选项</el-button>
@@ -73,7 +73,7 @@
 
         <!-- B1-6 批3：布局键（field_meta.col_span/group/visible_when——零后端迁移） -->
         <el-form-item label="列宽（field_meta.col_span · 1–24 / 24 栅格）">
-          <el-slider v-model="field.col_span" :min="1" :max="24" :step="1" show-input data-testid="fd-col-span" />
+          <el-input-number v-model="field.col_span" :min="1" :max="24" :step="1" :controls="false" placeholder="未设置" data-testid="fd-col-span" />
         </el-form-item>
 
         <el-form-item label="分组（field_meta.group · 同名字段折叠为一组）">
@@ -101,10 +101,10 @@
  * 字段类型可在面板内切换（选项面随类型重建——useDesigner.update）。
  */
 import { computed, ref, watch } from 'vue'
-import { ElButton, ElForm, ElFormItem, ElInput, ElOption, ElRadioButton, ElRadioGroup, ElSelect, ElSlider, ElSwitch } from 'element-plus'
+import { ElButton, ElForm, ElFormItem, ElInput, ElInputNumber, ElOption, ElRadioButton, ElRadioGroup, ElSelect, ElSwitch } from 'element-plus'
 import { listDictTypesApi, getDictItemsByCodeApi, type DictTypeRow, type DictItemRow } from '@/api/system/dict'
 import { isOptionType } from './schemaAdapter'
-import { FIELD_CATALOG, catalogOf, type DesignerField } from './types'
+import { FIELD_CATALOG, catalogOf, type DesignerField, type FieldType11 } from './types'
 
 const props = defineProps<{
   field: DesignerField | null
@@ -112,7 +112,11 @@ const props = defineProps<{
   keyErr: string
   regexErr: string
 }>()
-const emit = defineEmits<{ (e: 'add-option', idx: number): void; (e: 'remove-option', idx: number, optIdx: number): void }>()
+const emit = defineEmits<{
+  (e: 'add-option', idx: number): void
+  (e: 'remove-option', idx: number, optIdx: number): void
+  (e: 'change-type', value: FieldType11): void
+}>()
 
 const field = computed(() => props.field)
 
@@ -123,9 +127,10 @@ const optMode = computed({
     if (!field.value) return
     if (m === 'dict' && !field.value.dictRef) {
       field.value.dictRef = dictTypes.value[0]?.code ?? ''
-      field.value.field_options = field.value.field_options?.length ? field.value.field_options : [{ label: '选项一', value: 'opt1' }]
+      field.value.field_options = field.value.field_options?.length ? field.value.field_options : [{ label: '选项一', value: '' }]
     } else if (m === 'static') {
       field.value.dictRef = undefined
+      field.value.field_options ??= []
     }
   },
 })

@@ -6,9 +6,8 @@
  */
 import { ref, type Ref } from 'vue'
 import type { TicketTypeFieldDef, TicketTypeFieldInput } from '@/api/ticket'
-import { defToDraft, serialize, validateDraft } from './schemaAdapter'
+import { defToDraft, draftKey, nextUid, serialize, validateDraft } from './schemaAdapter'
 import { KEY_PATTERN, catalogOf, type DesignerField, type FieldType11 } from './types'
-import { nextUid } from './schemaAdapter'
 
 export interface DesignerState {
   fields: Ref<DesignerField[]>
@@ -24,7 +23,7 @@ export interface DesignerState {
   updateOption: (idx: number, optIdx: number, patch: { label?: string; value?: string }) => void
   keyError: (idx: number) => string
   regexError: (idx: number) => string
-  validate: () => ReturnType<typeof validateDraft>
+  validate: (checkBrowserRegex?: boolean) => ReturnType<typeof validateDraft>
   saveBlocked: () => boolean
   serialize: () => TicketTypeFieldInput[]
   loadFromDefs: (defs: TicketTypeFieldDef[]) => void
@@ -51,10 +50,10 @@ export function createDesignerState(): DesignerState {
         field_label: `${catalogOf(type).label}${seq}`,
         field_type: type,
         required: false,
-        field_options: catalogOf(type).hasOptions ? [{ label: '选项一', value: 'opt1' }] : null,
+        field_options: catalogOf(type).hasOptions ? [{ label: '选项一', value: '' }] : null,
         validate_regex: '',
         formula: '',
-        sort_order: fields.value.length + 1,
+        sort_order: Math.max(0, ...fields.value.map((f) => f.sort_order ?? 0)) + 1,
       })
       selected.value = fields.value.length - 1
     },
@@ -64,7 +63,6 @@ export function createDesignerState(): DesignerState {
     remove(idx) {
       if (idx < 0 || idx >= fields.value.length) return
       fields.value.splice(idx, 1)
-      resort()
       selected.value = -1
     },
     move(from, to) {
@@ -80,14 +78,15 @@ export function createDesignerState(): DesignerState {
     update(idx, patch) {
       const cur = fields.value[idx]
       if (!cur) return
+      const typeChanged = patch.field_type !== undefined && patch.field_type !== cur.field_type
       Object.assign(cur, patch)
-      if (patch.field_type !== undefined) {
+      if (typeChanged) {
         // 类型切换：选项面随类型重建（选项型给默认一项；非选项型清空）
-        cur.field_options = catalogOf(patch.field_type).hasOptions
-          ? cur.field_options?.length ? cur.field_options : [{ label: '选项一', value: 'opt1' }]
+        cur.field_options = catalogOf(cur.field_type).hasOptions
+          ? cur.field_options?.length ? cur.field_options : [{ label: '选项一', value: '' }]
           : null
-        if (patch.field_type === 'tips') cur.field_key = ''
-        if (!catalogOf(patch.field_type).hasOptions) cur.dictRef = undefined
+        if (cur.field_type === 'tips') cur.field_key = ''
+        if (!catalogOf(cur.field_type).hasOptions) cur.dictRef = undefined
       }
     },
     addOption(idx) {
@@ -108,18 +107,18 @@ export function createDesignerState(): DesignerState {
     keyError(idx) {
       const f = fields.value[idx]
       if (!f || f.field_type === 'tips') return ''
-      const key = f.field_key.trim()
+      const key = draftKey(f)
       if (!key) return '字段键不能为空'
-      if (!KEY_PATTERN.test(key)) return '非法：字母开头，仅字母/数字/下划线'
-      const dup = fields.value.findIndex((o, i) => i !== idx && o.field_key.trim() === key)
+      if (key !== f.source?.field_key && !KEY_PATTERN.test(key)) return '非法：字母开头，仅字母/数字/下划线'
+      const dup = fields.value.findIndex((o, i) => i !== idx && draftKey(o) === key)
       if (dup >= 0) return `与第 ${dup + 1} 个字段重复`
       return ''
     },
     regexError(idx) {
       const f = fields.value[idx]
       if (!f) return ''
-      const re = f.validate_regex.trim()
-      if (!re) return ''
+      const re = f.validate_regex
+      if (!re || re === f.source?.validate_regex) return ''
       try {
         new RegExp(re)
         return ''
@@ -127,13 +126,12 @@ export function createDesignerState(): DesignerState {
         return `正则语法错误：${(e as Error).message}`
       }
     },
-    validate: () => validateDraft(fields.value),
+    validate: (checkBrowserRegex) => validateDraft(fields.value, checkBrowserRegex),
     saveBlocked: () => validateDraft(fields.value).length > 0,
     serialize: () => serialize(fields.value),
     loadFromDefs(defs) {
-      fields.value = defs.map(defToDraft)  // defToDraft 已产 formula 字段
+      fields.value = defs.map(defToDraft)
       seq = fields.value.length
-      resort()
       selected.value = -1
     },
   }

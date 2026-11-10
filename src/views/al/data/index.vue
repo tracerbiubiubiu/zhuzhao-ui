@@ -329,12 +329,13 @@ function rowClass({ row }: { row: AlDataDoc }): string {
 
 // ─── 导出/导入 ───
 async function onExport() {
+  const type = selectedType.value
   try {
-    const blob = await exportAlDataApi(selectedType.value)
+    const blob = await exportAlDataApi(type)
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `${selectedType.value}_${new Date().toISOString().slice(0, 10)}.json`
+    a.download = `${type}_${new Date().toISOString().slice(0, 10)}.json`
     a.click()
     URL.revokeObjectURL(url)
   } catch (err: unknown) {
@@ -343,52 +344,89 @@ async function onExport() {
   }
 }
 
+const IMPORT_MAX_BYTES = 1024 * 1024
 const importVisible = ref(false)
+const importType = ref('')
 const importText = ref('')
+const importReading = ref(false)
 const importBusy = ref(false)
 const importError = ref('')
 const importResult = ref('')
-// 全量替换风险确认（2026-11-09）：导入会先清空该类型全部行（含软删）再重灌——
-// 原弹窗无任何警示且文案与「导出格式对称」连用，易误解为追加式导入。
 const replaceConfirmed = ref(false)
+let importReadSeq = 0
+const importPayload = computed(() => importText.value.trim())
+const importFormatError = computed(() => {
+  if (!importPayload.value) return ''
+  if (new TextEncoder().encode(importPayload.value).length > IMPORT_MAX_BYTES) {
+    return '导入内容超过 1 MiB'
+  }
+  try {
+    if (Array.isArray(JSON.parse(importPayload.value))) return ''
+  } catch {
+    // 无效 JSON 与非数组同样不能确认。
+  }
+  return '导入内容须为有效的 JSON 数组'
+})
+const importReady = computed(() =>
+  importVisible.value && importType.value === selectedType.value && !isDeprecated.value
+  && !importReading.value && !importBusy.value && !!importPayload.value && !importFormatError.value,
+)
 
-function openImport() {
-  importText.value = ''
+function editImportText(value: string) {
+  ++importReadSeq
+  importReading.value = false
+  importText.value = value
   importError.value = ''
   importResult.value = ''
   replaceConfirmed.value = false
+}
+
+function openImport() {
+  if (importBusy.value || !selectedType.value || isDeprecated.value) return
+  editImportText('')
+  importType.value = selectedType.value
   importVisible.value = true
 }
 
 async function onImportFile(ev: Event) {
-  const file = (ev.target as HTMLInputElement).files?.[0]
-  if (!file) return
-  if (file.size > 1024 * 1024) {
-    importError.value = '文件超过 1MB（网关实际上限——非 activelist 自身）'
+  const input = ev.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (!file || importBusy.value) return
+  // 换文件先撤销上一份内容的确认。允许随后重选同一文件。
+  input.value = ''
+  editImportText('')
+  if (file.size > IMPORT_MAX_BYTES) {
+    importError.value = '文件超过 1 MiB'
     return
   }
-  importText.value = await file.text()
+  const readSeq = importReadSeq
+  const isCurrentRead = () => readSeq === importReadSeq && importVisible.value
+  importReading.value = true
+  try {
+    const contents = await file.text()
+    if (isCurrentRead()) importText.value = contents
+  } catch {
+    if (isCurrentRead()) importError.value = '读取文件失败，请重新选择文件'
+  } finally {
+    if (isCurrentRead()) importReading.value = false
+  }
 }
 
 async function submitImport() {
-  if (!importText.value.trim()) {
-    importError.value = '请选择文件或粘贴 JSON 数组'
-    return
-  }
-  if (!replaceConfirmed.value) {
-    importError.value = '请先勾选「我已知晓导入为全量替换」'
-    return
-  }
+  if (!importReady.value || !replaceConfirmed.value) return
+  const type = importType.value
+  const payload = importPayload.value
   importBusy.value = true
   importError.value = ''
+  importResult.value = ''
+  replaceConfirmed.value = false
   try {
-    const res = await importAlDataApi(selectedType.value, importText.value)
+    const res = await importAlDataApi(type, payload)
     importResult.value = `已替换为 ${res.rows} 行（清除原有 ${res.deleted} 行）`
     ElMessage.warning(`导入为全量替换：已清除原有 ${res.deleted} 行`)
-    refresh()
+    if (selectedType.value === type) refresh()
   } catch (err: unknown) {
-    const resp = (err as { response?: { data?: { message?: string } } })?.response?.data
-    importError.value = resp?.message ?? '导入失败，请检查 JSON 格式'
+    importError.value = apiErrorBody(err).message ?? '未能确认导入结果，请核对数据后重试'
   } finally {
     importBusy.value = false
   }
@@ -610,27 +648,37 @@ useTableFit(dataTable, () => list.value)
       </template>
     </el-dialog>
 
-    <!-- 导入（JSON 数组与导出对称；网关上限 1MB） -->
-    <el-dialog :close-on-click-modal="false" v-model="importVisible" title="导入数据（全量替换）" width="560px">
+    <!-- 导入（JSON 数组；网关上限 1 MiB） -->
+    <el-dialog
+      v-model="importVisible"
+      :close-on-click-modal="false"
+      :close-on-press-escape="!importBusy"
+      :show-close="!importBusy"
+      destroy-on-close
+      title="导入数据（全量替换）"
+      width="560px"
+    >
       <el-alert
         title="导入为全量替换：将先清除该类型全部数据（含已删除行），再写入文件内容，不可撤销"
         type="warning" show-icon :closable="false" class="mb-4"
       />
-      <el-alert v-if="importError" :title="importError" type="error" show-icon class="mb-4" :closable="false" />
+      <el-alert v-if="importError || importFormatError" :title="importError || importFormatError" type="error" show-icon class="mb-4" :closable="false" />
       <el-alert v-if="importResult" :title="importResult" type="success" show-icon class="mb-4" :closable="false" />
-      <input type="file" accept=".json,application/json" class="mb-3" @change="onImportFile">
+      <input type="file" accept=".json,application/json" class="mb-3" :disabled="importBusy" @change="onImportFile">
+      <span v-if="importReading" class="ml-2 text-sm" role="status">正在读取文件…</span>
       <el-input
-        v-model="importText" type="textarea" :rows="8"
-        placeholder='或直接粘贴 JSON 数组（与导出格式对称）：[{"data":{...}},...]'
+        :model-value="importText" type="textarea" :rows="8" :disabled="importBusy"
+        placeholder='[{"id":"1","status":"active","data":{"name":"示例"}}]'
+        @update:model-value="editImportText"
       />
-      <div class="text-xs text-gray-400 mt-2">网关实际上限 1MB；格式校验失败整批不入（同事务）</div>
-      <el-checkbox v-model="replaceConfirmed" class="mt-2">
-        我已知晓导入会<span class="text-red-500 font-bold">清除「{{ selectedType }}」全部现有数据（含已删除行）</span>
+      <div class="text-xs text-gray-400 mt-2">可粘贴 JSON 数组或选择文件。每行须包含正整数 ID 字符串，浏览器导入上限 1 MiB。导入空数组会清空数据。</div>
+      <el-checkbox v-model="replaceConfirmed" class="mt-2" :disabled="!importReady">
+        我已知晓导入会<span class="text-red-500 font-bold">清除「{{ importType }}」全部现有数据（含已删除行）</span>
       </el-checkbox>
       <template #footer>
-        <el-button @click="onExport">先导出备份</el-button>
-        <el-button @click="importVisible = false">关闭</el-button>
-        <el-button type="danger" :loading="importBusy" :disabled="!replaceConfirmed" @click="submitImport">导入（替换）</el-button>
+        <el-button :disabled="importBusy || importType !== selectedType" @click="onExport">导出当前数据</el-button>
+        <el-button :disabled="importBusy" @click="importVisible = false">关闭</el-button>
+        <el-button type="danger" :loading="importBusy" :disabled="!importReady || !replaceConfirmed" @click="submitImport">导入（替换）</el-button>
       </template>
     </el-dialog>
 

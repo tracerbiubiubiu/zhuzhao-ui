@@ -20,7 +20,7 @@ describe('增删选排', () => {
     s.select(0); s.remove(0)
     expect(s.fields.value).toHaveLength(2)
     expect(s.fields.value[0].field_type).toBe('select')
-    expect(s.fields.value.map((f) => f.sort_order)).toEqual([1, 2])
+    expect(s.fields.value.map((f) => f.sort_order)).toEqual([2, 3])
   })
 
   it('move 重排并保持选中跟随（sortablejs onEnd → move）', () => {
@@ -85,7 +85,7 @@ describe('serialize 与校验闸', () => {
       { id: '2', type_code: 't', field_key: 'b', field_label: 'B', field_type: 'select', required: true, sort_order: 2, field_options: [{ value: 'x', label: 'X' }] },
     ] as never[])
     expect(s.fields.value).toHaveLength(2)
-    expect(s.fields.value[1].field_options).toEqual([{ label: 'X', value: 'x' }])
+    expect(s.fields.value[1].field_options).toMatchObject([{ label: 'X', value: 'x' }])
     expect(s.selected.value).toBe(-1)
   })
 })

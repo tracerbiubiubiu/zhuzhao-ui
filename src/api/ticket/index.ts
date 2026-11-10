@@ -106,13 +106,12 @@ export interface TransitionMetaRow {
   max_reminders?: number
 }
 
-/** 字段定义输入（ReplaceTypeFields——field_options 归一为字符串数组，后端
- * optionValues 兼容字符串数组与 {value,label} 对象数组两种形态） */
+/** 字段定义输入（ReplaceTypeFields——选项值和文件 MIME 白名单按字段类型传递） */
 export interface TicketTypeFieldInput {
   field_key: string
   field_label: string
   field_type: 'input' | 'textarea' | 'number' | 'date' | 'select' | 'multi_select' | 'tips' | 'richtext' | 'radio' | 'rating' | 'file'
-  field_options?: string[]
+  field_options?: unknown
   /** B1-3 formula/extension 元数据（附录 A.2 方案 b）——`{"formula":"price*qty"}` */
   field_meta?: Record<string, unknown>
   required: boolean
@@ -154,9 +153,8 @@ export async function replaceTicketTypeFieldsApi(input: {
   code: string
   fields: TicketTypeFieldInput[]
   version?: number
-}): Promise<TicketTypeFieldDef[]> {
-  const data = await request.post('/api/v1/ticket-types/fields/replace', input, { _silentError: true })
-  return ((data as unknown as { fields?: TicketTypeFieldDef[] })?.fields ?? [])
+}): Promise<void> {
+  await request.post('/api/v1/ticket-types/fields/replace', input, { _silentError: true })
 }
 
 // ===== S12：模板管理（GET 共享行挂页、写挂 ticket:type:manage——000031 词表重排） =====
