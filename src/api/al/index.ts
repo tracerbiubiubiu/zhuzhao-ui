@@ -42,6 +42,8 @@ export interface AlTypeHistoryRow {
   version: number
   op: string
   fields: AlFieldDef[]
+  unique_fields?: string[]
+  changed_by?: string
   created_at: string
 }
 
@@ -64,11 +66,14 @@ export interface AlCursor {
 }
 
 /** 导入结果（ImportResult 投影） */
+/** 导入=全量替换：服务端锁表后 DELETE 全部行（含软删）再重灌——rows=重灌行数、
+ * deleted=清除的原有行数（含软删）。与服务端 ImportResult（data_service.go）对齐，
+ * 修复 UI 曾读 inserted/skipped 致成功提示恒显「新增 ? 行」。 */
 export interface AlImportResult {
-  inserted?: number
-  skipped?: number
+  rows: number
+  deleted: number
+  max_id: string
   duration_ms?: number
-  [k: string]: unknown
 }
 
 // ─── 类型管理（activelist:type:read / type:manage）───

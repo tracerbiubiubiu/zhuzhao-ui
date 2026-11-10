@@ -359,6 +359,7 @@ useTableFit(typesTable, () => rows.value)
           <div class="flex items-center gap-2 text-sm">
             <el-tag size="small" :type="h.op === 'register' ? 'success' : 'warning'">{{ h.op }}</el-tag>
             <span class="text-gray-500">v{{ h.version }}</span>
+            <span v-if="h.changed_by" class="text-xs text-gray-500">{{ h.changed_by }}</span>
             <span class="text-xs text-gray-400 ml-auto">{{ formatTime(h.created_at) }}</span>
           </div>
           <div class="text-xs text-gray-500 mt-1">{{ fieldSummary(h.fields) }}</div>

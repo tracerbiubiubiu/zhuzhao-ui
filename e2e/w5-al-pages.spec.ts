@@ -149,3 +149,52 @@ test('活动列表：废弃类型只读视图（分组可选/写入隐藏/导出
   await drawer.getByRole('button', { name: '关闭', exact: true }).click()
   await expect(drawer).not.toBeVisible()
 })
+
+
+test('活动列表：导入为全量替换——强确认后替换且提示真实行数', async ({ page }) => {
+  const state = loadState()
+  const typeName = `e2e_al_imp_${Date.now().toString(36)}`
+  const admin = await apiLogin(state.admin.employeeNo, state.admin.password, 'w5-al-import')
+  const h = { token: admin.env!.data.access_token } as const
+  const created = await api('/al/api/v1/admin/types', {
+    ...h, method: 'POST', body: { type_name: typeName, fields: [{ name: 'name', type: 'string', required: true }] },
+  })
+  expect(created.env!.code).toBe(0)
+  for (const n of ['old_1', 'old_2', 'old_3']) {
+    const r = await api(`/al/api/v1/data/${typeName}`, { ...h, method: 'POST', body: { data: { name: n } } })
+    expect(r.env!.code).toBe(0)
+  }
+
+  try {
+    await waitUserRateBudget()
+    await uiLogin(page, state.admin.employeeNo, state.admin.password)
+    await expect(page.getByRole('menuitem', { name: '活动列表' })).toBeVisible({ timeout: 15_000 })
+    await page.goto('/#/al/data')
+    await page.getByPlaceholder('搜索类型').fill(typeName)
+    await page.locator('.al-type-item').filter({ hasText: typeName }).click()
+    await expect(page.locator('.el-table__row')).toHaveCount(3)
+
+    await page.getByRole('button', { name: '导入', exact: true }).click()
+    const dialog = page.locator('.el-dialog').filter({ hasText: '全量替换' })
+    // 弹窗常驻替换警示；未勾选知晓前「导入（替换）」不可点
+    await expect(dialog.getByText('导入为全量替换')).toBeVisible()
+    const submit = dialog.getByRole('button', { name: '导入（替换）' })
+    await expect(submit).toBeDisabled()
+    // 导入格式=带 id/status 的完整行（全量替换保留源 id）——与导出对称
+    await dialog.locator('textarea').fill(JSON.stringify([
+      { id: '1', status: 'active', data: { name: 'new_1' } },
+      { id: '2', status: 'active', data: { name: 'new_2' } },
+    ]))
+    await dialog.getByText('我已知晓导入会').click()
+    await expect(submit).toBeEnabled()
+    await submit.click()
+
+    // 提示用服务端真实回包（rows/deleted），不再是「新增 ? 行」
+    await expect(dialog.getByText('已替换为 2 行（清除原有 3 行）')).toBeVisible({ timeout: 10_000 })
+    await dialog.getByRole('button', { name: '关闭', exact: true }).click()
+    await expect(page.locator('.el-table__row')).toHaveCount(2)
+    await expect(page.locator('.el-table__row').filter({ hasText: 'old_1' })).toHaveCount(0)
+  } finally {
+    await api('/al/api/v1/admin/types/deprecate', { ...h, method: 'POST', body: { type_name: typeName } }).catch(() => {})
+  }
+})

@@ -18,7 +18,7 @@ import { formatDateTime } from '@/utils/datetime'
 import { computed, reactive, ref, watch } from 'vue'
 import { useTableFit } from '@vea/hooks'
 import {
-  ElAlert, ElButton, ElCard, ElDescriptions, ElDescriptionsItem, ElDialog, ElDrawer,
+  ElAlert, ElButton, ElCard, ElCheckbox, ElDescriptions, ElDescriptionsItem, ElDialog, ElDrawer,
   ElEmpty, ElForm, ElFormItem, ElInput, ElInputNumber, ElMessage, ElMessageBox,
   ElOption, ElSelect, ElTable, ElTableColumn, ElTag,
 } from 'element-plus'
@@ -348,11 +348,15 @@ const importText = ref('')
 const importBusy = ref(false)
 const importError = ref('')
 const importResult = ref('')
+// 全量替换风险确认（2026-11-09）：导入会先清空该类型全部行（含软删）再重灌——
+// 原弹窗无任何警示且文案与「导出格式对称」连用，易误解为追加式导入。
+const replaceConfirmed = ref(false)
 
 function openImport() {
   importText.value = ''
   importError.value = ''
   importResult.value = ''
+  replaceConfirmed.value = false
   importVisible.value = true
 }
 
@@ -371,11 +375,16 @@ async function submitImport() {
     importError.value = '请选择文件或粘贴 JSON 数组'
     return
   }
+  if (!replaceConfirmed.value) {
+    importError.value = '请先勾选「我已知晓导入为全量替换」'
+    return
+  }
   importBusy.value = true
   importError.value = ''
   try {
     const res = await importAlDataApi(selectedType.value, importText.value)
-    importResult.value = `导入完成：新增 ${res.inserted ?? '?'} 行${res.skipped ? `，跳过 ${res.skipped} 行` : ''}`
+    importResult.value = `已替换为 ${res.rows} 行（清除原有 ${res.deleted} 行）`
+    ElMessage.warning(`导入为全量替换：已清除原有 ${res.deleted} 行`)
     refresh()
   } catch (err: unknown) {
     const resp = (err as { response?: { data?: { message?: string } } })?.response?.data
@@ -602,7 +611,11 @@ useTableFit(dataTable, () => list.value)
     </el-dialog>
 
     <!-- 导入（JSON 数组与导出对称；网关上限 1MB） -->
-    <el-dialog :close-on-click-modal="false" v-model="importVisible" title="导入数据" width="560px">
+    <el-dialog :close-on-click-modal="false" v-model="importVisible" title="导入数据（全量替换）" width="560px">
+      <el-alert
+        title="导入为全量替换：将先清除该类型全部数据（含已删除行），再写入文件内容，不可撤销"
+        type="warning" show-icon :closable="false" class="mb-4"
+      />
       <el-alert v-if="importError" :title="importError" type="error" show-icon class="mb-4" :closable="false" />
       <el-alert v-if="importResult" :title="importResult" type="success" show-icon class="mb-4" :closable="false" />
       <input type="file" accept=".json,application/json" class="mb-3" @change="onImportFile">
@@ -611,9 +624,13 @@ useTableFit(dataTable, () => list.value)
         placeholder='或直接粘贴 JSON 数组（与导出格式对称）：[{"data":{...}},...]'
       />
       <div class="text-xs text-gray-400 mt-2">网关实际上限 1MB；格式校验失败整批不入（同事务）</div>
+      <el-checkbox v-model="replaceConfirmed" class="mt-2">
+        我已知晓导入会<span class="text-red-500 font-bold">清除「{{ selectedType }}」全部现有数据（含已删除行）</span>
+      </el-checkbox>
       <template #footer>
+        <el-button @click="onExport">先导出备份</el-button>
         <el-button @click="importVisible = false">关闭</el-button>
-        <el-button type="primary" :loading="importBusy" @click="submitImport">导入</el-button>
+        <el-button type="danger" :loading="importBusy" :disabled="!replaceConfirmed" @click="submitImport">导入（替换）</el-button>
       </template>
     </el-dialog>
 
