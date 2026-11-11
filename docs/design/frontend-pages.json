@@ -16,7 +16,8 @@
       "src/views/intel/query/IntelResult.vue",
       "src/views/Login/components/LoginForm.vue"
     ],
-    "exclusion_note": "两个辅助组件仍已阅读，统计在shared中，不计入路由文件数"
+    "exclusion_note": "两个辅助组件仍已阅读，统计在shared中，不计入路由文件数",
+    "future_business_journeys": 8
   },
   "batch_map": {
     "UX0": {
@@ -494,7 +495,7 @@
         "FE-PRE-10",
         "FE-PRE-12"
       ],
-      "note": "发现编号含跨页规范问题；并非每项均已实机复现；现有任务页面迁移归U06/P6.3，新增三策略恢复表单与控制台归I03/P7，自然语言计划入口归A04/P7",
+      "note": "发现编号含跨页规范问题；并非每项均已实机复现；现有任务页面迁移归U06/P6.3，新增三策略恢复表单与控制台归I03/P7，自然语言计划入口归A04/P7；一次性/双源总览归I05，新手动Action入口归U08，均为P7增量",
       "batches": [
         "UX1",
         "UX3",
@@ -508,7 +509,9 @@
       "task_ids": [
         "U06",
         "I03",
-        "A04"
+        "A04",
+        "I05",
+        "U08"
       ]
     },
     {
@@ -1391,5 +1394,118 @@
       "status": "decision_pending",
       "design_ref": "../../../zhuzhao/docs/design/business-lifecycle-contracts.md"
     }
-  ]
+  ],
+  "future_business_journeys": [
+    {
+      "id": "manual-capability",
+      "title": "手动能力运行与工单动作",
+      "first_window": "P7",
+      "task_ids": [
+        "U08",
+        "I01",
+        "I02",
+        "I03"
+      ],
+      "first_slice": "Schema表单一次运行、结果/历史、工单回贴；不依赖AI",
+      "enhancement": "P8接脚本/SOAR动作",
+      "status": "planned_not_implemented",
+      "route_policy": "reuse_existing_or_provider_view_first_no_route_count_claim"
+    },
+    {
+      "id": "schedule-operations",
+      "title": "一次性与双源调度总览",
+      "first_window": "P7",
+      "task_ids": [
+        "I05",
+        "I03"
+      ],
+      "first_slice": "指定时刻/延后一次、维护/TR只读总览与恢复链接",
+      "enhancement": "按运维反馈增视图，不造第二调度器",
+      "status": "planned_not_implemented",
+      "route_policy": "reuse_existing_or_provider_view_first_no_route_count_claim"
+    },
+    {
+      "id": "package-publication",
+      "title": "自定义逻辑发布消费",
+      "first_window": "P8",
+      "task_ids": [
+        "R03",
+        "I02",
+        "U08"
+      ],
+      "first_slice": "一成熟执行供给的登记/审批/版本/运行/结果入口或受权深链",
+      "enhancement": "后增Actions，缺口才评最小runner",
+      "status": "planned_not_implemented",
+      "route_policy": "reuse_existing_or_provider_view_first_no_route_count_claim"
+    },
+    {
+      "id": "periodic-reports",
+      "title": "周期报告与运营视图",
+      "first_window": "P8",
+      "task_ids": [
+        "E04",
+        "D13",
+        "I03",
+        "D11"
+      ],
+      "first_slice": "固定周/月报、白名单查询、Word/PDF与分发回执",
+      "enhancement": "后扩模板/订阅/有明确受众的大屏",
+      "status": "planned_not_implemented",
+      "route_policy": "reuse_existing_or_provider_view_first_no_route_count_claim"
+    },
+    {
+      "id": "notice-workflow",
+      "title": "外部通报处置与回复",
+      "first_window": "P8",
+      "task_ids": [
+        "E06",
+        "D11"
+      ],
+      "first_slice": "收文→分责处置→回复稿/回执，复用FSM/专业来源",
+      "enhancement": "通告/演练逐场景扩，不造运营中心",
+      "status": "planned_not_implemented",
+      "route_policy": "reuse_existing_or_provider_view_first_no_route_count_claim"
+    },
+    {
+      "id": "durable-collaboration",
+      "title": "持久跨系统协同",
+      "first_window": "P9",
+      "task_ids": [
+        "R02",
+        "R04"
+      ],
+      "first_slice": "责任/等待/失败/run/回传与恢复，首条有限链",
+      "enhancement": "复杂分支图按实际场景，不自建通用画布",
+      "status": "planned_not_implemented",
+      "route_policy": "reuse_existing_or_provider_view_first_no_route_count_claim"
+    },
+    {
+      "id": "oncall-evidence",
+      "title": "值班接管与证据",
+      "first_window": "P9",
+      "task_ids": [
+        "R05",
+        "D14",
+        "D11"
+      ],
+      "first_slice": "有效主备、接管/超时升级、手册/证据索引",
+      "enhancement": "外部供给优先，薄责任表可兜底",
+      "status": "planned_not_implemented",
+      "route_policy": "reuse_existing_or_provider_view_first_no_route_count_claim"
+    },
+    {
+      "id": "version-migration",
+      "title": "在途版本迁移审阅",
+      "first_window": "P7",
+      "task_ids": [
+        "D18",
+        "D01"
+      ],
+      "first_slice": "先CLI dry-run/映射/逐项报告，不强增管理页面",
+      "enhancement": "实际需要再加UI/跨类型",
+      "status": "planned_not_implemented",
+      "route_policy": "reuse_existing_or_provider_view_first_no_route_count_claim"
+    }
+  ],
+  "future_scope_note": "8项是跨阶段旅程/责任说明，不是8个已建页面；4类planned仍特指AI。既有27路由和9共享组不因未来旅程增加而改计数。"
 }
