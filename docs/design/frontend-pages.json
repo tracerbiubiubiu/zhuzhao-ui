@@ -1318,16 +1318,16 @@
     }
   ],
   "limitations": [
-    "没有浏览器截图/真实角色运行验证，不代表视觉或a11y已经验收",
+    "没有生产Vue全站视觉/原生缩放/真实角色的新设计验收；离线六视图已有截图/交互检查，不代表全站视觉或a11y通过",
     "发现包含规范调整和新增能力，非全部已复现运行缺陷",
     "大量合成mock保留并扩展；关键契约/授权仍需真栈",
-    "本次只修改文档/清单/协作测试口径，没有源码、依赖、配置或账号变更"
+    "本轮受控变更为设计文档/清单/离线原型；既有实现回归仅使用已回收私有栈合成账号，共享账号不变"
   ],
   "product_principle": "数据聚合与安全全生命周期管控；专业平台能力接入/消费/跳转，保留平台特有领域Agent双轨，不复制SOC/SIEM/SOAR/CMDB/TI/知识运营平台",
   "existing_platforms": "用户确认已有SOC/SIEM、SOAR、CMDB、TI、企业Agent/知识平台；API能力、授权、数据合同待核",
   "schedule_source": "../../../zhuzhao/docs/review/planning-backlog.md",
   "implementation_status": "planned_not_implemented",
-  "change_scope": "documentation_only",
+  "change_scope": "documentation_and_offline_prototype_only",
   "account_scope": "仅独立栈合成夹具账号；共享账号不变，私有库已回收",
   "shared_accounts_changed": false,
   "static_review": {
@@ -1347,5 +1347,48 @@
     "owner_specific_logo_reproduced": false,
     "full_site_visual_a11y_verified": false,
     "evidence": "zhuzhao/docs/review/reports/pre-phase6-replanning-2026-11-11.md"
-  }
+  },
+  "planned_scope": "四类原始计划入口为AI专项；风险/事件/设备未来工作区在planned_business_refs明确引用所属包，不把六视图原型当全站实施",
+  "planned_business_refs": [
+    {
+      "id": "risk-lifecycle-workspace",
+      "scope": "风险列表/详情/评估接受/整改关联与报告",
+      "task_ids": [
+        "D08",
+        "D09",
+        "D10",
+        "D13"
+      ],
+      "status": "planned_not_implemented",
+      "design_ref": "../../../zhuzhao/docs/design/business-lifecycle-contracts.md"
+    },
+    {
+      "id": "incident-collaboration",
+      "scope": "SOC结论协作/本地时间线证据与工单",
+      "task_ids": [
+        "D14",
+        "R05"
+      ],
+      "status": "planned_not_implemented",
+      "design_ref": "../../../zhuzhao/docs/design/platform-evolution.md"
+    },
+    {
+      "id": "device-extension",
+      "scope": "异构无SSO，设备目录/状态/人工登录入口；只读大屏独立范围",
+      "task_ids": [
+        "X03"
+      ],
+      "status": "planned_not_implemented",
+      "design_ref": "../../../zhuzhao/docs/design/device-module-contract.md"
+    },
+    {
+      "id": "legacy-migration-review",
+      "scope": "风险Excel/业务工单导入与跨指纹合并先按E10裁决，未默认增加通用导入页",
+      "task_ids": [
+        "E10"
+      ],
+      "status": "decision_pending",
+      "design_ref": "../../../zhuzhao/docs/design/business-lifecycle-contracts.md"
+    }
+  ]
 }
