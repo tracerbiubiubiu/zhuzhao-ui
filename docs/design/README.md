@@ -11,3 +11,5 @@
 Phase5 已验收并合入 main。Phase6 前的[全站重设计](frontend-redesign.md)核对了27个路由视图和9组共享组件，记录12组静态发现、代表页面方案、mock/契约/真实栈分工及验收标准；[逐页清单](frontend-pages.json)保留每页旅程、证据、任务与待验状态，另列4类未来AI页面。
 
 这是已落档的规划，尚未完成页面改造或视觉/真实角色运行验收。现行规范解释当前代码；重设计方案在对应实施任务中替换现行约束，并同步代码与验证。唯一排期与依赖见主仓[规划总账](../../../zhuzhao/docs/review/planning-backlog.md)，不在本仓复制工期。
+
+详设候选见[施工合同](frontend-implementation-contract.md)、[原型说明](prototypes/README.md)和[六视图离线原型](prototypes/lifecycle-workspace.html)。代表样板已做离线尺寸/交互检查，仍未接Vue/真实API，也不替代全站迁移；设备首期已确认人工登录。

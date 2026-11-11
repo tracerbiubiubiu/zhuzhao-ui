@@ -20,3 +20,5 @@
 Phase5已验收并合入main；重规划统一以主仓[规划总账](../../zhuzhao/docs/review/planning-backlog.md)维护任务、依赖和排期。本仓维护UI设计与逐页验收，不另建相互冲突的日历或工期估算。平台定位是数据聚合与安全全生命周期管控；模型、专业安全与知识能力以已有服务接入消费为主，平台特有领域Agent可做受控配置，前端不建设模型部署或通用Agent开发平台。
 
 `doc/` 是本地参考；执行卡、原日志、截图和临时验证产物留在 `.codex/` 等忽略目录。正式报告已迁至 `review/reports/`，旧 `deliverables/`、`outputs/`、`audit-reports/` 不再是受控文档入口。
+
+当前可看[六视图原型](design/prototypes/lifecycle-workspace.html)并按[施工合同](design/frontend-implementation-contract.md)评审；审计阶段、已确认与owner待决统一回[规划收口](../../zhuzhao/docs/review/planning-closeout.md)。
