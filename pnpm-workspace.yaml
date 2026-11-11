@@ -3,10 +3,19 @@
 # vue-demi=true：@tanstack/vue-query 传递依赖的版本切换 postinstall（Vue 3 环境，
 # 生态标准做法）——pnpm add 落的占位符「set this to true or false」非布尔值，
 # CI --frozen-lockfile 下 ERR_PNPM_IGNORED_BUILDS 致命（run 36430052551）。
+# @logicflow/core=false：其 postinstall 仅向终端打印 AI 提示文案，无构建产物（lib/es/dist 随包预构建），
+# 禁跑即可（S2 B2-1 2026-10-24）。
 allowBuilds:
+  '@logicflow/core': false
   esbuild: true
   vue-demi: true
 # 传递依赖安全钉（GHSA-68fv-2mgg-jv7q 事件循环 DoS）——pnpm 12 不再读 package.json 的
 # pnpm 段，overrides 唯一入口在此。
 overrides:
   source-map-js: ^1.2.2
+  # uuid moderate 漏洞（GHSA-w5hq-g745-h8pq——LogicFlow 传递依赖 <11.1.1
+  # 缺 buffer 边界检查）；钉 >=11.1.1（CI audit --prod 守卫）
+  uuid: ^11.1.1
+  # follow-redirects high 漏洞（GHSA-mrwp-f3q8-3g9p，<1.16.2）。原 package.json pnpm 段的同名钉
+  # 在 pnpm 12 下已不生效（且写死 1.16.1，若被重新启用会降级）——2026-11-09 迁入此处并上提下限
+  follow-redirects: ^1.16.2

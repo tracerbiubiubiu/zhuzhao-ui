@@ -2,6 +2,7 @@ import accountGroup from '@iconify-icons/mdi/account-group'
 import accountOutline from '@iconify-icons/mdi/account-outline'
 import lockOutline from '@iconify-icons/mdi/lock-outline'
 import bellOutline from '@iconify-icons/mdi/bell-outline'
+import clipboardCheckOutline from '@iconify-icons/mdi/clipboard-check-outline'
 import bookAlphabet from '@iconify-icons/mdi/book-alphabet'
 import account from '@iconify-icons/mdi/account'
 import accountMultiple from '@iconify-icons/mdi/account-multiple'
@@ -19,7 +20,11 @@ import fileTree from '@iconify-icons/mdi/file-tree'
 import folderOpenOutline from '@iconify-icons/mdi/folder-open-outline'
 import folderOutline from '@iconify-icons/mdi/folder-outline'
 import formatListBulleted from '@iconify-icons/mdi/format-list-bulleted'
+import formatLineSpacing from '@iconify-icons/mdi/format-line-spacing'
+import fullscreen from '@iconify-icons/mdi/fullscreen'
+import fullscreenExit from '@iconify-icons/mdi/fullscreen-exit'
 import helpCircle from '@iconify-icons/mdi/help-circle'
+import helpCircleOutline from '@iconify-icons/mdi/help-circle-outline'
 import home from '@iconify-icons/mdi/home'
 import keyOutline from '@iconify-icons/mdi/key-outline'
 import menu from '@iconify-icons/mdi/menu'
@@ -47,6 +52,7 @@ export const icons = {
   'mdi:account-outline': accountOutline,
   'mdi:lock-outline': lockOutline,
   'mdi:bell-outline': bellOutline,
+  'mdi:clipboard-check-outline': clipboardCheckOutline,
   'mdi:book-alphabet': bookAlphabet,
   'mdi:account': account,
   'mdi:account-multiple': accountMultiple,
@@ -64,7 +70,11 @@ export const icons = {
   'mdi:folder-open-outline': folderOpenOutline,
   'mdi:folder-outline': folderOutline,
   'mdi:format-list-bulleted': formatListBulleted,
+  'mdi:format-line-spacing': formatLineSpacing,
+  'mdi:fullscreen': fullscreen,
+  'mdi:fullscreen-exit': fullscreenExit,
   'mdi:help-circle': helpCircle,
+  'mdi:help-circle-outline': helpCircleOutline,
   'mdi:home': home,
   'mdi:key-outline': keyOutline,
   'mdi:menu': menu,
@@ -118,6 +128,9 @@ export const MENU_ICON_MAP: Readonly<Record<string, string>> = {
   'al-types': 'mdi:tag-outline',
   // 000025 audit 域
   'audit-log': 'mdi:file-document-outline',
+  // phase5：000067 情报查询（建行时漏登记——侧栏曾静默空白）；000073 分派规则复用 setting；
+  // 000072 消息中心 icon 'message' 随 000078 删行退役（消息中心改常量路由+铃铛入口，不再有菜单行）
+  intel: 'mdi:shield-account',
 }
 
 const warnedMenuIcons = new Set<string>()

@@ -11,46 +11,69 @@
  * - 按钮码（000010/000031 种子）：ticket:update/close/assign/delete/comment/note/relation
  * - 静态路由（§3.2④，菜单外——入口在列表页「详情」按钮，挂 ticket:read 码）
  */
-import { computed, reactive, ref } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { formatDateTime } from '@/utils/datetime'
+import { computed, onActivated, onDeactivated, reactive, ref, toRef, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import {
   ElAlert, ElButton, ElCard, ElCheckbox, ElDescriptions, ElDescriptionsItem, ElDialog,
-  ElEmpty, ElForm, ElFormItem, ElInput, ElMessage, ElMessageBox, ElOption, ElSelect, ElTag,
+  ElEmpty, ElForm, ElFormItem, ElInput, ElLink, ElMessage, ElMessageBox, ElOption, ElSelect, ElTag,
 } from 'element-plus'
 import type { FormInstance } from 'element-plus'
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
 import {
-  assignTicketApi, closeTicketApi, createTicketCommentApi, createTicketNoteApi,
+  addTicketCCApi, assignTicketApi, closeTicketApi, createTicketCommentApi, createTicketNoteApi,
   createTicketRelationApi, deleteTicketApi, getTicketApi, getTicketCommentsApi,
-  getTicketRelationsApi, listTicketTypesApi, STATUS_LABEL, updateTicketApi,
+  getTicketRelationsApi, listAvailableTransitionsApi, listTicketCCApi, listTicketTagsApi,
+  listTicketTypesApi, listTicketsApi, addTicketTagsApi, removeTicketCCApi, removeTicketTagApi,
+  transitionTicketApi, STATUS_LABEL, updateTicketApi, type TagRow, type TicketCCRow,
 } from '@/api/ticket'
 import { useUserStoreWithOut } from '@/store/modules/user'
 import UserNameText from '@/components/UserNameText/index.vue'
+import { getTicketTypeFieldsApi, type TicketTypeFieldDef , renderRichtextApi } from '@/api/ticket'
+import { getDictItemsByCodeApi } from '@/api/system/dict'
+import UserPicker from '@/components/UserPicker/index.vue'
+import TicketAttachments from '@/components/TicketAttachments.vue'
+import { useRenderedRichtext } from './useRenderedRichtext'
 
 // keep-alive 契约：name=静态路由名（参数路由——同工单不同 ID 依赖 :key 路由 fullPath 分实例）
 defineOptions({ name: 'TicketDetail' })
 
-const route = useRoute()
+const props = defineProps<{ ticketId: string }>()
 const router = useRouter()
 const queryClient = useQueryClient()
 const userStore = useUserStoreWithOut()
 
-const ticketId = computed(() => String(route.params.id ?? ''))
+// AppView 按 fullPath 缓存实例。路由参数由 RouterView 传入，缓存页不跟随全局 route 换单。
+const ticketId = toRef(props, 'ticketId')
+const active = ref(true)
+onActivated(() => { active.value = true })
+onDeactivated(() => { active.value = false })
+const canQueryTicket = computed(() => active.value && !!ticketId.value && ticketId.value !== 'new')
 
 const ticketQuery = useQuery({
   queryKey: computed(() => ['ticket', 'detail', ticketId.value]),
   queryFn: () => getTicketApi(ticketId.value),
-  enabled: computed(() => ticketId.value !== '' && ticketId.value !== 'new'),
+  enabled: canQueryTicket,
 })
 const commentsQuery = useQuery({
   queryKey: computed(() => ['ticket', 'comments', ticketId.value]),
   queryFn: () => getTicketCommentsApi(ticketId.value),
-  enabled: computed(() => ticketId.value !== ''),
+  enabled: canQueryTicket,
 })
 const relationsQuery = useQuery({
   queryKey: computed(() => ['ticket', 'relations', ticketId.value]),
   queryFn: () => getTicketRelationsApi(ticketId.value),
-  enabled: computed(() => ticketId.value !== ''),
+  enabled: canQueryTicket,
+})
+const ccQuery = useQuery({
+  queryKey: computed(() => ['ticket', 'cc', ticketId.value]),
+  queryFn: () => listTicketCCApi(ticketId.value),
+  enabled: canQueryTicket,
+})
+const tagsQuery = useQuery({
+  queryKey: computed(() => ['ticket', 'tags', ticketId.value]),
+  queryFn: () => listTicketTagsApi(ticketId.value),
+  enabled: canQueryTicket,
 })
 const typesQuery = useQuery({ queryKey: ['ticket', 'types'], queryFn: listTicketTypesApi })
 
@@ -60,9 +83,195 @@ const typeLabel = computed(
 )
 const isClosed = computed(() => ticket.value?.status === 'closed')
 
+// B1-5 自定义字段 schema + 回显（01 号 §3.5——"填了看不见"痛点收口件）
+const typeFieldsQuery = useQuery({
+  queryKey: computed(() => ['ticket', 'typeFields', ticket.value?.type_code ?? ''] as const),
+  queryFn: ({ queryKey }) => getTicketTypeFieldsApi(queryKey[2]),
+  enabled: computed(() => canQueryTicket.value && !!ticket.value?.type_code),
+  staleTime: 60_000,
+})
+const customFields = computed(() => typeFieldsQuery.data.value ?? [])
+
+const customValue = (key: string): unknown => {
+  const cd = (ticket.value?.custom_data ?? {}) as Record<string, unknown>
+  return cd[key]
+}
+// richtext 只展示服务端消毒 HTML；同单内容变化由字段缓存统一跟进。
+const renderedHtml = useRenderedRichtext(
+  () => customFields.value.filter((f) => f.field_type === 'richtext').map((f) => ({
+    key: f.field_key,
+    src: String(customValue(f.field_key) ?? ''),
+  })),
+  renderRichtextApi,
+)
+const formatCustomValue = (f: TicketTypeFieldDef): string => {
+  const v = customValue(f.field_key)
+  if (v === undefined || v === null) return '—'
+  if (f.field_type === 'tips') return f.field_label
+  if (typeof v === 'boolean') return v ? '是' : '否'
+  // 空数组兜底（file 未传等）：String([]) 得空串会渲染成空白单元格
+  if (Array.isArray(v) && !v.length) return '—'
+  return String(v)
+}
+
+// ─── S3a B3-1 统一转换（available 按用户过滤——condition 语义；叠加 Close/Assign 既有按钮）───
+const availableTransitionsQuery = useQuery({
+  queryKey: computed(() => ['ticket', 'transitions', ticketId.value, ticket.value?.status] as const),
+  queryFn: ({ queryKey }) => listAvailableTransitionsApi(queryKey[2]),
+  enabled: computed(() => canQueryTicket.value && !!ticket.value && !isClosed.value),
+  retry: false,
+})
+const availableTransitions = computed(() =>
+  availableTransitionsQuery.isError.value ? [] : (availableTransitionsQuery.data.value ?? []),
+)
+const transitionLoading = ref(false)
+
+async function doTransition(to: string) {
+  transitionLoading.value = true
+  try {
+    await transitionTicketApi({ id: ticketId.value, to })
+    ElMessage.success(`已转换到 ${STATUS_LABEL[to] ?? to}`)
+    await queryClient.invalidateQueries({ queryKey: ['ticket'] })
+  } catch (err: unknown) {
+    const resp = (err as { response?: { data?: { message?: string } } })?.response?.data
+    ElMessage.error(resp?.message ?? '转换失败（可能不满足前置条件）')
+  } finally {
+    transitionLoading.value = false
+  }
+}
+
+// ─── S10 B10-2 标签（默认共享；挂/自摘=读可见，摘他人挂的=update 权由后端兜底）───
+const tagRows = computed(() => (tagsQuery.data.value ?? []) as TagRow[])
+const tagInput = ref('')
+const tagSaving = ref(false)
+
+async function refreshTags() {
+  await queryClient.invalidateQueries({ queryKey: ['ticket', 'tags'] })
+}
+
+async function addTag() {
+  const v = tagInput.value.trim()
+  if (!v) return
+  tagSaving.value = true
+  try {
+    await addTicketTagsApi({ ticket_id: ticketId.value, tags: [v] })
+    tagInput.value = ''
+    await refreshTags()
+  } catch (err: unknown) {
+    const resp = (err as { response?: { data?: { message?: string } } })?.response?.data
+    ElMessage.error(resp?.message ?? '添加标签失败')
+  } finally {
+    tagSaving.value = false
+  }
+}
+
+async function removeTag(row: TagRow) {
+  try {
+    await removeTicketTagApi({ ticket_id: ticketId.value, tag: row.tag })
+    await refreshTags()
+  } catch (err: unknown) {
+    const resp = (err as { response?: { data?: { message?: string } } })?.response?.data
+    ElMessage.error(resp?.message ?? '移除失败（摘他人挂的需编辑权限）')
+  }
+}
+
+// ─── S10 B10-1 抄送（L2 特例通道：抄送即可见；自加/自摘=读可见，加/摘他人=update 权）───
+const ccRows = computed(() => (ccQuery.data.value ?? []) as TicketCCRow[])
+const ccForm = reactive({ userId: '' })
+const ccSaving = ref(false)
+
+const ccLabel = (cc: TicketCCRow) => (cc.name ? `${cc.name}${cc.employee_no ? `(${cc.employee_no})` : ''}` : `用户 #${cc.user_id}`)
+
+async function refreshCC() {
+  await queryClient.invalidateQueries({ queryKey: ['ticket', 'cc'] })
+}
+
+async function doAddCC(userIds: string[]) {
+  ccSaving.value = true
+  try {
+    await addTicketCCApi({ ticket_id: ticketId.value, user_ids: userIds })
+    ElMessage.success('已抄送')
+    ccForm.userId = ''
+    await refreshCC()
+  } catch (err: unknown) {
+    const resp = (err as { response?: { data?: { message?: string } } })?.response?.data
+    ElMessage.error(resp?.message ?? '抄送失败')
+  } finally {
+    ccSaving.value = false
+  }
+}
+
+function addCC() {
+  if (!ccForm.userId) return
+  void doAddCC([ccForm.userId])
+}
+
+/** 抄送我：读可见面动作（无需 update 权） */
+function addSelfCC() {
+  const me = userStore.profile?.id
+  if (!me) return
+  if (ccRows.value.some((c) => c.user_id === me)) {
+    ElMessage.info('你已在抄送列表中')
+    return
+  }
+  void doAddCC([me])
+}
+
+async function removeCC(cc: TicketCCRow) {
+  try {
+    await removeTicketCCApi({ ticket_id: ticketId.value, user_id: cc.user_id })
+    ElMessage.success('已移除')
+    await refreshCC()
+  } catch (err: unknown) {
+    const resp = (err as { response?: { data?: { message?: string } } })?.response?.data
+    ElMessage.error(resp?.message ?? '移除失败（摘他人需编辑权限）')
+  }
+}
+
+// ── B1-7 批3（三路F-E-4）：字典引用选项预载——select/multi_select 显示 label 而非 code ──
+const dictCache = ref<Record<string, Array<{ value: string; label: string }>>>({})
+watch(
+  () => customFields.value,
+  async (fs) => {
+    const codes = new Set<string>()
+    for (const f of fs ?? []) {
+      const raw = f.field_options
+      if (Array.isArray(raw) && raw.length === 1 && typeof raw[0] === 'string' && raw[0].startsWith('dict:')) {
+        codes.add(raw[0].slice(5))
+      }
+    }
+    for (const code of codes) {
+      if (dictCache.value[code]) continue
+      const items = (await getDictItemsByCodeApi(code, true).catch(() => [])) ?? []
+      dictCache.value[code] = items.map((i) => ({ value: i.code, label: i.label }))
+    }
+  },
+  { immediate: true },
+)
+
+/** 选项 label 解析（三形态与 create 页 optionsOf 同款——dict 引用展开缓存，兜底原值） */
+function labelOf(f: TicketTypeFieldDef, v: string): string {
+  const raw = f.field_options
+  if (Array.isArray(raw)) {
+    let opts: Array<{ value: string; label: string }>
+    if (raw.length === 1 && typeof raw[0] === 'string' && raw[0].startsWith('dict:')) {
+      opts = dictCache.value[raw[0].slice(5)] ?? []
+    } else {
+      opts = raw.map((o) =>
+        typeof o === 'object' && o !== null && 'value' in (o as Record<string, unknown>)
+          ? { value: String((o as Record<string, unknown>).value), label: String((o as Record<string, unknown>).label ?? (o as Record<string, unknown>).value) }
+          : { value: String(o), label: String(o) },
+      )
+    }
+    return opts.find((o) => o.value === v)?.label ?? v
+  }
+  return v
+}
+
+
 function formatTime(iso?: string): string {
   if (!iso) return '—'
-  return new Date(iso).toLocaleString('zh-CN', { hour12: false })
+  return formatDateTime(iso)
 }
 
 /** 动作后统一失效（close/assign/update 无有效响应体——S10 靠失效刷新，勿依赖返回值） */
@@ -71,6 +280,7 @@ async function refreshAll() {
     queryClient.invalidateQueries({ queryKey: ['ticket', 'detail', ticketId.value] }),
     queryClient.invalidateQueries({ queryKey: ['ticket', 'comments', ticketId.value] }),
     queryClient.invalidateQueries({ queryKey: ['ticket', 'relations', ticketId.value] }),
+    queryClient.invalidateQueries({ queryKey: ['ticket', 'transitions', ticketId.value] }),
   ])
 }
 
@@ -122,10 +332,11 @@ async function submitEdit() {
 const assignVisible = ref(false)
 const assignLoading = ref(false)
 const assignError = ref('')
-const assignForm = reactive({ userId: '' })
+const assignForm = reactive({ userId: '', escalationSupervisor: '' })
 
 function openAssign() {
   assignForm.userId = ''
+  assignForm.escalationSupervisor = ''
   assignError.value = ''
   assignVisible.value = true
 }
@@ -139,7 +350,7 @@ async function submitAssign() {
   assignLoading.value = true
   assignError.value = ''
   try {
-    await assignTicketApi(ticketId.value, uid)
+    await assignTicketApi(ticketId.value, uid, assignForm.escalationSupervisor.trim() || undefined)
     ElMessage.success('已分派')
     assignVisible.value = false
     await refreshAll()
@@ -240,15 +451,51 @@ async function submitComposer() {
   }
 }
 
-// ─── 关联（ticket:relation——正反向判重 409/自关联 400 内联）───
+// ─── 关联（ticket:relation——远程搜索下拉自动补全；正反向判重 409/自关联 400 内联）───
+/** 已建关联快速跳转（#id 直达对方详情——详情路由 /tickets/:id，非缓存页新建实例） */
+function goTicket(id: string) {
+  void router.push(`/tickets/${id}`)
+}
+/** 搜索候选「查看」：新标签打开候选单详情（当前页关联表单态保留） */
+function openInTab(id: string) {
+  window.open(`/#/tickets/${id}`, '_blank')
+}
 const relationForm = reactive({ targetId: '' })
 const relationLoading = ref(false)
 const relationError = ref('')
+const relationSearching = ref(false)
+const relationOptions = ref<Array<{ value: string; label: string; status: string }>>([])
+let relationSearchTimer: ReturnType<typeof setTimeout> | undefined
+
+/** 远程搜索（300ms 防抖同筛选栏配方）：后端 keyword 模糊、L2 可见面内。
+ * 仅排除自身（自关联 400 无意义）；已关联的保留可选——选了走后端 409 内联提示，
+ * 也是判重路径的 UI 可达形态（S10 验收点） */
+function searchRelationOptions(query: string) {
+  if (relationSearchTimer) clearTimeout(relationSearchTimer)
+  const kw = query.trim()
+  if (!kw) {
+    relationOptions.value = []
+    return
+  }
+  relationSearchTimer = setTimeout(async () => {
+    relationSearching.value = true
+    try {
+      const { list } = await listTicketsApi({ page: 1, page_size: 20, keyword: kw })
+      relationOptions.value = list
+        .filter((t) => String(t.id) !== ticketId.value)
+        .map((t) => ({ value: String(t.id), label: `#${t.id} ${t.title}`, status: t.status }))
+    } catch {
+      relationOptions.value = []
+    } finally {
+      relationSearching.value = false
+    }
+  }, 300)
+}
 
 async function submitRelation() {
-  const target = relationForm.targetId.trim()
-  if (!/^\d+$/.test(target)) {
-    relationError.value = '请填写数字工单 ID'
+  const target = relationForm.targetId
+  if (!target) {
+    relationError.value = '请先搜索并选择对方工单'
     return
   }
   if (target === ticketId.value) {
@@ -303,6 +550,19 @@ async function submitRelation() {
       <!-- 处理动作（S11：仅分派/取消/关闭/更新/删除——三态经 API 不可达不做流转；
            closed 后编辑/分派/关闭隐藏，后端 409 兜底） -->
       <div class="mt-4 flex gap-2 flex-wrap">
+        <!-- S3a B3-1：condition 过滤后的可执行转换（后端语义+前端按钮一一对应） -->
+        <template v-if="!isClosed && availableTransitions.length">
+        <el-button
+          v-for="to in availableTransitions"
+          :key="to"
+          type="primary"
+          plain
+          size="small"
+          :loading="transitionLoading"
+          :data-testid="`btn-transition-${to}`"
+          @click="doTransition(to)"
+        >→ {{ STATUS_LABEL[to] ?? to }}</el-button>
+        </template>
         <el-button v-permission="'ticket:update'" v-if="!isClosed" @click="openEdit">编辑</el-button>
         <el-button v-permission="'ticket:assign'" v-if="!isClosed" type="primary" @click="openAssign">分派</el-button>
         <el-button v-permission="'ticket:assign'" v-if="!isClosed && ticket?.assigned_to" @click="unassign">取消分派</el-button>
@@ -313,7 +573,99 @@ async function submitRelation() {
 
     <el-card shadow="hover" class="mb-4">
       <template #header><span class="font-semibold">描述</span></template>
-      <pre class="whitespace-pre-wrap text-sm">{{ ticket?.description || '（无描述）' }}</pre>
+      <pre class="ticket-description whitespace-pre-wrap text-sm" data-testid="ticket-description">{{ ticket?.description || '（无描述）' }}</pre>
+    </el-card>
+
+    <!-- B1-5 自定义字段回显（01 号 §3.5——"填了看不见"痛点收口件） -->
+    <el-card v-if="customFields.length" shadow="hover" class="mb-4">
+      <template #header><span class="font-semibold">自定义字段</span></template>
+      <el-descriptions :column="2" border size="small">
+        <el-descriptions-item
+          v-for="f in customFields"
+          :key="f.field_key"
+          :label="f.field_label"
+          :span="f.field_type === 'richtext' || f.field_type === 'textarea' ? 2 : 1"
+        >
+          <!-- richtext=服务端渲染 HTML（goldmark+bluemonday 消毒 SSOT——非前端自渲染） -->
+          <!-- eslint-disable-next-line vue/no-v-html -- XSS SSOT：服务端 goldmark+bluemonday 消毒出站 HTML（F-E-1 修复 2026-10-22——不直接注入 MD 源文本） -->
+          <div v-if="f.field_type === 'richtext' && renderedHtml[f.field_key]?.html" class="richtext-view" v-html="renderedHtml[f.field_key]?.html" />
+          <span v-else-if="f.field_type === 'multi_select' && Array.isArray(customValue(f.field_key))">
+            <!-- B1-7 批3（三路F-E-4）：字典项显示 label 而非 code -->
+            <el-tag v-for="v in customValue(f.field_key) as string[]" :key="v" size="small" class="mr-1">{{ labelOf(f, v) }}</el-tag>
+          </span>
+          <span v-else-if="(f.field_type === 'select' || f.field_type === 'radio') && customValue(f.field_key) != null">{{
+            labelOf(f, String(customValue(f.field_key)))
+          }}</span>
+          <!-- B1-6 批3 file 字段闭环（2026-10-30 审计补）：create 端 object_key 数组入
+               custom_data，详情此前落 String() 裸 key 兜底——渲染代理下载链接（同附件面）。
+               注：后端建单时会把 file 字段 key 自动绑附件区（file_name 友好名在彼处），
+               此处链接文本用「附件 N」避免与附件卡重复裸 uuid -->
+          <span v-else-if="f.field_type === 'file' && Array.isArray(customValue(f.field_key)) && (customValue(f.field_key) as string[]).length">
+            <a
+              v-for="(k, i) in customValue(f.field_key) as string[]"
+              :key="k" :href="`/api/v1/files/${k}`" target="_blank" rel="noopener"
+              :title="k" class="mr-2 text-[var(--el-color-primary)] hover:underline"
+            >{{ `附件 ${i + 1}` }}</a>
+          </span>
+          <span v-else>{{ formatCustomValue(f) }}</span>
+        </el-descriptions-item>
+      </el-descriptions>
+    </el-card>
+
+    <!-- B5-3 工单附件区（05 号 §5——列表/上传/删除/下载，代理端点稳定 URL） -->
+    <el-card shadow="hover" class="mb-4">
+      <template #header><span class="font-semibold">附件</span></template>
+      <TicketAttachments :ticket-id="ticketId" :can-edit="true" />
+    </el-card>
+
+    <!-- S10 B10-1 抄送人区（抄送即可见——被抄送人收通知并可见此单；摘他人无权由后端 403 兜底） -->
+    <el-card shadow="hover" class="mb-4" data-testid="ticket-cc-card">
+      <template #header>
+        <div class="flex items-center justify-between flex-wrap gap-2">
+          <span class="font-semibold">抄送（{{ ccRows.length }}）</span>
+          <div class="flex items-center gap-2">
+            <el-button size="small" :loading="ccSaving" data-testid="cc-self" @click="addSelfCC">抄送我</el-button>
+            <UserPicker v-model="ccForm.userId" class="!w-[220px]" />
+            <el-button size="small" type="primary" plain :disabled="!ccForm.userId" :loading="ccSaving" data-testid="cc-add" @click="addCC">添加抄送</el-button>
+          </div>
+        </div>
+      </template>
+      <div v-if="ccRows.length" class="flex flex-wrap gap-2">
+        <el-tag
+          v-for="cc in ccRows"
+          :key="cc.user_id"
+          closable
+          :data-testid="`cc-row-${cc.user_id}`"
+          @close="removeCC(cc)"
+        >{{ ccLabel(cc) }}</el-tag>
+      </div>
+      <span v-else class="text-xs text-gray-400">暂无抄送人</span>
+    </el-card>
+
+    <!-- S10 B10-2 标签（默认共享——挂载人留痕；摘他人挂的由后端 update 权兜底） -->
+    <el-card shadow="hover" class="mb-4" data-testid="ticket-tags-card">
+      <template #header>
+        <div class="flex items-center justify-between flex-wrap gap-2">
+          <span class="font-semibold">标签</span>
+          <div class="flex items-center gap-2">
+            <el-input
+              v-model="tagInput" placeholder="输入标签回车添加" maxlength="50" class="!w-[200px]"
+              data-testid="tag-input" @keyup.enter="addTag"
+            />
+            <el-button size="small" type="primary" plain :disabled="!tagInput.trim()" :loading="tagSaving" @click="addTag">添加</el-button>
+          </div>
+        </div>
+      </template>
+      <div v-if="tagRows.length" class="flex flex-wrap gap-2">
+        <el-tag
+          v-for="row in tagRows"
+          :key="row.tag"
+          closable
+          :data-testid="`tag-${row.tag}`"
+          @close="removeTag(row)"
+        >{{ row.tag }}</el-tag>
+      </div>
+      <span v-else class="text-xs text-gray-400">暂无标签</span>
     </el-card>
 
     <!-- 评论/备注（S10 分层：is_internal 标内部备注；可见性由服务端过滤） -->
@@ -361,10 +713,10 @@ async function submitRelation() {
         <div v-for="r in relationsQuery.data.value ?? []" :key="r.id" class="flex items-center gap-2 text-sm">
           <el-tag size="small" type="info">{{ r.relation_type || 'related' }}</el-tag>
           <template v-if="r.source_ticket_id === ticketId">
-            <span>关联 → <b>#{{ r.target_ticket_id }}</b></span>
+            <span>关联 → <el-link type="primary" class="!align-baseline" @click="goTicket(r.target_ticket_id)">#{{ r.target_ticket_id }}</el-link></span>
           </template>
           <template v-else>
-            <span>被关联 ← <b>#{{ r.source_ticket_id }}</b></span>
+            <span>被关联 ← <el-link type="primary" class="!align-baseline" @click="goTicket(r.source_ticket_id)">#{{ r.source_ticket_id }}</el-link></span>
           </template>
         </div>
         <el-empty v-if="!relationsQuery.isLoading.value && !relationsQuery.data.value?.length" description="暂无关联" :image-size="60" />
@@ -372,7 +724,21 @@ async function submitRelation() {
 
       <div v-if="userStore.hasPermission('ticket:relation')" class="border-t pt-3">
         <div class="flex items-center gap-2">
-          <el-input v-model="relationForm.targetId" placeholder="对方工单 ID" class="!w-[200px]" @keyup.enter="submitRelation" />
+          <!-- 远程搜索下拉：标题/工单号 keyword 定位（后端 L2 可见面内），选项带状态 -->
+          <el-select
+            v-model="relationForm.targetId" filterable remote clearable
+            :remote-method="searchRelationOptions" :loading="relationSearching"
+            placeholder="搜索标题或工单号" class="!w-[340px]"
+          >
+            <el-option v-for="o in relationOptions" :key="o.value" :value="o.value" :label="o.label">
+              <span class="flex items-center gap-2">
+                <span>{{ o.label }}</span>
+                <el-tag size="small" type="info">{{ STATUS_LABEL[o.status] ?? o.status }}</el-tag>
+                <!-- 查看详情：新标签打开不丢已填关联态；@click.stop 防触发选中/收起下拉 -->
+                <el-link type="primary" class="!h-auto ml-auto !align-baseline" @click.stop="openInTab(o.value)">查看</el-link>
+              </span>
+            </el-option>
+          </el-select>
           <el-button size="small" :loading="relationLoading" @click="submitRelation">建立关联</el-button>
         </div>
         <el-alert v-if="relationError" :title="relationError" type="error" show-icon class="mt-2" :closable="false" />
@@ -381,7 +747,7 @@ async function submitRelation() {
 
     <!-- 编辑对话框 -->
     </div>
-    <el-dialog v-model="editVisible" title="编辑工单" width="520px">
+    <el-dialog v-model="editVisible" :close-on-click-modal="false" title="编辑工单" width="520px">
       <el-form ref="editFormRef" :model="editForm" label-width="80px">
         <el-form-item label="标题" required>
           <el-input v-model="editForm.title" maxlength="200" show-word-limit />
@@ -406,13 +772,17 @@ async function submitRelation() {
     </el-dialog>
 
     <!-- 分派对话框 -->
-    <el-dialog v-model="assignVisible" title="分派工单" width="420px">
+    <el-dialog v-model="assignVisible" :close-on-click-modal="false" title="分派工单" width="420px">
       <el-form label-width="80px" @submit.prevent>
         <el-form-item label="处理人">
-          <el-input v-model="assignForm.userId" placeholder="用户 ID（数字）" />
+          <UserPicker v-model="assignForm.userId" />
+        </el-form-item>
+        <!-- S10 B10-4：催办上级人工指定（可选——随分派事务落库；不填保持不动） -->
+        <el-form-item label="催办上级">
+          <UserPicker v-model="assignForm.escalationSupervisor" />
         </el-form-item>
       </el-form>
-      <div class="text-xs text-gray-400 mb-2">分派后工单进入「已分派」；填错 ID 后端会拒绝并回显原因。</div>
+      <div class="text-xs text-gray-400 mb-2">分派后工单进入「已分派」（B1-2 起选人补全替代手输 ID——姓名（工号）搜索）。</div>
       <el-alert v-if="assignError" :title="assignError" type="error" show-icon :closable="false" />
       <template #footer>
         <el-button @click="assignVisible = false">取消</el-button>
@@ -421,7 +791,7 @@ async function submitRelation() {
     </el-dialog>
 
     <!-- 关闭对话框（可选关闭说明） -->
-    <el-dialog v-model="closeVisible" title="关闭工单" width="460px">
+    <el-dialog v-model="closeVisible" :close-on-click-modal="false" title="关闭工单" width="460px">
       <el-input v-model="closeForm.comment" type="textarea" :rows="3" placeholder="关闭说明（可选）" />
       <el-alert v-if="closeError" :title="closeError" type="error" show-icon class="mt-2" :closable="false" />
       <template #footer>
@@ -431,3 +801,10 @@ async function submitRelation() {
     </el-dialog>
   </div>
 </template>
+
+<style scoped>
+.ticket-description { overflow-wrap: anywhere; }
+.richtext-view :deep(img) { max-width: 100%; border-radius: 4px; }
+.richtext-view :deep(code) { background: var(--el-fill-color-light); padding: 1px 4px; border-radius: 2px; font-size: 0.9em; }
+.richtext-view :deep(pre) { background: var(--el-fill-color-light); padding: 8px; border-radius: 4px; overflow-x: auto; }
+</style>

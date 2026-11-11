@@ -11,6 +11,8 @@
  * - 时间本地化渲染（new Date + toLocaleString——后端 RFC3339 带时区）
  * - 服务端态走 vue-query（角色字典 queryKey=['system','roles']）；列表态归 ProTable/useCrud
  */
+import { apiErrorBody } from '@/utils/apiError'
+import { formatDateTime } from '@/utils/datetime'
 import { computed, reactive, ref } from 'vue'
 import {
   ElAlert, ElButton, ElCard, ElDialog, ElDropdown, ElDropdownItem, ElDropdownMenu,
@@ -95,7 +97,7 @@ function onMoreCommand(cmd: UserMoreCommand, row: UserRow) {
 
 function formatTime(iso: string): string {
   if (!iso) return '—'
-  return new Date(iso).toLocaleString('zh-CN', { hour12: false })
+  return formatDateTime(iso)
 }
 
 // ─── 新建/编辑对话框 ───
@@ -169,7 +171,7 @@ async function submitEdit() {
     editVisible.value = false
     tableRef.value?.refresh({ resetPage: editIsCreate.value })
   } catch (err: unknown) {
-    const resp = (err as { response?: { data?: { code?: number; message?: string } } })?.response?.data
+    const resp = apiErrorBody(err)
     if (resp?.code === 10006) {
       // 乐观锁冲突范式（01 §3.3：重拉让用户重填，非 toast）——列表行 version 已过期
       editVisible.value = false
@@ -342,7 +344,7 @@ async function submitOrgs() {
     orgsVisible.value = false
     tableRef.value?.refresh()
   } catch (err: unknown) {
-    const resp = (err as { response?: { data?: { code?: number; message?: string } } })?.response?.data
+    const resp = apiErrorBody(err)
     orgsError.value = resp?.message ?? '保存失败，请稍后重试'
   } finally {
     orgsLoading.value = false
@@ -433,7 +435,7 @@ async function onDelete(row: UserRow) {
     </el-card>
 
     <!-- 新建/编辑 -->
-    <el-dialog v-model="editVisible" :title="editIsCreate ? '新建用户' : '编辑用户'" width="480px">
+    <el-dialog v-model="editVisible" :close-on-click-modal="false" :title="editIsCreate ? '新建用户' : '编辑用户'" width="480px">
       <el-form ref="editFormRef" :model="editForm" :rules="editRules" label-width="80px">
         <el-form-item label="用户名" prop="username">
           <el-input v-model="editForm.username" :disabled="!editIsCreate" />
@@ -461,7 +463,7 @@ async function onDelete(row: UserRow) {
     </el-dialog>
 
     <!-- 重置密码 -->
-    <el-dialog :model-value="resetVisible" title="重置密码" width="420px" @update:model-value="resetVisible = $event">
+    <el-dialog :model-value="resetVisible" :close-on-click-modal="false" title="重置密码" width="420px" @update:model-value="resetVisible = $event">
       <el-form ref="resetFormRef" :model="resetForm" :rules="resetRules" label-width="80px">
         <el-form-item label="用户">
           <el-input :model-value="resetForm.username" disabled />
@@ -477,7 +479,7 @@ async function onDelete(row: UserRow) {
     </el-dialog>
 
     <!-- 分配角色 -->
-    <el-dialog :model-value="rolesVisible" title="分配角色" width="480px" @update:model-value="rolesVisible = $event">
+    <el-dialog :model-value="rolesVisible" :close-on-click-modal="false" title="分配角色" width="480px" @update:model-value="rolesVisible = $event">
       <el-form :model="rolesForm" label-width="80px">
         <el-form-item label="用户">
           <el-input :model-value="rolesForm.username" disabled />
@@ -496,7 +498,7 @@ async function onDelete(row: UserRow) {
     </el-dialog>
 
     <!-- 分配组织（P2-12：全量替换 + 主组织） -->
-    <el-dialog :model-value="orgsVisible" title="分配组织" width="520px" @update:model-value="orgsVisible = $event">
+    <el-dialog :model-value="orgsVisible" :close-on-click-modal="false" title="分配组织" width="520px" @update:model-value="orgsVisible = $event">
       <el-form label-width="80px" @submit.prevent>
         <el-form-item label="用户">
           <el-input :model-value="orgsForm.username" disabled />

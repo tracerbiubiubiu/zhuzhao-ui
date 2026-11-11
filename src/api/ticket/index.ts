@@ -7,6 +7,7 @@
  * Ticket 行无 version（乐观锁三件套=用户/组织/角色，工单除外）。
  */
 import request from '@vea/request'
+import type { components } from '@/api/__generated__/schema'
 
 /** 工单行（= model.Ticket 的 JSON 投影；assigned_to 可空——创建即未分派；
  * created_by_name/assignee_name 为 W4 后端回填字段（03 S9——real_name 优先/空回退
@@ -29,6 +30,10 @@ export interface TicketRow {
   org_path: string
   custom_data?: unknown
   sla_due_at?: string
+  /** 进入当前状态时刻（S10 B10-4——超时扫描数据源） */
+  status_changed_at?: string
+  /** 催办上级·人工指定（S10 B10-4——dd §31 基线档；展示富化走 escalation_supervisor_name） */
+  escalation_supervisor_id?: string
   created_at: string
   updated_at: string
 }
@@ -38,10 +43,16 @@ export interface TicketRow {
 export interface TicketListQuery {
   type_code?: string
   status?: string
+  /** 多状态集合，逗号分隔，与 status/exclude_statuses 互斥。 */
+  statuses?: string
+  /** 排除状态集合；角标非终态含自定义状态，列表与导出同源过滤。 */
+  exclude_statuses?: string
   priority?: number
   assignee?: 'me'
   created_by?: 'me'
   keyword?: string
+  /** 标签筛选（S10 B10-2——精确匹配；可见性由后端 GetFilter 管线约束） */
+  tag?: string
   created_from?: string
   created_to?: string
 }
@@ -76,21 +87,33 @@ export async function listTicketTypesApi(): Promise<TicketTypeRow[]> {
 }
 
 /** 类型管理行（S12 三件套——= model.TicketType 全量投影；states/transitions 为
- * JSONB 原文（配置即代码，管理页 JSON 源码模式），version 供 CAS 回传） */
+ * JSONB 原文（配置即代码，管理页 JSON 源码模式），version 供 CAS 回传；
+ * transition_meta=节点超时/催办策略（S10 B10-4——表单化编辑面数据源） */
 export interface TicketTypeFullRow extends TicketTypeRow {
   states?: unknown
   transitions?: unknown
+  transition_meta?: unknown
   is_active: boolean
   version: number
 }
 
-/** 字段定义输入（ReplaceTypeFields——field_options 归一为字符串数组，后端
- * optionValues 兼容字符串数组与 {value,label} 对象数组两种形态） */
+/** transition_meta 单节点段（S10 B10-4——表单化编辑面行模型） */
+export interface TransitionMetaRow {
+  state: string
+  timeout_minutes?: number
+  notify?: string[]
+  reminder_interval_minutes?: number
+  max_reminders?: number
+}
+
+/** 字段定义输入（ReplaceTypeFields——选项值和文件 MIME 白名单按字段类型传递） */
 export interface TicketTypeFieldInput {
   field_key: string
   field_label: string
-  field_type: 'input' | 'textarea' | 'number' | 'date' | 'select' | 'multi_select' | 'tips'
-  field_options?: string[]
+  field_type: 'input' | 'textarea' | 'number' | 'date' | 'select' | 'multi_select' | 'tips' | 'richtext' | 'radio' | 'rating' | 'file'
+  field_options?: unknown
+  /** B1-3 formula/extension 元数据（附录 A.2 方案 b）——`{"formula":"price*qty"}` */
+  field_meta?: Record<string, unknown>
   required: boolean
   validate_regex?: string
   sort_order: number
@@ -105,14 +128,15 @@ export async function createTicketTypeApi(input: {
   await request.post('/api/v1/ticket-types', input, { _silentError: true })
 }
 
-/** 更新类型（patch；code 不可改入 body；states/transitions 传 JSONB 原文；
- * version 可选 CAS——nil 保持旧 patch 行为，管理页应带上收 10006 内联） */
+/** 更新类型（patch；code 不可改入 body；states/transitions/transition_meta 传
+ * JSONB 原文；version 可选 CAS——nil 保持旧 patch 行为，管理页应带上收 10006 内联） */
 export async function updateTicketTypeApi(input: {
   code: string
   name?: string
   description?: string
   states?: unknown
   transitions?: unknown
+  transition_meta?: unknown
   is_active?: boolean
   version?: number
 }): Promise<void> {
@@ -129,9 +153,8 @@ export async function replaceTicketTypeFieldsApi(input: {
   code: string
   fields: TicketTypeFieldInput[]
   version?: number
-}): Promise<TicketTypeFieldDef[]> {
-  const data = await request.post('/api/v1/ticket-types/fields/replace', input, { _silentError: true })
-  return ((data as unknown as { fields?: TicketTypeFieldDef[] })?.fields ?? [])
+}): Promise<void> {
+  await request.post('/api/v1/ticket-types/fields/replace', input, { _silentError: true })
 }
 
 // ===== S12：模板管理（GET 共享行挂页、写挂 ticket:type:manage——000031 词表重排） =====
@@ -190,9 +213,10 @@ export interface TicketTypeFieldDef {
   type_code: string
   field_key: string
   field_label: string
-  field_type: 'input' | 'textarea' | 'number' | 'date' | 'select' | 'multi_select' | 'tips'
+  field_type: 'input' | 'textarea' | 'number' | 'date' | 'select' | 'multi_select' | 'tips' | 'richtext' | 'radio' | 'rating' | 'file'
   /** select/multi_select 的选项（JSON——[{value,label}] 或字符串数组，渲染时归一） */
   field_options?: unknown
+  field_meta?: Record<string, unknown> | null
   required: boolean
   validate_regex?: string
   sort_order: number
@@ -204,15 +228,11 @@ export async function getTicketTypeFieldsApi(typeCode: string): Promise<TicketTy
   return ((data as unknown as { fields?: TicketTypeFieldDef[] })?.fields ?? [])
 }
 
-/** 发起工单入参（CreateTicketRequest——custom_data 生成类型标 number[] 失真，按实况
- * 覆写为字段键值对象；assigned_to 拒收[W0 P0-5]前端发起不传） */
-export interface CreateTicketInput {
-  type_code: string
-  title: string
-  org_id: string
-  priority?: number
-  description?: string
-  template_code?: string
+type GeneratedCreateTicketInput = components['schemas']['github_com_tracerbiubiubiu_zhuzhao_internal_model.CreateTicketRequest']
+
+/** 发起沿generated契约；仍不暴露assigned_to。Swag无additionalProperties的
+ * RawMessage object生成Record<string,never>，只此自由字段做窄适配，不放宽其他schema。 */
+export type CreateTicketInput = Omit<GeneratedCreateTicketInput, 'assigned_to' | 'custom_data'> & {
   custom_data?: Record<string, unknown>
 }
 
@@ -222,8 +242,8 @@ export async function createTicketApi(input: CreateTicketInput): Promise<TicketR
   return data as unknown as TicketRow
 }
 
-/** 工单状态（03 S11：六态；in_progress/pending_verify/rejected 经 API 流转不可达——
- * 列表筛选仍可列（历史数据/关闭前曾流转），流转按钮只做分派/取消/关闭/更新/删除 */
+/** 常见状态筛选标签。Phase5 S3a已提供配置流转入口；实际可执行动作由后端
+ * available-transitions按类型图、权限、条件与校验器决定。审批节点仍属S3b。 */
 export const TICKET_STATUSES: Array<{ value: string; label: string }> = [
   { value: 'open', label: '待处理' },
   { value: 'assigned', label: '已分派' },
@@ -262,6 +282,128 @@ export async function getTicketCommentsApi(id: string): Promise<TicketCommentRow
 /** 发表公开评论（POST /tickets/comments） */
 export async function createTicketCommentApi(ticketId: string, content: string): Promise<void> {
   await request.post('/api/v1/tickets/comments', { ticket_id: ticketId, content }, { _silentError: true })
+}
+
+/** 抄送行（S10 B10-1——「人名(工号)」富化同 TicketRow 口径；软删用户保留 ID 行） */
+export interface TicketCCRow {
+  user_id: string
+  name?: string
+  employee_no?: string
+  role: string
+  created_at: string
+}
+
+/** 抄送列表（GET /tickets/:id/cc——L2 read 面，不可见单 404 同形） */
+export async function listTicketCCApi(id: string): Promise<TicketCCRow[]> {
+  const data = await request.get(`/api/v1/tickets/${id}/cc`)
+  return ((data as unknown as { cc?: TicketCCRow[] })?.cc ?? [])
+}
+
+/** 添加抄送（POST /tickets/cc——仅本人=读可见；含他人=update 权；幂等；ID数组元素保持精确字符串） */
+export async function addTicketCCApi(input: { ticket_id: string; user_ids: string[] }): Promise<TicketCCRow[]> {
+  const data = await request.post('/api/v1/tickets/cc', input, { _silentError: true })
+  return ((data as unknown as { cc?: TicketCCRow[] })?.cc ?? [])
+}
+
+/** 标签行（S10 B10-2——默认共享+挂载人留痕富化） */
+export interface TagRow {
+  tag: string
+  created_by: string
+  created_by_name?: string
+  created_by_no?: string
+  created_at: string
+}
+
+/** 工单标签列表（GET /tickets/:id/tags——读可见面） */
+export async function listTicketTagsApi(id: string): Promise<TagRow[]> {
+  const data = await request.get(`/api/v1/tickets/${id}/tags`)
+  return ((data as unknown as { tags?: TagRow[] })?.tags ?? [])
+}
+
+/** 添加标签（POST /tickets/tags——读可见面协作动作；单次 ≤20 个/单个 ≤50 字符；幂等） */
+export async function addTicketTagsApi(input: { ticket_id: string; tags: string[] }): Promise<TagRow[]> {
+  const data = await request.post('/api/v1/tickets/tags', input, { _silentError: true })
+  return ((data as unknown as { tags?: TagRow[] })?.tags ?? [])
+}
+
+/** 移除标签（POST /tickets/tags/remove——自摘=读可见；摘他人挂的=update 权） */
+export async function removeTicketTagApi(input: { ticket_id: string; tag: string }): Promise<void> {
+  await request.post('/api/v1/tickets/tags/remove', input, { _silentError: true })
+}
+
+/** 统一转换执行（S3a B3-1——POST /tickets/transition；condition/validator 服务端判） */
+export async function transitionTicketApi(input: { id: string; to: string; comment?: string }): Promise<TicketRow> {
+  const data = await request.post('/api/v1/tickets/transition', input, { _silentError: true })
+  return data as unknown as TicketRow
+}
+
+/** 当前用户可执行的转换列表（S3a B3-1——Jira condition 语义按用户过滤；前端按钮渲染依据） */
+export async function listAvailableTransitionsApi(id: string): Promise<string[]> {
+  const data = await request.get(`/api/v1/tickets/${id}/transitions/available`)
+  return ((data as unknown as { transitions?: string[] })?.transitions ?? [])
+}
+
+/** 分派规则行（S3a B3-2——自动分派管理面） */
+export interface AssignmentRuleRow {
+  id: string
+  type_code: string
+  priority: number
+  keyword?: string
+  target_org: string
+  target_user?: string
+  enabled: boolean
+  created_by: string
+  created_at: string
+}
+
+/** 分派规则列表（S3a B3-2——GET /assignment-rules） */
+export async function listAssignmentRulesApi(): Promise<AssignmentRuleRow[]> {
+  const data = await request.get('/api/v1/assignment-rules')
+  return ((data as unknown as { rules?: AssignmentRuleRow[] })?.rules ?? [])
+}
+
+/** 建分派规则（S3a B3-2——POST /assignment-rules；target_user 须属 target_org） */
+export async function createAssignmentRuleApi(input: {
+  type_code: string
+  priority?: number
+  keyword?: string
+  target_org: string
+  target_user?: string
+  enabled?: boolean
+}): Promise<AssignmentRuleRow> {
+  const data = await request.post('/api/v1/assignment-rules', input, { _silentError: true })
+  return data as unknown as AssignmentRuleRow
+}
+
+/** 删分派规则（S3a B3-2——POST /assignment-rules/delete） */
+export async function deleteAssignmentRuleApi(id: string): Promise<void> {
+  await request.post('/api/v1/assignment-rules/delete', { id }, { _silentError: true })
+}
+
+/** 启停分派规则（S3a B3-2——POST /assignment-rules/enabled） */
+export async function updateAssignmentRuleEnabledApi(id: string, enabled: boolean): Promise<void> {
+  await request.post('/api/v1/assignment-rules/enabled', { id, enabled }, { _silentError: true })
+}
+
+/** 工单导出（S10 B10-5——与列表同筛选参数/同可见性；xlsx blob 下载；>5 万行后端 400） */
+export async function exportTicketsApi(params: TicketListQuery): Promise<Blob> {
+  const clean: Record<string, string | number> = {}
+  for (const [k, v] of Object.entries(params)) {
+    if (v !== undefined && v !== '' && v !== null) clean[k] = v as string | number
+  }
+  const data = await request.get('/api/v1/tickets/export', { params: clean, responseType: 'blob', _silentError: true })
+  return data as unknown as Blob
+}
+
+/** 待办角标聚合（S10 B10-3——sections 开放 map；未知 section 前端忽略） */
+export async function getBadgesApi(): Promise<Record<string, number>> {
+  const data = await request.get('/api/v1/badges')
+  return ((data as unknown as { sections?: Record<string, number> })?.sections ?? {})
+}
+
+/** 移除抄送（POST /tickets/cc/remove——自摘=读可见；摘他人=update 权；幂等） */
+export async function removeTicketCCApi(input: { ticket_id: string; user_id: string }): Promise<void> {
+  await request.post('/api/v1/tickets/cc/remove', input, { _silentError: true })
 }
 
 /** 发表内部备注（POST /tickets/notes——仅创建人/处理人/admin 可见，服务端过滤） */
@@ -312,13 +454,34 @@ export async function closeTicketApi(id: string, comment?: string): Promise<void
   await request.post('/api/v1/tickets/close', { id, ...(comment ? { comment } : {}) }, { _silentError: true })
 }
 
-/** 分派/取消分派（assignedTo=null 取消分派；open→assigned/assigned→open 自动推状态；
- * assigned_to 用户存在性校验属后端随手项池——传错 ID 500 兜底，前端仅格式预检） */
-export async function assignTicketApi(id: string, assignedTo: string | null): Promise<void> {
-  await request.post('/api/v1/tickets/assign', { id, ...(assignedTo ? { assigned_to: assignedTo } : { assigned_to: null }) }, { _silentError: true })
+type GeneratedAssignTicketInput = components['schemas']['github_com_tracerbiubiubiu_zhuzhao_internal_model.AssignTicketRequest']
+
+/** Swagger2的nullable生成边界仅在assigned_to补null；supervisor完全沿generated。 */
+export type AssignTicketInput = Omit<GeneratedAssignTicketInput, 'assigned_to'> & {
+  assigned_to?: GeneratedAssignTicketInput['assigned_to'] | null
+}
+
+/** 分派/取消分派；assignedTo=null取消分派，open/assigned按后端状态机推进。 */
+export async function assignTicketApi(
+  id: AssignTicketInput['id'],
+  assignedTo: NonNullable<AssignTicketInput['assigned_to']> | null,
+  escalationSupervisorId?: AssignTicketInput['escalation_supervisor_id'],
+): Promise<void> {
+  const input = {
+    id,
+    ...(assignedTo ? { assigned_to: assignedTo } : { assigned_to: null }),
+    ...(escalationSupervisorId ? { escalation_supervisor_id: escalationSupervisorId } : {}),
+  } satisfies AssignTicketInput
+  await request.post('/api/v1/tickets/assign', input, { _silentError: true })
 }
 
 /** 删除工单（软删） */
 export async function deleteTicketApi(id: string): Promise<void> {
   await request.post('/api/v1/tickets/delete', { id }, { _silentError: true })
+}
+
+/** B5-4 richtext 渲染（服务端消毒 SSOT——goldmark+bluemonday） */
+export async function renderRichtextApi(content: string): Promise<string> {
+  const data = await request.post('/api/v1/tickets/richtext/render', { content })
+  return ((data as unknown as { html?: string })?.html ?? '')
 }

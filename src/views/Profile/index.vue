@@ -2,16 +2,18 @@
 /**
  * 个人中心（profile 自服务，01 §8-W2→W3 首批补交付）
  *
- * - 资料展示（用户名/工号只读——后端自服务不可改）+ 四字段编辑
- *   （real_name/email/phone/avatar——patch 语义，对应 UpdateProfileRequest）
+ * - 资料展示（用户名/工号只读——后端自服务不可改）+ 三字段编辑
+ *   （real_name/email/phone——patch 语义，对应 UpdateProfileRequest）；头像不经表单，
+ *   唯一写入口=上传组件 bind 端点（2026-10-29 保存抹头像修复）
  * - 自愿改密入口 → 强制改密页（共用同一页面流程：旧密码验证+轮换）
  * - 编辑成功后重拉 /user/profile 刷新 store（侧栏头像等消费点同步）
  */
 
+import { formatDateTime } from '@/utils/datetime'
 import { reactive, ref, computed } from 'vue'
 import {
   ElCard, ElForm, ElFormItem, ElInput, ElButton, ElDescriptions,
-  ElDescriptionsItem, ElAlert, ElTag, ElAvatar, ElMessage, ElMessageBox,
+  ElDescriptionsItem, ElAlert, ElTag, ElMessage, ElMessageBox,
   ElTable, ElTableColumn, ElDialog, ElInputNumber,
 } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
@@ -19,6 +21,7 @@ import { useRouter } from 'vue-router'
 import { useUserStore } from '@/store/modules/user'
 import { updateProfileApi, fetchProfileApi } from '@/api/user'
 import { createPatApi, listPatsApi, revokePatApi, type PatRow } from '@/api/user/pat'
+import StorageAvatarUpload from '@/components/StorageAvatarUpload.vue'
 import { useTableFit } from '@vea/hooks'
 
 // keep-alive 契约：name=路由名（静态补充路由 §3.2④，tagsView.cachedViews 存路由名）
@@ -35,7 +38,6 @@ const form = reactive({
   real_name: userStore.profile?.real_name ?? '',
   email: userStore.profile?.email ?? '',
   phone: userStore.profile?.phone ?? '',
-  avatar: userStore.profile?.avatar ?? '',
 })
 
 const rules: FormRules = {
@@ -52,7 +54,17 @@ async function handleSubmit() {
   loading.value = true
   errorMsg.value = ''
   try {
-    await updateProfileApi({ ...form })
+    // 空 email/phone 不发送(patch 语义=保持不变):后端 UpdateProfileRequest 的
+    // *string + omitempty,email 对「非 nil 空串指针」不跳过校验,显式空串会 400
+    // (空邮箱用户无法保存任何资料——2026-10-15 头像保存实测)。后端语义修复(B2-3
+    // 空串显式清空)落地前,先在前端省略空字段。
+    // avatar 不在表单提交面（2026-10-29 保存抹头像修复）：头像唯一合法写入口=
+    // 头像上传组件的 bind 端点；表单曾把 setup 时的旧值（常为空串）patch 回去覆盖它
+    await updateProfileApi({
+      real_name: form.real_name,
+      ...(form.email.trim() ? { email: form.email.trim() } : {}),
+      ...(form.phone.trim() ? { phone: form.phone.trim() } : {}),
+    })
     // 重拉资料刷新 store（头像等全局消费点同步）
     userStore.profile = await fetchProfileApi()
     ElMessage.success('资料已更新')
@@ -66,7 +78,7 @@ async function handleSubmit() {
 
 // ─── P4-6 PAT（个人 API 凭据——脚本/CI 调用）───
 const pats = ref<PatRow[]>([])
-/** PAT 表列宽自适应（frontend-standard.md 踩坑⑦口径——手动 el-table 必须自行挂接） */
+/** PAT 表列宽自适应（docs/design/frontend-ui.md “踩过的坑”的表格列宽项口径——手动 el-table 必须自行挂接） */
 const patsTable = ref()
 useTableFit(patsTable, () => pats.value)
 const patLoading = ref(false)
@@ -163,7 +175,7 @@ async function copySecret() {
 
 function formatTime(iso?: string | null): string {
   if (!iso) return '—'
-  return new Date(iso).toLocaleString('zh-CN', { hour12: false })
+  return formatDateTime(iso)
 }
 </script>
 
@@ -173,9 +185,10 @@ function formatTime(iso?: string | null): string {
     <el-card shadow="hover" class="mb-4">
       <template #header><span class="font-semibold">基本信息</span></template>
       <div class="flex items-center gap-4 mb-2">
-        <el-avatar :size="64" :src="userStore.profile?.avatar || undefined">
-          {{ userStore.profile?.username?.slice(0, 1)?.toUpperCase() }}
-        </el-avatar>
+        <StorageAvatarUpload
+          :current-avatar="userStore.profile?.avatar || undefined"
+          @avatar-changed="(url: string) => userStore.profile && (userStore.profile.avatar = url)"
+        />
         <el-descriptions :column="2" border>
           <el-descriptions-item label="用户名">{{ userStore.profile?.username ?? '—' }}</el-descriptions-item>
           <el-descriptions-item label="工号">{{ userStore.profile?.employee_no ?? '—' }}</el-descriptions-item>
@@ -203,9 +216,6 @@ function formatTime(iso?: string | null): string {
         <el-form-item label="手机号" prop="phone">
           <el-input v-model="form.phone" placeholder="手机号" maxlength="20" />
         </el-form-item>
-        <el-form-item label="头像" prop="avatar">
-          <el-input v-model="form.avatar" placeholder="头像图片 URL" />
-        </el-form-item>
         <el-form-item>
           <el-button type="primary" :loading="loading" :disabled="!canSubmit" @click="handleSubmit">
             保存
@@ -227,22 +237,22 @@ function formatTime(iso?: string | null): string {
         type="info" show-icon :closable="false" class="mb-3"
       />
       <el-table ref="patsTable" :data="pats" v-loading="patLoading" row-key="id">
-        <el-table-column prop="name" label="名称" min-width="140" />
-        <el-table-column label="状态" width="90" align="center">
+        <el-table-column prop="name" label="名称" min-width="90" show-overflow-tooltip />
+        <el-table-column label="状态" width="80" align="center">
           <template #default="{ row }">
             <el-tag :type="patStatus(row as PatRow).type" size="small">{{ patStatus(row as PatRow).label }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="过期时间" width="170">
+        <el-table-column label="过期时间" width="140">
           <template #default="{ row }">{{ (row as PatRow).expires_at ? formatTime((row as PatRow).expires_at) : '永不过期' }}</template>
         </el-table-column>
-        <el-table-column label="最近使用" width="170">
+        <el-table-column label="最近使用" width="140">
           <template #default="{ row }">{{ formatTime((row as PatRow).last_used_at) }}</template>
         </el-table-column>
-        <el-table-column label="创建时间" width="170">
+        <el-table-column label="创建时间" width="140">
           <template #default="{ row }">{{ formatTime((row as PatRow).created_at) }}</template>
         </el-table-column>
-        <el-table-column label="操作" width="90" fixed="right">
+        <el-table-column label="操作" width="80" fixed="right">
           <template #default="{ row }">
             <el-button
               link type="danger" size="small" :disabled="!!(row as PatRow).revoked_at"
@@ -253,12 +263,12 @@ function formatTime(iso?: string | null): string {
       </el-table>
 
       <!-- 创建/明文一次弹窗 -->
-      <el-dialog v-model="patVisible" :title="createdSecret ? '凭据已创建——仅此一次' : '新建 API 凭据'" width="520px">
+      <el-dialog :close-on-click-modal="false" v-model="patVisible" :title="createdSecret ? '凭据已创建——仅此一次' : '新建 API 凭据'" width="520px">
         <template v-if="!createdSecret">
           <el-input v-model="patForm.name" placeholder="凭据名称（如 CI 部署脚本）" class="mb-3" />
           <div class="flex items-center gap-2 mb-3">
             <span class="text-sm text-gray-500">有效期（天）</span>
-            <el-input-number v-model="patForm.expires_days" :min="0" :max="3650" />
+            <el-input-number v-model="patForm.expires_days" :min="0" :max="3650" :controls="false" />
             <span class="text-xs text-gray-400">0=永不过期</span>
           </div>
           <el-alert v-if="patError" :title="patError" type="error" show-icon :closable="false" />

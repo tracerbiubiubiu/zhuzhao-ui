@@ -8,6 +8,7 @@
   const userStore = useUserStore()
 
   import avatarFallback from '@/assets/imgs/avatar.jpg'
+  import { avatarSrc } from '@/utils/avatar'
   const prefixCls = 'v-user-info'
 
   const { t } = useI18n()
@@ -43,9 +44,9 @@
   <ElDropdown class="header-action" :class="prefixCls" trigger="click">
     <div class="flex items-center">
       <img
-        :src="userStore.profile?.avatar || avatarFallback"
+        :src="avatarSrc(userStore.profile?.avatar) || avatarFallback"
         alt=""
-        class="w-[calc(var(--logo-height)-25px)] rounded-[50%]"
+        class="w-[calc(var(--logo-height)-25px)] h-[calc(var(--logo-height)-25px)] object-cover rounded-[50%]"
       />
       <span class="<lg:hidden text-14px pl-[5px] text-[var(--top-header-text-color)]">{{
         userStore.profile?.username

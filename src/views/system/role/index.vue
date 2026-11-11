@@ -13,6 +13,7 @@
  * - 角色复制（随手项池排 W3）：预填源角色字段开创建框
  * - 菜单树走 vue-query（queryKey=['system','menus']）
  */
+import { apiErrorBody } from '@/utils/apiError'
 import { reactive, ref } from 'vue'
 import {
   ElButton, ElCard, ElDialog, ElForm, ElFormItem, ElInput, ElInputNumber, ElMessage,
@@ -158,7 +159,7 @@ async function submitEdit() {
     await queryClient.invalidateQueries({ queryKey: ['system', 'roles'] })
     tableRef.value?.refresh()
   } catch (err: unknown) {
-    const resp = (err as { response?: { data?: { code?: number; message?: string } } })?.response?.data
+    const resp = apiErrorBody(err)
     if (resp?.code === 10006) {
       editVisible.value = false
       ElMessage.warning('该角色已被他人修改，请刷新后重试')
@@ -269,7 +270,7 @@ async function onDelete(row: RoleRow) {
     </el-card>
 
     <!-- 新建/编辑 -->
-    <el-dialog v-model="editVisible" :title="editIsCreate ? '新建角色' : '编辑角色'" width="520px">
+    <el-dialog :close-on-click-modal="false" v-model="editVisible" :title="editIsCreate ? '新建角色' : '编辑角色'" width="520px">
       <el-form ref="editFormRef" :model="editForm" :rules="editRules" label-width="90px">
         <el-form-item label="编码" prop="code">
           <el-input v-model="editForm.code" :disabled="!editIsCreate" placeholder="如 ops_support" />
@@ -278,7 +279,7 @@ async function onDelete(row: RoleRow) {
           <el-input v-model="editForm.name" />
         </el-form-item>
         <el-form-item label="优先级" prop="priority">
-          <el-input-number v-model="editForm.priority" :min="1" :max="99" />
+          <el-input-number v-model="editForm.priority" :min="1" :max="99" :controls="false" />
           <span class="text-xs text-gray-400 ml-2">数值越小优先级越高（子 ≤ 父）</span>
         </el-form-item>
         <el-form-item label="继承父角色">
@@ -304,7 +305,7 @@ async function onDelete(row: RoleRow) {
     </el-dialog>
 
     <!-- 分配菜单（check-strictly 勾选树） -->
-    <el-dialog v-model="menusVisible" :title="`分配菜单 — ${menusForm.roleName}`" width="520px">
+    <el-dialog :close-on-click-modal="false" v-model="menusVisible" :title="`分配菜单 — ${menusForm.roleName}`" width="520px">
       <el-alert
         type="info" :closable="false" class="mb-2"
         title="勾选/取消目录会联动其下全部页面与按钮；页面与按钮之间勾选相互独立（可只勾页面不勾按钮=只读授权），保存为整体替换。"

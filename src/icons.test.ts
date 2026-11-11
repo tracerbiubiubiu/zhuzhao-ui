@@ -16,6 +16,18 @@ import { MENU_ICON_MAP, resolveMenuIcon, icons } from './icons'
  *  拼错名（如 lock-outlien）侧栏测试照绿、图标静默零渲染（离线 iconify 未知名不渲染）。
  *  本用例扫全部视图/布局模板字面量，逐个断言在注册表内。 */
 describe('视图内直写图标名', () => {
+  it('页面图标使用已注册的离线组件，不从在线入口另开网络加载', () => {
+    const root = resolve(join(fileURLToPath(import.meta.url), '..'))
+    const collect = (dir: string): string[] => readdirSync(dir).flatMap((name) => {
+      const path = join(dir, name)
+      return statSync(path).isDirectory() ? collect(path) : (name.endsWith('.vue') || name.endsWith('.tsx') ? [path] : [])
+    })
+    const files = collect(root)
+    expect(files.length).toBeGreaterThan(0)
+    const onlineImports = files.filter((file) => /\bfrom\s+['"]@iconify\/vue['"]/.test(readFileSync(file, 'utf-8')))
+    expect(onlineImports, '全局registerIcons写入offline注册表，online组件会空白并另发外网请求').toEqual([])
+  })
+
   it('icon="mdi:..." 字面量全部已注册（拼错=静默零渲染）', () => {
     const root = resolve(join(fileURLToPath(import.meta.url), '../..'))
     const walk = (dir: string, out: string[] = []): string[] => {
@@ -44,13 +56,16 @@ describe('视图内直写图标名', () => {
   })
 })
 
-/** 主仓菜单种子 icon 裸名全集（000002/000010/000018/000022/000024/000025/000034——新迁移加菜单须同步） */
+/** 主仓菜单种子 icon 裸名全集（000002/000010/000018/000022/000024/000025/000034/000067/000073——新迁移加菜单须同步；
+ *  2026-10-25 补 intel：000067/000072 建行时两处漏登记，侧栏图标静默空白两段无人察觉；000072 的 message 随 000078 删行退役——
+ *  本清单与 MENU_ICON_MAP 均手工维护，派生化挂账 G-24） */
 const SEED_ICON_NAMES = [
   'home', 'settings', 'user', 'role', 'menu', 'org',
   'ticket', 'ticket-list', 'setting',
   'task', 'task-list',
   'al', 'al-data', 'al-types',
   'audit-log', 'dict', 'notification',
+  'intel',
 ]
 
 describe('菜单图标映射表', () => {

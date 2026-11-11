@@ -19,7 +19,7 @@ const SEED_PWD = process.env.E2E_ADMIN_SEED_PASSWORD ?? 'admin123'
 // （终态翻转见 main ① 注释；新测试账号口令模式参考 runbook §4）
 const ADMIN_PWD = process.env.E2E_ADMIN_PASSWORD ?? 'E2eAdmin#2609'
 // admin 唯一终态口令（全生态收敛：后端 acceptance phase1 幂等流 / break-glass CLI 复原值
-// / E2E 本闭环三处同值；dev 栈公开测试凭据，台账=主仓 docs/runbook.md §4）
+// / E2E 本闭环三处同值；dev 栈公开测试凭据，台账=主仓 docs/ops/runbook.md §4）
 const ACCEPTANCE_PWD = process.env.E2E_ADMIN_ACCEPTANCE_PASSWORD ?? 'admin12345'
 
 const OPERATOR = {

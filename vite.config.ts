@@ -74,7 +74,12 @@ export default ({ mode }: ConfigEnv): UserConfig => {
       }
     },
     server: {
-      port: 4000,
+      // strictPort（2026-10-29 端口事故批）：被占时显式失败而非静默挪号——
+      // auto-increment 漂移曾致浏览器/E2E baseURL 与实际端口错位四天未察觉
+      // （4000 被 10/25 遗留 vite 占用，全部实例漂到 4001；QQ 又抢 4001 IPv4）。
+      // 冲突时杀旧实例或 VITE_PORT 覆盖（端口表：docs/ops/port-allocation.md）。
+      port: Number(process.env.VITE_PORT) || 4000,
+      strictPort: true,
       proxy: {
         '/api': {
           target: 'http://127.0.0.1:33333',

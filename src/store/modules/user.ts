@@ -9,7 +9,7 @@ import { defineStore } from 'pinia'
 import { store } from '../index'
 import { loginApi, logoutApi, updatePasswordApi, type LoginParams } from '@/api/auth'
 import {
-  clearTokens, setTokens, isLoggedIn, type TokenPair,
+  clearTokens, setTokens, isLoggedIn, getSessionGeneration, SessionChangedError, type TokenPair,
 } from '@/common/auth/tokenStorage'
 // 静态导入（复检 P1-2 修）：vueQuery 模块零应用侧依赖（仅 @tanstack/vue-query），
 // 无环；原 logout 内动态导入既漏了 resetState 三路（401 终态/守卫失败不清缓存），
@@ -88,7 +88,10 @@ export const useUserStore = defineStore('user', {
   actions: {
     /** 登录（存 TokenPair+标记 mustChangePassword） */
     async login(params: LoginParams) {
+      this.resetState()
+      const generation = getSessionGeneration()
       const pair: TokenPair = await loginApi(params)
+      if (generation !== getSessionGeneration()) throw new SessionChangedError()
       setTokens(pair)
       this.mustChangePassword = pair.must_change_password ?? false
       this.sessionLoaded = false // 新会话须重拉 profile/permissions
@@ -97,6 +100,7 @@ export const useUserStore = defineStore('user', {
     /** 刷新后加载 session 三件：profile + menus + permissions（守卫 §3.1 步 3） */
     async loadSession() {
       if (this.sessionLoaded) return
+      const generation = getSessionGeneration()
       // P3-4 修复：静态导入消除 INEFFECTIVE_DYNAMIC_IMPORT（动态导入在 tree-shake 后无效——build 警告根因）
       const { default: request } = await import('@vea/request')
       const [profile, perms, menus] = await Promise.all([
@@ -104,6 +108,7 @@ export const useUserStore = defineStore('user', {
         request.get('/api/v1/user/permissions'),
         request.get('/api/v1/user/menus'),
       ])
+      if (generation !== getSessionGeneration()) throw new SessionChangedError()
       this.rawMenus = ((menus as unknown as { menus?: unknown[] })?.menus ?? [])
       this.profile = profile as unknown as UserProfile
       this.permissions = ((perms as unknown as { permissions?: string[] })?.permissions ?? []) as string[]
@@ -115,7 +120,9 @@ export const useUserStore = defineStore('user', {
 
     /** 改密（成功=TokenPair 轮换——整体替换+清 mustChangePassword） */
     async changePassword(oldPassword: string, newPassword: string) {
+      const generation = getSessionGeneration()
       const pair: TokenPair = await updatePasswordApi(oldPassword, newPassword)
+      if (generation !== getSessionGeneration()) throw new SessionChangedError()
       setTokens(pair)
       this.mustChangePassword = false
       if (this.profile) this.profile.must_change_password = false
@@ -123,11 +130,12 @@ export const useUserStore = defineStore('user', {
 
     /** 登出（先调 logoutApi，无论成败都拆除会话） */
     async logout() {
+      const generation = getSessionGeneration()
       try {
         await logoutApi()
       } finally {
         // 会话拆除收敛为唯一实现（与 401 终态 / 守卫加载失败共用——缓存清空在 resetState 内）
-        this.resetState()
+        if (generation === getSessionGeneration()) this.resetState()
       }
     },
 
@@ -151,8 +159,9 @@ export const useUserStore = defineStore('user', {
       this.rawMenus = []
       // 3. 权限动态路由复位（isAddRouters 必须回 false，否则新会话不重注册）
       usePermissionStore().reset()
-      // 4. 标签页复位
-      useTagsViewStore().removeAllViews()
+      // 4. 标签页复位（$reset 而非 removeAllViews——连持久化一起清空+restored 标志复位，
+      //    跨用户登录不得残留上一账号页签（2026-11-03 持久化批）；订阅随写空 storage）
+      useTagsViewStore().$reset()
       // 5. 路由注册表复位（清动态路由 + 允许 catch-all 下次重新尾注册）
       resetRouter()
       resetCatchAll()

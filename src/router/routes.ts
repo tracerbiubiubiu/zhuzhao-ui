@@ -12,24 +12,37 @@ import type { RouteRecordRaw } from 'vue-router'
  * 根容器 `/`（Layout + redirect:/home）在 src/router/index.ts 的 constantRouterMap 中组装。
  */
 const constantRoutes: RouteRecordRaw[] = [
-  { path: '/login', name: 'Login', component: () => import('@/views/Login/Login.vue'), meta: { title: '登录', hidden: true } },
-  { path: '/change-password', name: 'ChangePassword', component: () => import('@/views/ChangePassword/index.vue'), meta: { title: '修改密码', hidden: true } },
+  // 全屏独立布局四页一律 noTagsView（2026-11-03 页签持久化批硬化——独立页不挂 Layout
+  // 本就不产生页签；显式声明让持久化恢复校验（createTagView）与建签口径同源兜底）
+  { path: '/login', name: 'Login', component: () => import('@/views/Login/Login.vue'), meta: { title: '登录', hidden: true, noTagsView: true } },
+  { path: '/change-password', name: 'ChangePassword', component: () => import('@/views/ChangePassword/index.vue'), meta: { title: '修改密码', hidden: true, noTagsView: true } },
   // 会话加载瞬时失败页（§3.3：5xx/网络抖动不清会话——守卫 transient 分支跳入，白名单放行）
-  { path: '/session-error', name: 'SessionError', component: () => import('@/views/Error/SessionError.vue'), meta: { title: '会话加载失败', hidden: true } },
+  { path: '/session-error', name: 'SessionError', component: () => import('@/views/Error/SessionError.vue'), meta: { title: '会话加载失败', hidden: true, noTagsView: true } },
   // 403 无权限页（§3.2⑤）——守卫 route:{path} 校验未过（路由存在但无码）跳入；
   // 路由不存在仍由 catch-all 404 兜底（routePermission 对 NotFound 豁免，二者不混）
-  { path: '/403', name: 'Forbidden', component: () => import('@/views/Error/403.vue'), meta: { title: '无权限', hidden: true } },
+  { path: '/403', name: 'Forbidden', component: () => import('@/views/Error/403.vue'), meta: { title: '无权限', hidden: true, noTagsView: true } },
   // 个人中心（§3.2④ 菜单外静态补充路由——任何登录用户可达，挂根容器 Layout 下，
   // 与 Redirect 同款装配方式：router/index.ts 单独挂 children、不进顶层整表展开）
   { path: '/profile', name: 'Profile', component: () => import('@/views/Profile/index.vue'), meta: { title: '个人中心', hidden: true } },
   // 「我的组织」自服务面（§3.2④——非 admin 委托者唯一可达入口，owner/admin 经 L3 见委托控件）
   { path: '/my-org', name: 'MyOrg', component: () => import('@/views/MyOrg/index.vue'), meta: { title: '我的组织', hidden: true } },
+  // 消息中心（G-23 实施 000076——铃铛对全员渲染，路由不能随菜单绑定；inbox 三端点已移后端 selfService；
+  // 菜单行 message_center 已 visible=false 惰性化，避免与本常量路由同 path 双注册；name=组件 defineOptions 名供 keep-alive）
+  { path: '/messages', name: 'message_center_page', component: () => import('@/views/message/center/index.vue'), meta: { title: '消息中心', hidden: true } },
   // 工单发起/详情（§3.2④——W4：菜单外静态路由，入口按钮挂 ticket:create/read 码；
   // 详情参数路由的 route:{path} 校验走前缀豁免（routePermission）——真实边界在后端 L2/L3
   { path: '/tickets/new', name: 'TicketCreate', component: () => import('@/views/ticket/create/index.vue'), meta: { title: '发起工单', hidden: true } },
-  { path: '/tickets/:id', name: 'TicketDetail', component: () => import('@/views/ticket/detail/index.vue'), meta: { title: '工单详情', hidden: true } },
+  {
+    path: '/tickets/:id', name: 'TicketDetail', component: () => import('@/views/ticket/detail/index.vue'),
+    props: (route) => ({ ticketId: String(route.params.id ?? '') }),
+    meta: { title: '工单详情', hidden: true },
+  },
   // Redirect 中转（挂在 Layout 下供 TagsView 刷新——见 router/index.ts）
-  { path: '/redirect/:path(.*)', name: 'Redirect', component: () => import('@/views/Redirect/Redirect.vue'), meta: { hidden: true, noTagsView: true } } // noTagsView 防刷新幽灵标签（种子原版有——裁剪时丢失）,
+  { path: '/redirect/:path(.*)', name: 'Redirect', component: () => import('@/views/Redirect/Redirect.vue'), meta: { hidden: true, noTagsView: true } }, // noTagsView 防刷新幽灵标签（种子原版有——裁剪时丢失）
+  // 404 兜底（catch-all——本条曾在 routePermission.isExemptRoute/本注释中"预告"却从未注册：
+  // 未匹配 URL 整页空白，2026-10-29 手输 /audit/log 失效路径实证）。全屏独立页与 /403 同款；
+  // noTagsView 防 404 幽灵标签；豁免由 routePermission NOT_FOUND_ROUTE_NAME 配套
+  { path: '/:pathMatch(.*)*', name: 'NotFound', component: () => import('@/views/Error/404.vue'), meta: { title: '404', hidden: true, noTagsView: true } },
 ]
 
 export default constantRoutes

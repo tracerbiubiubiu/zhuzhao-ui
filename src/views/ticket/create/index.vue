@@ -15,7 +15,7 @@
 import { computed, reactive, ref, watch } from 'vue'
 import {
   ElButton, ElCard, ElDatePicker, ElForm, ElFormItem, ElInput, ElInputNumber,
-  ElMessage, ElOption, ElSelect,
+  ElMessage, ElOption, ElRadio, ElRadioGroup, ElRate, ElSelect, ElTag,
   ElAlert,
 } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
@@ -25,13 +25,21 @@ import {
   createTicketApi, getTicketTypeFieldsApi, listTicketTypesApi,
   type TicketTypeFieldDef,
 } from '@/api/ticket'
+import { uploadAndConfirm } from '@/api/storage'
 import { getMyOrgsApi } from '@/api/org/selfService'
 import { getOrgTreeApi, type OrgTreeNode } from '@/api/system/org'
+import { getDictItemsByCodeApi } from '@/api/system/dict'
+import UserPicker from '@/components/UserPicker/index.vue'
+import RichtextField from '@/components/RichtextField.vue'
+import { richtextDraftKey } from '@/components/useRichtextDraft'
+import { useUserStore } from '@/store/modules/user'
 
 defineOptions({ name: 'TicketCreate' })
 
 const router = useRouter()
 const formRef = ref<FormInstance>()
+const richtextRefs = ref<InstanceType<typeof RichtextField>[]>([])
+const userStore = useUserStore()
 const loading = ref(false)
 const errorMsg = ref('')
 
@@ -42,6 +50,7 @@ const form = reactive({
   priority: 3,
   org_id: '',
   custom: {} as Record<string, unknown>,
+  escalationSupervisor: '', // 催办上级·人工指定（S10 B10-4——dd §31 基线档，可选）
 })
 
 const rules: FormRules = {
@@ -53,15 +62,109 @@ const rules: FormRules = {
 // ─── 类型与字段定义 ───
 const typesQuery = useQuery({ queryKey: ['ticket', 'types'], queryFn: listTicketTypesApi })
 const fields = ref<TicketTypeFieldDef[]>([])
+const loadedType = ref('')
+const fieldsError = ref('')
+const fieldsReady = computed(() => !!loadedType.value && loadedType.value === form.type_code)
 let fieldsSeq = 0 // 快速切换类型时弃置过期响应（后到的旧 schema 不得覆盖新选中类型）
 
-watch(() => form.type_code, async (code) => {
-  form.custom = {}
+async function loadTypeFields(code: string) {
   const seq = ++fieldsSeq
-  const next = code ? await getTicketTypeFieldsApi(code).catch(() => []) : []
-  if (seq !== fieldsSeq) return
-  fields.value = next
-})
+  fields.value = []
+  loadedType.value = ''
+  fieldsError.value = ''
+  form.custom = {}
+  fileUploading.value = {}
+  fileErrors.value = {}
+  if (!code) return
+  try {
+    const next = await getTicketTypeFieldsApi(code)
+    if (seq !== fieldsSeq) return
+    fields.value = next
+    loadedType.value = code
+  } catch {
+    if (seq === fieldsSeq) fieldsError.value = '字段配置加载失败，请重试'
+  }
+}
+
+watch(() => form.type_code, loadTypeFields, { flush: 'sync' })
+
+// ── B1-6 批3：条件显隐（渲染端 watch 联动——服务端 G2 提交时兜底断言） ──
+function isVisibleField(f: TicketTypeFieldDef): boolean {
+  const vw = (f.field_meta as { visible_when?: string } | null | undefined)?.visible_when
+  if (!vw) return true
+  try {
+    const m = vw.match(/^(\w+)\s*(==|!=|>=|<=|>|<)\s*(.+)$/)
+    if (!m) return true
+    const [, key, op, rawVal] = m
+    const cur = (form.custom as Record<string, unknown>)[key]
+    const target = rawVal.replace(/'/g, '').replace(/"/g, '').trim()
+    const curStr = String(cur ?? '')
+    switch (op) {
+      case '==': return curStr === target
+      case '!=': return curStr !== target
+      case '>': return Number(cur) > Number(target)
+      case '<': return Number(cur) < Number(target)
+      case '>=': return Number(cur) >= Number(target)
+      case '<=': return Number(cur) <= Number(target)
+    }
+    return true
+  } catch {
+    return true
+  }
+}
+
+// ── B1-6 批3：布局渲染投影（col_span 栅格 + group 折叠 + visible_when 过滤） ──
+const visibleFields = computed(() => fields.value.filter((f) => isVisibleField(f)))
+
+
+// ── B1-6 批3 file：上传字段（presign→PUT→confirm 三步直传→object_key 入 custom_data） ──
+const fileUploading = ref<Record<string, boolean>>({})
+const fileErrors = ref<Record<string, string>>({})
+
+function fileKeys(f: TicketTypeFieldDef): string[] {
+  return ((form.custom as Record<string, unknown>)[f.field_key] as string[] | undefined) ?? []
+}
+
+function setFileKeys(f: TicketTypeFieldDef, keys: string[]) {
+  ;(form.custom as Record<string, unknown>)[f.field_key] = keys.length ? keys : undefined
+}
+
+function mimeAllowed(f: TicketTypeFieldDef, file: File): boolean {
+  const raw = f.field_options
+  if (!Array.isArray(raw) || raw.length === 0) return true
+  return raw.some((m) => typeof m === 'string' && file.type === m)
+}
+
+async function handleFileUpload(f: TicketTypeFieldDef, event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''
+  if (!file || !fieldsReady.value) return
+  const seq = fieldsSeq
+  fileErrors.value[f.field_key] = ''
+  if (!mimeAllowed(f, file)) {
+    fileErrors.value[f.field_key] = `文件类型 ${file.type} 不在白名单内`
+    return
+  }
+  fileUploading.value[f.field_key] = true
+  try {
+    const result = await uploadAndConfirm(file, 'attachment_create')
+    if (seq === fieldsSeq) setFileKeys(f, [...fileKeys(f), result.object_key])
+  } catch (e) {
+    if (seq === fieldsSeq) fileErrors.value[f.field_key] = e instanceof Error ? e.message : '上传失败'
+  } finally {
+    if (seq === fieldsSeq) fileUploading.value[f.field_key] = false
+  }
+}
+
+function removeFileKey(f: TicketTypeFieldDef, key: string) {
+  setFileKeys(f, fileKeys(f).filter((k) => k !== key))
+}
+
+function shortName(key: string): string {
+  const parts = key.split('/')
+  return parts[parts.length - 1] ?? key
+}
 
 /** 字段动态校验规则（required + regex 预检——03 S8） */
 const fieldRules = computed(() => {
@@ -89,10 +192,40 @@ const fieldRules = computed(() => {
   return out
 })
 
-/** select 选项归一（field_options 可能是字符串数组或 {value,label} 数组） */
+// ── B1-2 字典引用预载：field_options 单元素 "dict:<code>" → 拉启用项缓存（optionsOf 同步查） ──
+const dictCache = ref<Record<string, Array<{ value: string; label: string }>>>({})
+watch(
+  () => fields.value,
+  async (fs) => {
+    const codes = new Set<string>()
+    for (const f of fs ?? []) {
+      const raw = f.field_options
+      if (Array.isArray(raw) && raw.length === 1 && typeof raw[0] === 'string' && raw[0].startsWith('dict:')) {
+        codes.add(raw[0].slice(5))
+      }
+    }
+    for (const code of codes) {
+      if (dictCache.value[code]) continue
+      const items = (await getDictItemsByCodeApi(code).catch(() => [])) ?? []
+      dictCache.value[code] = items.map((i) => ({ value: i.code, label: i.label }))
+    }
+  },
+  { immediate: true },
+)
+
+/** B1-3 formula 字段判定（field_meta.formula 非空——服务端求值 SSOT，前端禁编辑） */
+function isFormulaField(f: TicketTypeFieldDef): boolean {
+  return !!(f as { field_meta?: { formula?: string } | null }).field_meta?.formula
+}
+
+/** select 选项归一（字符串数组 / {value,label} 数组 / dict:<code> 引用——B1-2 三形态） */
 function optionsOf(f: TicketTypeFieldDef): Array<{ value: string; label: string }> {
   const raw = f.field_options
   if (Array.isArray(raw)) {
+    // 挂字典引用：展开启用项（缓存未到时暂空——watch immediate 补齐后响应式刷新）
+    if (raw.length === 1 && typeof raw[0] === 'string' && raw[0].startsWith('dict:')) {
+      return dictCache.value[raw[0].slice(5)] ?? []
+    }
     return raw.map((o) =>
       typeof o === 'object' && o !== null && 'value' in (o as Record<string, unknown>)
         ? { value: String((o as Record<string, unknown>).value), label: String((o as Record<string, unknown>).label ?? (o as Record<string, unknown>).value) }
@@ -129,8 +262,9 @@ const orgsLoading = ref(true)
 })()
 
 async function handleSubmit() {
+  const seq = fieldsSeq
   const valid = await formRef.value?.validate().catch(() => false)
-  if (!valid) return
+  if (!valid || seq !== fieldsSeq || !fieldsReady.value) return
   loading.value = true
   errorMsg.value = ''
   try {
@@ -141,7 +275,13 @@ async function handleSubmit() {
       priority: form.priority,
       description: form.description || undefined,
       custom_data: Object.keys(form.custom).length ? form.custom : undefined,
+      ...(form.escalationSupervisor ? { escalation_supervisor_id: form.escalationSupervisor } : {}),
     })
+    richtextRefs.value.forEach((editor) => editor.clearDraft())
+    // 发起页在 keep-alive 中存活；成功后复原表单，返回发起页不能继承已提交内容。
+    Object.assign(form, { type_code: '', title: '', description: '', priority: 3, org_id: '', custom: {}, escalationSupervisor: '' })
+    fields.value = []
+    formRef.value?.clearValidate()
     ElMessage.success('工单已提交')
     router.push(`/tickets/${id}`)
   } catch (err: unknown) {
@@ -157,14 +297,16 @@ async function handleSubmit() {
   <div class="fill-page p-4 max-w-[760px] mx-auto">
     <div class="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
     <el-card shadow="never">
-      <template #header><span class="font-semibold">发起工单</span></template>
       <el-alert v-if="errorMsg" :title="errorMsg" type="error" show-icon class="mb-4" :closable="false" />
       <el-form ref="formRef" :model="form" :rules="rules" label-width="100px">
         <el-form-item label="工单类型" prop="type_code">
-          <el-select v-model="form.type_code" placeholder="选择类型" class="!w-full">
+          <el-select v-model="form.type_code" :disabled="loading" placeholder="选择类型" class="!w-full">
             <el-option v-for="t in typesQuery.data.value ?? []" :key="t.code" :label="t.name" :value="t.code" />
           </el-select>
         </el-form-item>
+        <el-alert v-if="fieldsError" :title="fieldsError" type="error" show-icon :closable="false" class="mb-4">
+          <el-button size="small" @click="loadTypeFields(form.type_code)">重试</el-button>
+        </el-alert>
         <el-form-item label="标题" prop="title">
           <el-input v-model="form.title" maxlength="200" show-word-limit placeholder="一句话描述问题或请求" />
         </el-form-item>
@@ -186,22 +328,33 @@ async function handleSubmit() {
         </el-form-item>
 
         <!-- 动态自定义字段（七类型渲染器；类型切换时重置） -->
-        <template v-for="f in fields" :key="f.field_key">
+        <template v-for="f in visibleFields" :key="form.type_code + ':' + f.field_key">
           <!-- tips=说明块无值：脱离 label 列整行呈现（此前 label/内容双显同文案） -->
           <div v-if="f.field_type === 'tips'" class="text-xs text-gray-400 -mt-1 mb-3">
             {{ f.field_label }}
           </div>
           <el-form-item v-else :label="f.field_label" :prop="`custom.${f.field_key}`" :rules="fieldRules[f.field_key]">
             <el-input
-              v-if="f.field_type === 'input'" v-model="(form.custom[f.field_key] as string | undefined)"
+              v-if="f.field_type === 'input' && !isFormulaField(f)" v-model="(form.custom[f.field_key] as string | undefined)"
               :placeholder="f.required ? '必填' : ''"
             />
+            <el-input
+              v-else-if="f.field_type === 'input' && isFormulaField(f)" :model-value="String(form.custom[f.field_key] ?? '—')"
+              disabled
+            >
+              <template #suffix><span class="text-xs text-blue-400">自动计算</span></template>
+            </el-input>
             <el-input
               v-else-if="f.field_type === 'textarea'" v-model="(form.custom[f.field_key] as string | undefined)"
               type="textarea" :rows="3"
             />
             <el-input-number
-              v-else-if="f.field_type === 'number'" v-model="form.custom[f.field_key] as number | undefined"
+              v-else-if="f.field_type === 'number' && !isFormulaField(f)" v-model="form.custom[f.field_key] as number | undefined"
+              :controls="false"
+            />
+            <el-input-number
+              v-else-if="f.field_type === 'number' && isFormulaField(f)" :model-value="(form.custom[f.field_key] as number | undefined)"
+              :controls="false" disabled
             />
             <!-- 后端 validateFieldValue 严格校验 YYYY-MM-DD——value-format 直出字符串，
                  防 Date 对象被序列化成 ISO datetime 而吃 400 -->
@@ -221,14 +374,78 @@ async function handleSubmit() {
             >
               <el-option v-for="o in optionsOf(f)" :key="o.value" :label="o.label" :value="o.value" />
             </el-select>
+            <!-- B1-6 批3 radio：与 select 同数据模型不同渲染（el-radio-group） -->
+            <el-radio-group
+              v-else-if="f.field_type === 'radio'" v-model="form.custom[f.field_key] as string | undefined"
+            >
+              <el-radio v-for="o in optionsOf(f)" :key="o.value" :value="o.value">{{ o.label }}</el-radio>
+            </el-radio-group>
+            <!-- B1-6 批3 rating：与 number 同数据模型（el-rate 1–5 整数） -->
+            <el-rate
+              v-else-if="f.field_type === 'rating' && !isFormulaField(f)"
+              :model-value="Number(form.custom[f.field_key] ?? 0)"
+              @update:model-value="(v: number | undefined) => { form.custom[f.field_key] = v ?? 0 }"
+            />
+            <el-input-number
+              v-else-if="f.field_type === 'rating' && isFormulaField(f)"
+              :model-value="Number(form.custom[f.field_key] ?? 0)" :controls="false" disabled
+            />
+            <!-- B1-6 批3 file：上传字段（presign→confirm 直传→object_key 数组） -->
+            <div v-else-if="f.field_type === 'file'" class="file-upload-field">
+              <input
+                type="file"
+                :data-field-key="f.field_key"
+                class="hidden"
+                @change="handleFileUpload(f, $event)"
+              />
+              <el-button
+                size="small"
+                :loading="fileUploading[f.field_key]"
+                @click="(($event?.target as HTMLElement)?.closest('.file-upload-field')?.querySelector('input[type=file]') as HTMLInputElement | null)?.click()"
+              >
+                选择文件
+              </el-button>
+              <div v-if="fileKeys(f).length" class="mt-1 flex flex-wrap gap-1">
+                <el-tag
+                  v-for="k in fileKeys(f)"
+                  :key="k"
+                  size="small"
+                  closable
+                  @close="removeFileKey(f, k)"
+                >{{ shortName(k) }}</el-tag>
+              </div>
+              <div v-if="fileErrors[f.field_key]" class="text-xs text-red-500 mt-1">{{ fileErrors[f.field_key] }}</div>
+            </div>
+            <!-- richtext=md-editor-v3 富文本编辑器（工具栏+图片粘贴直传+本地草稿） -->
+            <RichtextField
+              v-else-if="f.field_type === 'richtext' && !isFormulaField(f)"
+              :key="`${form.type_code}:${f.field_key}`"
+              ref="richtextRefs"
+              :model-value="(form.custom[f.field_key] as string | undefined) ?? ''"
+              :placeholder="f.required ? '必填' : ''"
+              :draft-key="richtextDraftKey(userStore.profile?.id, form.type_code, f.field_key)"
+              @update:model-value="(v: string) => { form.custom[f.field_key] = v }"
+            />
+            <el-input
+              v-else-if="f.field_type === 'richtext' && isFormulaField(f)"
+              :model-value="String(form.custom[f.field_key] ?? '—')"
+              disabled
+            >
+              <template #suffix><span class="text-xs text-blue-400">自动计算</span></template>
+            </el-input>
           </el-form-item>
         </template>
 
         <el-form-item label="描述">
           <el-input v-model="form.description" type="textarea" :rows="4" placeholder="补充细节（可选）" />
         </el-form-item>
+        <!-- S10 B10-4：催办上级人工指定（可选——超时催办的上级收件档；可后续分派时改） -->
+        <el-form-item label="催办上级">
+          <UserPicker v-model="form.escalationSupervisor" class="!w-[240px]" />
+          <span class="text-xs text-gray-400 ml-2">可选：工单超时催办时通知的上级（不填则只催处理人）</span>
+        </el-form-item>
         <el-form-item>
-          <el-button type="primary" :loading="loading" @click="handleSubmit">提交工单</el-button>
+          <el-button type="primary" :loading="loading" :disabled="!!form.type_code && !fieldsReady" @click="handleSubmit">提交工单</el-button>
           <el-button @click="router.back()">取消</el-button>
         </el-form-item>
       </el-form>

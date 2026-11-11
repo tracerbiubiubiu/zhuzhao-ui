@@ -19,12 +19,18 @@ export interface AlFieldDef {
   required: boolean
   /** 敏感字段（日志侧脱敏语义——响应值原样，前端不脱显） */
   sensitive?: boolean
+  /** string/string_list 单值字符上限（后端恒出；0/缺省=默认 255——2026-10-27 拍板） */
+  max_chars?: number
+  /** int_list/string_list 项数上限（后端恒出；0/缺省=默认 100——同批拍板） */
+  max_list_items?: number
 }
 
 /** 类型定义（meta.Definition 投影） */
 export interface AlTypeDef {
   type_name: string
   fields: AlFieldDef[]
+  /** 唯一键（标量字段组合，空数组=无唯一约束——写路径对活跃行查重 409） */
+  unique_fields?: string[]
   status: 'active' | 'deprecated'
   version: number
   created_at: string
@@ -36,6 +42,8 @@ export interface AlTypeHistoryRow {
   version: number
   op: string
   fields: AlFieldDef[]
+  unique_fields?: string[]
+  changed_by?: string
   created_at: string
 }
 
@@ -58,11 +66,14 @@ export interface AlCursor {
 }
 
 /** 导入结果（ImportResult 投影） */
+/** 导入=全量替换：服务端锁表后 DELETE 全部行（含软删）再重灌——rows=重灌行数、
+ * deleted=清除的原有行数（含软删）。与服务端 ImportResult（data_service.go）对齐，
+ * 修复 UI 曾读 inserted/skipped 致成功提示恒显「新增 ? 行」。 */
 export interface AlImportResult {
-  inserted?: number
-  skipped?: number
+  rows: number
+  deleted: number
+  max_id: string
   duration_ms?: number
-  [k: string]: unknown
 }
 
 // ─── 类型管理（activelist:type:read / type:manage）───
@@ -78,7 +89,11 @@ export async function getAlTypeRulesApi(): Promise<unknown> {
   return data
 }
 
-export async function registerAlTypeApi(input: { type_name: string; fields: AlFieldDef[] }): Promise<AlTypeDef> {
+export async function registerAlTypeApi(input: {
+  type_name: string
+  fields: AlFieldDef[]
+  unique_fields?: string[]
+}): Promise<AlTypeDef> {
   const data = await request.post('/al/api/v1/admin/types', input, { _silentError: true })
   return data as unknown as AlTypeDef
 }
@@ -87,6 +102,7 @@ export async function registerAlTypeApi(input: { type_name: string; fields: AlFi
 export async function evolveAlTypeApi(input: {
   type_name: string
   fields: AlFieldDef[]
+  unique_fields?: string[]
   version: number
 }): Promise<AlTypeDef> {
   const data = await request.post('/al/api/v1/admin/types/schema', input, { _silentError: true })
@@ -108,7 +124,17 @@ export async function listAlTypeHistoryApi(typeName: string): Promise<{ list: Al
 
 export async function listAlDataApi(
   typeName: string,
-  params: { page_size?: number; after_created_at?: string; after_id?: string; include_deleted?: boolean },
+  params: {
+    page_size?: number
+    after_created_at?: string
+    after_id?: string
+    include_deleted?: boolean
+    /** 关键字——全标量字段 ILIKE 模糊（≤100 字符，2026-10-28） */
+    q?: string
+    /** 单字段精确筛选（与 value 成对；限标量字段） */
+    field?: string
+    value?: string
+  },
 ): Promise<{ list: AlDataDoc[]; page_size: number; next_cursor: AlCursor | null }> {
   const data = await request.get(`/al/api/v1/data/${encodeURIComponent(typeName)}`, { params })
   return data as unknown as { list: AlDataDoc[]; page_size: number; next_cursor: AlCursor | null }

@@ -23,6 +23,8 @@ export interface TaskRunRow {
   attempts: number
   error: string
   duration_ms: number
+  /** taskrunner submitted_by：cron 定时触发显式留空（cron.go「无用户参与」设计）——
+   *  手动提交经网关恒填 actor；前端空值渲染「系统定时」标签做审计归因 */
   submitted_by: string
   enqueued_at: string
   started_at?: string | null
@@ -35,17 +37,19 @@ export interface TaskDetail extends TaskRunRow {
   live_state?: string
 }
 
-/** 死信行 */
+/** 死信行（2026-11-03 对齐真实响应——原类型为臆测形状，action/error/attempts 等字段
+ *  在实际数据中不存在，列表 3/4 列恒空；真实形状=asynq archived 投影，dev 实测取证） */
 export interface DeadLetterRow {
   task_id: string
-  request_id?: string
-  action: string
-  job_id?: string
-  dept?: string
-  params?: string
-  error: string
-  attempts?: number
-  failed_at?: string
+  /** asynq 任务类型（如 taskrunner:callback） */
+  type: string
+  /** asynq 任务态（死信=archived） */
+  state: string
+  /** 最后错误全文（含对端响应片段） */
+  last_error: string
+  retried?: number
+  max_retry?: number
+  last_failed_at?: string
   [k: string]: unknown
 }
 
@@ -65,6 +69,22 @@ export interface TaskJobRow {
   owner_service: string
   created_at: string
   updated_at: string
+}
+
+/** 动作元数据行（S4 B4-1——GET /jobs/actions 最小读面；params_schema null=未声明降级 JSON 模式） */
+export interface JobActionRow {
+  action_id: string
+  name: string
+  description?: string
+  kind?: string
+  owner_service?: string
+  params_schema?: Record<string, unknown> | null
+}
+
+/** 动作清单（提交选单数据源——operator 持 task:read 可读） */
+export async function listJobActionsApi(): Promise<JobActionRow[]> {
+  const data = await request.get('/api/v1/jobs/actions')
+  return ((data as unknown as { list?: JobActionRow[] })?.list ?? [])
 }
 
 // ─── 提交/查询（task:submit / task:read）───
@@ -148,13 +168,20 @@ export async function createJobApi(input: {
   return data as unknown as TaskJobRow
 }
 
-/** patch：enabled 启停为主（cron/params/description 指针可改） */
+/**
+ * patch 语义（taskrunner JobPatch 指针：JSON 省略字段=不改）：
+ * - params：显式 null 被服务端 400 拒——清空传 {}；仅 cron 触发类型可改 cron_spec
+ *   （否则 400 透传）；description/dept 传空串=清空
+ * - 网关侧 raw body 纯透传（taskrunner_handler UpdateJob 不解字段），新增上游字段无需网关改动
+ */
 export async function updateJobApi(input: {
   job_id: string
   enabled?: boolean
   cron_spec?: string
   params?: unknown
   description?: string
+  dept?: string
+  timeout_secs?: number
 }): Promise<void> {
   await request.post('/api/v1/jobs/update', input, { _silentError: true })
 }

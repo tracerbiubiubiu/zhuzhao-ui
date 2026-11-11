@@ -1,0 +1,389 @@
+<template>
+  <div class="p-4">
+    <el-card shadow="hover">
+      <el-tabs v-model="activeTab">
+        <!-- 模板管理（2026-10-26 通知面收口批：只读首版 → 编辑面） -->
+        <el-tab-pane label="消息模板" name="templates">
+          <div class="mb-2">
+            <el-button v-permission="'notification:manage'" type="primary" size="small" data-testid="tpl-create" @click="openTplCreate">新建模板</el-button>
+            <span class="text-xs text-gray-400 ml-2">占位符用双花括号包字段名（ticket.title / ticket.human_key / ticket.link）；种子模板（系统）只读</span>
+          </div>
+          <el-table ref="tplTable" :data="templates" v-loading="tplLoading" size="small" border>
+            <template #empty>
+              <el-empty description="暂无模板——新建后供规则引用" :image-size="60">
+                <el-button v-permission="'notification:manage'" type="primary" size="small" @click="openTplCreate">新建首个模板</el-button>
+              </el-empty>
+            </template>
+            <el-table-column prop="code" label="标识" width="200" />
+            <el-table-column prop="name" label="名称" width="180" />
+            <el-table-column prop="biz_type" label="业务域" width="80" />
+            <el-table-column prop="subject" label="主题模板" show-overflow-tooltip />
+            <el-table-column prop="enabled" label="启用" width="60">
+              <template #default="{ row }"><el-tag :type="row.enabled ? 'success' : 'info'" size="small">{{ row.enabled ? '是' : '否' }}</el-tag></template>
+            </el-table-column>
+            <el-table-column label="系统" width="60" align="center">
+              <template #default="{ row }">{{ row.is_system ? '是' : '' }}</template>
+            </el-table-column>
+            <el-table-column label="操作" width="130" fixed="right">
+              <template #default="{ row }">
+                <el-button v-permission="'notification:manage'" link type="primary" size="small" :disabled="row.is_system" @click="openTplEdit(row as MessageTemplateRow)">编辑</el-button>
+                <el-button v-permission="'notification:manage'" link type="danger" size="small" :disabled="row.is_system" @click="onTplDelete(row as MessageTemplateRow)">删除</el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+        </el-tab-pane>
+
+        <!-- 订阅规则（事件→模板路由；一事件一规则，改绑模板即在此换） -->
+        <el-tab-pane label="订阅规则" name="rules">
+          <div class="mb-2">
+            <el-button v-permission="'notification:manage'" type="primary" size="small" data-testid="rule-create" @click="openRuleCreate">新建规则</el-button>
+            <span class="text-xs text-gray-400 ml-2">规则=开关与默认模板；notify 动作可在 params.template 逐次覆盖</span>
+          </div>
+          <el-table ref="ruleTable" :data="rules" v-loading="ruleLoading" size="small" border>
+            <template #empty>
+              <el-empty description="暂无规则——新建后按业务域路由通知" :image-size="60">
+                <el-button v-permission="'notification:manage'" type="primary" size="small" @click="openRuleCreate">新建首个规则</el-button>
+              </el-empty>
+            </template>
+            <el-table-column prop="biz_type" label="业务域" width="80" />
+            <el-table-column prop="event_action" label="事件动作" width="200" />
+            <el-table-column prop="template_code" label="使用模板" width="200" />
+            <el-table-column prop="recipient_type" label="收件人类型" width="120" />
+            <el-table-column prop="fixed_recipients" label="固定收件人" width="140" show-overflow-tooltip />
+            <el-table-column prop="enabled" label="启用" width="60">
+              <template #default="{ row }"><el-tag :type="row.enabled ? 'success' : 'info'" size="small">{{ row.enabled ? '是' : '否' }}</el-tag></template>
+            </el-table-column>
+            <el-table-column label="操作" width="130" fixed="right">
+              <template #default="{ row }">
+                <el-button v-permission="'notification:manage'" link type="primary" size="small" @click="openRuleEdit(row as MessageRuleRow)">编辑</el-button>
+                <el-button v-permission="'notification:manage'" link type="danger" size="small" @click="onRuleDelete(row as MessageRuleRow)">删除</el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+        </el-tab-pane>
+
+        <!-- 发送记录 -->
+        <el-tab-pane label="发送记录" name="logs">
+          <!-- 排障筛选：模板/状态/业务 ID（2026-10-28 发送记录筛选批——主仓同批端点参数） -->
+          <div class="mb-2 flex flex-wrap items-center gap-4">
+            <el-select v-model="logFilter.template_code" placeholder="全部模板" clearable size="small" class="!w-[180px]" data-testid="log-filter-tpl" @change="onLogFilterChange">
+              <el-option v-for="t in templates" :key="t.code" :label="t.name || t.code" :value="t.code" />
+            </el-select>
+            <el-select v-model="logFilter.status" placeholder="全部状态" clearable size="small" class="!w-[110px]" data-testid="log-filter-status" @change="onLogFilterChange">
+              <el-option label="已发送" value="sent" />
+              <el-option label="失败" value="failed" />
+            </el-select>
+            <el-input v-model="logFilter.biz_id" placeholder="业务 ID（如工单号）" clearable size="small" class="!w-[160px]" data-testid="log-filter-bizid" @input="onLogFilterChange" />
+            <el-button size="small" class="ml-auto !mr-0" @click="resetLogFilter">重置</el-button>
+          </div>
+          <el-table ref="logTable" :data="logs" v-loading="logLoading" size="small" border>
+            <el-table-column prop="template_code" label="模板" width="200" />
+            <el-table-column prop="biz_id" label="业务 ID" width="80" />
+            <el-table-column prop="recipients" label="收件人" width="120" />
+            <el-table-column prop="subject" label="主题" show-overflow-tooltip />
+            <el-table-column prop="status" label="状态" width="70">
+              <template #default="{ row }"><el-tag :type="row.status === 'sent' ? 'success' : 'danger'" size="small">{{ row.status === 'sent' ? '已发' : '失败' }}</el-tag></template>
+            </el-table-column>
+            <el-table-column prop="created_at" label="时间" width="170">
+              <template #default="{ row }">{{ formatDateTime(row.created_at) }}</template>
+            </el-table-column>
+          </el-table>
+          <div v-if="logTotal > logPageSize" class="mt-2 flex justify-end">
+            <el-pagination v-model:current-page="logPage" :page-size="logPageSize" :total="logTotal" layout="total, prev, pager, next" @current-change="fetchLogs" />
+          </div>
+        </el-tab-pane>
+      </el-tabs>
+    </el-card>
+
+    <!-- 模板编辑对话框（code 建后不可改；is_system 行不可入） -->
+    <el-dialog v-model="tplDialog.visible" :close-on-click-modal="false" :title="tplDialog.isCreate ? '新建消息模板' : `编辑模板 ${tplForm.code}`" width="640px">
+      <el-form label-width="90px" @submit.prevent>
+        <el-form-item label="标识" required>
+          <el-input v-model="tplForm.code" :disabled="!tplDialog.isCreate" placeholder="如 ticket_assigned_v2" maxlength="64" />
+        </el-form-item>
+        <el-form-item label="名称" required>
+          <el-input v-model="tplForm.name" placeholder="模板名称" maxlength="128" />
+        </el-form-item>
+        <el-form-item label="业务域" required>
+          <el-select v-model="tplForm.biz_type" class="!w-[200px]">
+            <el-option label="工单 ticket" value="ticket" />
+            <el-option label="运维 ops" value="ops" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="渠道">
+          <el-select v-model="tplForm.channel" class="!w-[200px]" disabled>
+            <el-option label="企业统一消息平台 uip" value="uip" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="主题" required>
+          <el-input v-model="tplForm.subject" :placeholder="'通知主题，可含 {{ticket.title}} 等占位'" maxlength="255" />
+        </el-form-item>
+        <el-form-item label="正文" required>
+          <el-input v-model="tplForm.body" type="textarea" :rows="5" placeholder="通知正文，占位符同主题" />
+        </el-form-item>
+        <el-form-item label="启用">
+          <el-switch v-model="tplForm.enabled" />
+        </el-form-item>
+      </el-form>
+      <el-alert v-if="tplDialog.error" :title="tplDialog.error" type="error" show-icon :closable="false" />
+      <template #footer>
+        <el-button @click="tplDialog.visible = false">取消</el-button>
+        <el-button type="primary" :loading="tplDialog.loading" @click="submitTpl">{{ tplDialog.isCreate ? '创建' : '保存' }}</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 规则编辑对话框（upsert：biz_type+event_action 唯一，同键保存=改绑模板/收件人） -->
+    <el-dialog v-model="ruleDialog.visible" :close-on-click-modal="false" :title="ruleDialog.isCreate ? '新建订阅规则' : `编辑规则 ${ruleForm.biz_type}:${ruleForm.event_action}`" width="560px">
+      <el-form label-width="100px" @submit.prevent>
+        <el-form-item label="业务域" required>
+          <el-select v-model="ruleForm.biz_type" class="!w-full" :disabled="!ruleDialog.isCreate">
+            <el-option label="工单 ticket" value="ticket" />
+            <el-option label="运维 ops" value="ops" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="事件动作" required>
+          <el-select v-model="ruleForm.event_action" class="!w-full" filterable :disabled="!ruleDialog.isCreate" placeholder="选择事件">
+            <el-option v-for="e in EVENT_OPTIONS" :key="e.value" :label="`${e.value}（${e.label}）`" :value="e.value" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="使用模板" required>
+          <el-select v-model="ruleForm.template_code" class="!w-full" filterable placeholder="选择模板">
+            <el-option v-for="t in templates" :key="t.code" :label="`${t.code}（${t.name}）`" :value="t.code" :disabled="!t.enabled" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="收件人类型" required>
+          <el-select v-model="ruleForm.recipient_type" class="!w-full">
+            <el-option label="处理人 assignee" value="assignee" />
+            <el-option label="创建人 creator" value="creator" />
+            <el-option label="抄送人 cc" value="cc" />
+            <el-option label="固定收件人 fixed" value="fixed" />
+          </el-select>
+        </el-form-item>
+        <el-form-item v-if="ruleForm.recipient_type === 'fixed'" label="固定收件人">
+          <el-input v-model="ruleForm.fixed_recipients" placeholder="用户 ID 逗号分隔，如 12,34" />
+        </el-form-item>
+        <el-form-item label="启用">
+          <el-switch v-model="ruleForm.enabled" />
+        </el-form-item>
+      </el-form>
+      <el-alert v-if="ruleDialog.error" :title="ruleDialog.error" type="error" show-icon :closable="false" />
+      <template #footer>
+        <el-button @click="ruleDialog.visible = false">取消</el-button>
+        <el-button type="primary" :loading="ruleDialog.loading" @click="submitRule">{{ ruleDialog.isCreate ? '创建' : '保存' }}</el-button>
+      </template>
+    </el-dialog>
+  </div>
+</template>
+
+<script setup lang="ts">
+/**
+ * S6 消息管理页（B6-3 模板 + B6-6 规则/发送记录——06 号 §4/§5.4 管理面）。
+ * 2026-10-26 通知面收口批：只读首版 → 模板/规则编辑面（后端端点随 B6-6 既有，本页补 UI）。
+ * 规则语义：biz_type+event_action 唯一（一事件一规则）——同键保存=改绑模板/收件人；规则=开关与默认模板，
+ * notify 动作可在 params.template 逐次覆盖（000079 起 ticket.action_notify 有种子默认路由）。
+ */
+import { formatDateTime } from '@/utils/datetime'
+import { reactive, ref, onMounted } from 'vue'
+import { useTableFit } from '@vea/hooks'
+import {
+  ElAlert, ElButton, ElCard, ElDialog, ElForm, ElFormItem, ElInput,
+  ElMessage, ElMessageBox, ElOption, ElPagination, ElSelect, ElSwitch,
+  ElTabPane, ElTable, ElTableColumn, ElTabs, ElTag,
+  ElEmpty,
+} from 'element-plus'
+import {
+  listMessageTemplatesApi, createMessageTemplateApi, updateMessageTemplateApi, deleteMessageTemplateApi,
+  listMessageRulesApi, upsertMessageRuleApi, deleteMessageRuleApi, listMessageLogsApi,
+  type MessageTemplateRow, type MessageRuleRow,
+} from '@/api/message'
+
+// 顶层菜单页路由名=`${code}_page`（permissionRoutes）；原 'SystemNotification' 与路由名不符致 keep-alive 恒不命中
+defineOptions({ name: 'system_notification_page' })
+
+/** 事件词表——与后端 message_admin_service.go 的 validEventActions 手工同步，
+ * eventOptions.test.ts 跨仓比较完整集合；未来词表端点演进登记见主仓
+ * docs/phase5/06-s6-message-notification.md 的 A.9（RR-DOC-01）。 */
+const EVENT_OPTIONS: Array<{ value: string; label: string }> = [
+  { value: 'ticket.created', label: '工单创建' },
+  { value: 'ticket.assigned', label: '工单分派' },
+  { value: 'ticket.closed', label: '工单关闭' },
+  { value: 'ticket.updated', label: '工单更新' },
+  { value: 'ticket.commented', label: '工单评论' },
+  { value: 'ticket.cc_added', label: '加入抄送' },
+  { value: 'ticket.timeout', label: '节点超时催办' },
+  { value: 'ticket.deadline', label: 'SLA 截止' },
+  { value: 'ticket.transitioned', label: '状态转换' },
+  { value: 'ticket.dispatch_missed', label: '自动分派未命中' },
+  { value: 'ticket.action_notify', label: 'notify 动作（流程提醒）' },
+  { value: 'ops.cron_failed', label: '定时任务失败（ops）' },
+  { value: 'ops.action_failed', label: '流程动作失败（ops）' },
+  { value: 'ops.storage_usage_high', label: '存储用量告警（ops）' },
+]
+
+const activeTab = ref('templates')
+const templates = ref<MessageTemplateRow[]>([])
+const rules = ref<MessageRuleRow[]>([])
+const logs = ref<Record<string, unknown>[]>([])
+const tplLoading = ref(false)
+const ruleLoading = ref(false)
+const logLoading = ref(false)
+const logPage = ref(1)
+const logPageSize = 20
+const logTotal = ref(0)
+// 发送记录筛选（2026-10-28 批）：排障三件——模板/状态/业务 ID；变更即查 300ms 防抖+回首页
+const logFilter = reactive({ template_code: '', status: '', biz_id: '' })
+let logFiltTimer: ReturnType<typeof setTimeout> | undefined
+function onLogFilterChange() {
+  clearTimeout(logFiltTimer)
+  logFiltTimer = setTimeout(() => { logPage.value = 1; fetchLogs() }, 300)
+}
+function resetLogFilter() {
+  clearTimeout(logFiltTimer)
+  logFilter.template_code = ''
+  logFilter.status = ''
+  logFilter.biz_id = ''
+  logPage.value = 1
+  fetchLogs()
+}
+
+const tplTable = ref()
+const ruleTable = ref()
+const logTable = ref()
+useTableFit(tplTable, () => templates.value)
+useTableFit(ruleTable, () => rules.value)
+useTableFit(logTable, () => logs.value)
+
+async function fetchTemplates() {
+  tplLoading.value = true
+  try {
+    // page_size:100 拉全豁免（docs/design/frontend-ui.md 分页口径）：管理面配置数据量小且近乎不增长
+    templates.value = (await listMessageTemplatesApi({ page: 1, page_size: 100 })).list
+  } catch { /* 403=无权限 */ } finally { tplLoading.value = false }
+}
+
+async function fetchRules() {
+  ruleLoading.value = true
+  try {
+    rules.value = await listMessageRulesApi()
+  } catch { /* 403=无权限 */ } finally { ruleLoading.value = false }
+}
+
+async function fetchLogs() {
+  logLoading.value = true
+  try {
+    const resp = await listMessageLogsApi({
+      page: logPage.value, page_size: logPageSize,
+      ...(logFilter.template_code ? { template_code: logFilter.template_code } : {}),
+      ...(logFilter.status ? { status: logFilter.status } : {}),
+      ...(logFilter.biz_id.trim() ? { biz_id: logFilter.biz_id.trim() } : {}),
+    })
+    logs.value = resp?.list ?? []
+    logTotal.value = resp?.total ?? 0
+  } catch { /* 403=无权限 */ } finally { logLoading.value = false }
+}
+
+// ─── 模板编辑 ───
+const tplDialog = reactive({ visible: false, loading: false, error: '', isCreate: true })
+const tplForm = reactive<MessageTemplateRow>({ code: '', name: '', channel: 'uip', biz_type: 'ticket', subject: '', body: '', enabled: true })
+
+function openTplCreate() {
+  Object.assign(tplForm, { code: '', name: '', channel: 'uip', biz_type: 'ticket', subject: '', body: '', enabled: true })
+  tplDialog.error = ''
+  tplDialog.isCreate = true
+  tplDialog.visible = true
+}
+function openTplEdit(row: MessageTemplateRow) {
+  Object.assign(tplForm, row)
+  tplDialog.error = ''
+  tplDialog.isCreate = false
+  tplDialog.visible = true
+}
+async function submitTpl() {
+  if (!tplForm.code || !tplForm.name || !tplForm.subject || !tplForm.body) {
+    tplDialog.error = 'code/名称/主题/正文均必填'
+    return
+  }
+  tplDialog.loading = true
+  tplDialog.error = ''
+  try {
+    // 同规则：model.ID 为 json:",string"——payload 不带 id（create 无、update 按 code 定位）
+    const body = { ...tplForm }
+    delete (body as Partial<MessageTemplateRow>).id
+    if (tplDialog.isCreate) {
+      await createMessageTemplateApi(body)
+    } else {
+      await updateMessageTemplateApi(body)
+    }
+    tplDialog.visible = false
+    ElMessage.success(tplDialog.isCreate ? '模板已创建' : '模板已保存')
+    await fetchTemplates()
+  } catch (e: unknown) {
+    tplDialog.error = (e as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '保存失败'
+  } finally { tplDialog.loading = false }
+}
+async function onTplDelete(row: MessageTemplateRow) {
+  try {
+    await ElMessageBox.confirm(`确认删除模板「${row.name}（${row.code}）」？引用它的规则将拒发并 Warn。`, '危险操作',
+      { type: 'warning', confirmButtonText: '删除', confirmButtonClass: 'el-button--danger' })
+  } catch { return }
+  try {
+    await deleteMessageTemplateApi(row.code)
+    ElMessage.success('已删除')
+    await fetchTemplates()
+  } catch (e: unknown) {
+    ElMessage.error((e as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '删除失败')
+  }
+}
+
+// ─── 规则编辑（upsert：同 biz_type+event_action 保存=改绑） ───
+const ruleDialog = reactive({ visible: false, loading: false, error: '', isCreate: true })
+const ruleForm = reactive<MessageRuleRow>({ id: '', biz_type: 'ticket', event_action: '', template_code: '', recipient_type: 'assignee', fixed_recipients: '', enabled: true })
+
+function openRuleCreate() {
+  Object.assign(ruleForm, { id: '', biz_type: 'ticket', event_action: '', template_code: '', recipient_type: 'assignee', fixed_recipients: '', enabled: true, version: undefined })
+  ruleDialog.error = ''
+  ruleDialog.isCreate = true
+  ruleDialog.visible = true
+}
+function openRuleEdit(row: MessageRuleRow) {
+  Object.assign(ruleForm, row)
+  ruleDialog.error = ''
+  ruleDialog.isCreate = false
+  ruleDialog.visible = true
+}
+async function submitRule() {
+  if (!ruleForm.event_action || !ruleForm.template_code) {
+    ruleDialog.error = '事件动作与模板必填'
+    return
+  }
+  ruleDialog.loading = true
+  ruleDialog.error = ''
+  try {
+    // upsert 按 biz_type+event_action 定位（同键保存=改绑）——id 不参与；且 model.ID 为 json:",string"，
+    // 空串会 ShouldBindJSON 失败落「参数错误」，故载荷剔 id
+    const body: Omit<MessageRuleRow, 'id'> = { ...ruleForm }
+    delete (body as Record<string, unknown>).id
+    await upsertMessageRuleApi(body)
+    ruleDialog.visible = false
+    ElMessage.success(ruleDialog.isCreate ? '规则已创建' : '规则已保存')
+    await fetchRules()
+  } catch (e: unknown) {
+    ruleDialog.error = (e as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '保存失败'
+  } finally { ruleDialog.loading = false }
+}
+async function onRuleDelete(row: MessageRuleRow) {
+  try {
+    await ElMessageBox.confirm(`确认删除规则 ${row.biz_type}:${row.event_action}？删除后该事件不再发通知。`, '危险操作',
+      { type: 'warning', confirmButtonText: '删除', confirmButtonClass: 'el-button--danger' })
+  } catch { return }
+  try {
+    await deleteMessageRuleApi(row.id)
+    ElMessage.success('已删除')
+    await fetchRules()
+  } catch (e: unknown) {
+    ElMessage.error((e as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '删除失败')
+  }
+}
+
+onMounted(() => { fetchTemplates(); fetchRules(); fetchLogs() })
+</script>

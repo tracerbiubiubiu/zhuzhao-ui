@@ -7,19 +7,26 @@
  * - offset 分页（ProTable）；行展开显 request_body/user_agent（审计溯源载荷）
  * - P4-8 对账/指标极简查询页：后端本体未开工（穿插池件），本页不含——随本体批交付
  */
+import { formatDateTime } from '@/utils/datetime'
 import { reactive, ref, watch } from 'vue'
-import { ElAlert, ElButton, ElCard, ElDatePicker, ElDescriptions, ElDescriptionsItem, ElDialog, ElForm, ElFormItem, ElInput, ElOption, ElPagination, ElSelect, ElTabPane, ElTable, ElTableColumn, ElTabs, ElTag } from 'element-plus'
+import { ElMessage, ElAlert, ElButton, ElCard, ElDatePicker, ElDescriptions, ElDescriptionsItem, ElDrawer, ElInput, ElOption, ElPagination, ElSelect, ElTabPane, ElTable, ElTableColumn, ElTabs, ElTag, ElRadioButton, ElRadioGroup} from 'element-plus'
 import ProTable from '@/components/ProTable/index.vue'
 import UserNameText from '@/components/UserNameText/index.vue'
 import type { ProTableColumn } from '@/components/ProTable/types'
 import { listAuditLogsApi, type AuditLogRow, listPanicsApi, reconcileAuditApi, type PanicRow } from '@/api/audit'
-import { useAutoFilterRun, useTableFit } from '@vea/hooks'
+import FilterBar from '@/components/FilterBar/index.vue'
+import { useAutoFilterRun, useDatePresetRange, useTableFit } from '@vea/hooks'
 
 // keep-alive 契约：name=动态路由名（菜单 code audit_log，组件路径 audit/log/index）
 defineOptions({ name: 'audit_log_page' })
 
 const tableRef = ref<InstanceType<typeof ProTable>>()
-const search = reactive({ employee_no: '', path: '', method: '', range: [] as string[] })
+const search = reactive({ employee_no: '', path: '', method: [] as string[], range: [] as string[] })
+// 日期快捷段（2026-10-29 统一形态批）：preset 选择/重置驱动 search.range
+const datePreset = useDatePresetRange()
+const presetValue = datePreset.preset
+const applyPreset = datePreset.apply
+watch(datePreset.range, (r) => { search.range = (r ?? []) as string[] })
 
 // 筛选即时生效（筛选栏配方触发口径：全部控件变更即查，文本防抖 300ms 收敛）
 useAutoFilterRun(
@@ -30,8 +37,9 @@ useAutoFilterRun(
 function onReset() {
   search.employee_no = ''
   search.path = ''
-  search.method = ''
+  search.method = []
   search.range = []
+  datePreset.reset()
   tableRef.value?.refresh({ resetPage: true })
 }
 
@@ -41,7 +49,7 @@ function fetcher(params: { page: number; page_size: number }) {
     page_size: params.page_size,
     ...(search.employee_no ? { employee_no: search.employee_no.trim() } : {}),
     ...(search.path ? { path: search.path.trim() } : {}),
-    ...(search.method ? { method: search.method } : {}),
+    ...(search.method.length ? { method: search.method.join(',') } : {}),
     ...(search.range?.[0] ? { start: String(search.range[0]) } : {}),
     ...(search.range?.[1] ? { end: String(search.range[1]) } : {}),
   })
@@ -69,7 +77,7 @@ function statusTag(code: number): 'success' | 'danger' | 'warning' {
 
 function formatTime(iso?: string): string {
   if (!iso) return '—'
-  return new Date(iso).toLocaleString('zh-CN', { hour12: false })
+  return formatDateTime(iso)
 }
 
 const payloadVisible = ref(false)
@@ -87,6 +95,22 @@ function prettyBody(row: AuditLogRow): string {
     return JSON.stringify(JSON.parse(row.request_body), null, 2)
   } catch {
     return row.request_body
+  }
+}
+
+/** 一键复制请求报文（格式化 JSON；空报文提示） */
+async function copyRequestBody() {
+  if (!payloadRow.value) return
+  const text = prettyBody(payloadRow.value)
+  if (!text || text === '（无 body）') {
+    ElMessage.info('该请求无报文（GET 类或空 body）')
+    return
+  }
+  try {
+    await navigator.clipboard.writeText(text)
+    ElMessage.success('已复制请求报文')
+  } catch {
+    ElMessage.error('复制失败（浏览器剪贴板权限）')
   }
 }
 
@@ -127,6 +151,23 @@ async function runReconcile() {
 
 const panicsTable = ref()
 useTableFit(panicsTable, () => panics.value)
+
+// panic 详情抽屉（聚合行点「详情」——stack 为该指纹最近一次的完整恢复栈）
+const panicDrawer = ref(false)
+const panicDetail = ref<PanicRow | null>(null)
+function openPanicDetail(row: PanicRow) {
+  panicDetail.value = row
+  panicDrawer.value = true
+}
+async function copyPanicStack() {
+  if (!panicDetail.value?.stack) return
+  try {
+    await navigator.clipboard.writeText(panicDetail.value.stack)
+    ElMessage.success('已复制恢复栈')
+  } catch {
+    ElMessage.error('复制失败（浏览器剪贴板权限）')
+  }
+}
 </script>
 
 <template>
@@ -134,31 +175,43 @@ useTableFit(panicsTable, () => panics.value)
     <el-tabs v-model="activeTab" class="fill-tabs">
       <el-tab-pane label="审计日志" name="logs">
     <el-card shadow="never">
-      <template #header><span class="font-semibold">审计日志</span></template>
       <ProTable ref="tableRef" :columns="columns" :fetcher="fetcher" fill>
         <template #search>
-          <el-form inline @submit.prevent>
-            <el-form-item label="工号">
-              <el-input v-model="search.employee_no" placeholder="如 E000001（含已删用户）" clearable class="!w-44" />
-            </el-form-item>
-            <el-form-item label="方法">
-              <el-select v-model="search.method" placeholder="全部" clearable class="!w-[110px]">
+          <FilterBar :visible="4">
+            <!-- placeholder 式+日期快捷段（2026-10-29 统一形态批：label 式/常驻 daterange 双漂移整改） -->
+            <div>
+              <el-input v-model="search.employee_no" placeholder="工号，如 E000001" clearable class="!w-[160px]" title="可查已删除用户的审计记录" />
+            </div>
+            <div>
+              <el-select v-model="search.method" multiple collapse-tags placeholder="全部方法" clearable class="!w-[150px]" data-testid="audit-method-filter">
                 <el-option v-for="m in ['GET', 'POST', 'PUT', 'DELETE', 'PATCH']" :key="m" :label="m" :value="m" />
               </el-select>
-            </el-form-item>
-            <el-form-item label="路径">
-              <el-input v-model="search.path" placeholder="如 /api/v1/users" clearable class="!w-52" />
-            </el-form-item>
-            <el-form-item label="时间范围">
+            </div>
+            <div>
+              <el-input v-model="search.path" placeholder="路径，如 /api/v1/users" clearable class="!w-[190px]" />
+            </div>
+            <div>
+              <el-radio-group
+                :model-value="presetValue" size="small"
+                @update:model-value="(v: string | number | boolean | undefined) => applyPreset(v)"
+              >
+                <el-radio-button value="">全部</el-radio-button>
+                <el-radio-button value="7d">近 7 天</el-radio-button>
+                <el-radio-button value="30d">近 30 天</el-radio-button>
+                <el-radio-button value="custom">自定义</el-radio-button>
+              </el-radio-group>
               <el-date-picker
-                v-model="search.range" type="daterange" value-format="YYYY-MM-DD"
-                start-placeholder="开始" end-placeholder="结束" class="!w-60"
+                v-if="presetValue === 'custom'"
+                :model-value="search.range" type="daterange" value-format="YYYY-MM-DD" format="MM-DD"
+                start-placeholder="起" end-placeholder="止" class="audit-daterange !flex-none"
+                :style="{ '--el-date-editor-width': '210px' }"
+                @update:model-value="(v: [string, string] | null) => { search.range = (v ?? []) as string[] }"
               />
-            </el-form-item>
-            <el-form-item class="ml-auto !mr-0">
+            </div>
+            <div class="ml-auto !mr-0" data-ignore>
               <el-button @click="onReset">重置</el-button>
-            </el-form-item>
-          </el-form>
+            </div>
+          </FilterBar>
         </template>
 
         <template #operator="{ row }">
@@ -181,11 +234,12 @@ useTableFit(panicsTable, () => panics.value)
     </el-card>
       </el-tab-pane>
 
-      <!-- P4-8 panic 聚合 -->
+      <!-- P4-8 panic 聚合：紧凑卡+max-height 魔数形态历经走查后（2026-10-30）被治理
+           批点名为视口锁定违例（100vh-325px 不随侧栏折叠/视口自愈）——改标准 fill 列表
+           面板：卡拉伸/表内滚/分页钉底，与同页主日志 tab（ProTable fill）同款 -->
       <el-tab-pane label="Panic 聚合" name="panics">
-        <el-card shadow="never">
-          <template #header><span class="font-semibold">Panic 聚合（同指纹计数——最近优先）</span></template>
-          <div class="min-h-0 flex-initial">
+        <el-card shadow="never" class="panics-card">
+          <div class="min-h-0 flex-1">
             <el-table ref="panicsTable" :data="panics" v-loading="panicsLoading" row-key="id" height="100%">
               <el-table-column prop="count" label="次数" width="80" align="center" />
               <el-table-column prop="path" label="路径" min-width="200" />
@@ -193,9 +247,14 @@ useTableFit(panicsTable, () => panics.value)
               <el-table-column prop="last_at" label="最近发生" width="170">
                 <template #default="{ row }">{{ formatTime((row as { last_at: string }).last_at) }}</template>
               </el-table-column>
+              <el-table-column label="操作" width="80" fixed="right">
+                <template #default="{ row }">
+                  <el-button link type="primary" size="small" @click="openPanicDetail(row as PanicRow)">详情</el-button>
+                </template>
+              </el-table-column>
             </el-table>
           </div>
-          <div class="mt-3 flex items-center justify-between">
+          <div class="mt-3 flex flex-none items-center justify-between">
             <span class="text-xs text-gray-400">共 {{ panicsTotal }} 个聚合指纹</span>
             <el-pagination
               :total="panicsTotal"
@@ -232,8 +291,15 @@ useTableFit(panicsTable, () => panics.value)
     </el-tabs>
 
     <!-- 审计载荷（request_body JSON 美化——溯源） -->
-    <!-- 请求详情：审计上下文全字段 + 请求体（载荷溯源）——2026-10-12 由「载荷」弹窗升级 -->
-    <el-dialog v-model="payloadVisible" :title="`#${payloadRow?.id ?? ''} 请求详情`" width="640px">
+    <!-- 请求详情：右侧抽屉（看报文时保留列表上下文——2026-10-28 走查批由居中弹窗改）
+         + 一键复制报文（格式化 JSON） -->
+    <el-drawer v-model="payloadVisible" :title="`#${payloadRow?.id ?? ''} 请求详情`" size="620px">
+      <template #header>
+        <div class="flex items-center gap-2">
+          <span class="font-semibold">#{{ payloadRow?.id ?? '' }} 请求详情</span>
+          <el-button link type="primary" size="small" data-testid="audit-copy-body" @click="copyRequestBody">复制报文</el-button>
+        </div>
+      </template>
       <el-descriptions v-if="payloadRow" :column="2" border size="small">
         <el-descriptions-item label="操作人">{{ payloadRow.username || '—' }}</el-descriptions-item>
         <el-descriptions-item label="时间">{{ formatTime(payloadRow.created_at) }}</el-descriptions-item>
@@ -250,6 +316,67 @@ useTableFit(panicsTable, () => panics.value)
           <pre class="whitespace-pre-wrap text-xs bg-gray-50 dark:bg-gray-800 p-3 rounded max-h-[280px] overflow-auto m-0">{{ prettyBody(payloadRow) }}</pre>
         </el-descriptions-item>
       </el-descriptions>
-    </el-dialog>
+    </el-drawer>
+
+    <!-- panic 详情抽屉（聚合行「详情」——恢复栈为该指纹最近一次）；panic-drawer 收紧
+         body 上下内边距（EP 默认 20px 上下各留一大截——2026-10-30 走查反馈） -->
+    <el-drawer v-model="panicDrawer" size="620px" class="panic-drawer">
+      <template #header>
+        <span class="font-semibold">Panic #{{ panicDetail?.id ?? '' }} 详情</span>
+      </template>
+      <!-- 恢复栈独立于 descriptions 做弹性区块（flex-1 吃满抽屉剩余高度）：全屏高+
+           栈面板撑满下部，短内容无死空白、长内容抽屉内滚动——fit-content（悬空）与
+           默认（底部大空白）两形态的合并解（2026-10-30 三轮走查拍板） -->
+      <el-descriptions v-if="panicDetail" :column="2" border size="small">
+        <el-descriptions-item label="消息" :span="2">
+          <span class="text-[var(--el-color-danger)] font-medium">{{ panicDetail.message }}</span>
+        </el-descriptions-item>
+        <el-descriptions-item label="路径" :span="2">{{ panicDetail.path }}</el-descriptions-item>
+        <el-descriptions-item label="次数">{{ panicDetail.count }}</el-descriptions-item>
+        <el-descriptions-item label="最近发生">{{ formatTime(panicDetail.last_at) }}</el-descriptions-item>
+        <el-descriptions-item label="首次发生" :span="2">{{ panicDetail.first_at ? formatTime(panicDetail.first_at) : '—' }}</el-descriptions-item>
+      </el-descriptions>
+      <div v-if="panicDetail" class="flex flex-col flex-1 min-h-0 mt-3">
+        <div class="flex items-center gap-2 mb-1">
+          <span class="text-sm font-medium">恢复栈</span>
+          <span class="text-xs text-gray-400">（最近一次）recovery 中间件捕获 · debug.Stack()</span>
+          <!-- 复制钉栈标题行右缘（所有者拍板：随栈区走比挂抽屉头语义更顺，名即「复制」） -->
+          <el-button
+            link type="primary" size="small" class="!ml-auto"
+            data-testid="audit-copy-stack" :disabled="!panicDetail.stack" @click="copyPanicStack"
+          >复制</el-button>
+        </div>
+        <!-- pre-wrap+break-all：长路径帧就地折行，横向只差一点的微滚动条不出现 -->
+        <pre
+          class="whitespace-pre-wrap break-all text-xs bg-gray-50 dark:bg-gray-800 p-3 rounded overflow-y-auto m-0 font-mono"
+          :class="panicDetail.stack ? 'flex-1 min-h-0' : ''"
+        >{{ panicDetail.stack || '（无栈记录）' }}</pre>
+      </div>
+    </el-drawer>
   </div>
 </template>
+
+<!-- 抽屉 teleport 到 body，scoped 不可达——全局窄名空间 .panic-drawer 仅此一处使用。
+     header margin-bottom EP 默认 32px（标题→表格 44px 的主凶）收到 10px；抽屉保持
+     EP 默认全视口高（fit-content 悬空已否——2026-10-30 三轮），body 转 flex 列让
+     恢复栈区块吃满剩余高度（消底部死空白，见模板内注释） -->
+<style>
+/* panics 卡：标准 fill 链——卡体 flex 列，表格区 flex:1 内滚（height=100% 解析到定高），
+   分页 flex-none 钉底；EP 内 body scoped 管不到，:deep 打通 */
+.panics-card :deep(.el-card__body) {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.panic-drawer .el-drawer__header {
+  margin-bottom: 10px;
+  padding: 16px 20px 0;
+}
+
+.panic-drawer .el-drawer__body {
+  display: flex;
+  flex-direction: column;
+  padding: 10px 20px 14px;
+}
+</style>

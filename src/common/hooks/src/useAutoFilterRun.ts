@@ -1,7 +1,7 @@
 import { watch } from 'vue'
 
 /**
- * useAutoFilterRun——筛选即时生效（frontend-standard.md「筛选栏配方」触发口径）：
+ * useAutoFilterRun——筛选即时生效（docs/design/frontend-ui.md「筛选栏配方」触发口径）：
  * watch 筛选态（deep）→ 防抖收敛 → run({ resetPage: true })。
  *
  * 口径：

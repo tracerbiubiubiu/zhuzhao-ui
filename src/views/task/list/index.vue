@@ -2,7 +2,8 @@
 /**
  * 任务中心（P4-W5；2026-10-13 交互批——三 Tab：运行记录/任务定义/死信，提交=运行记录
  *  页首主按钮+对话框。一期改造：运行序号列与筛选/定义下拉带默认参数/无参任务隐藏参数区
- *  （admin 视角；operator 的动作读端点与选单依赖 P5-S4 动作注册表读端点，暂保持 action 输入））
+ *  （admin 视角；S4 B4-1 起 operator 的 action 输入改**动作下拉**——数据源
+ *   GET /jobs/actions 最小读面，加载失败回退手填））
  *
  * - runs/jobs：offset 分页有 total（ProTable）；死信：{list,page,page_size} 无 total——
  *   按页号上一页/下一页（十三批「无 total 形态」）
@@ -12,21 +13,35 @@
  *   「勿填口令/密钥/PII」（共享队列全可见，E-⑤ 前端配合面）；64KB 上限前端预检
  * - jobs 写操作挂 task:manage；trigger 对 enabled=false 后端 409——按钮同步禁用
  * - 「只看我提交的」仅运行记录（submitted_by=me 由 zhuzhao 代理换 actor 透传）
+ * - 2026-11-03 死信排障批：Tab 红点改 mounted 探测驱动（原绑 deadList.length 首入
+ *   Tab 前恒隐——提醒失效）+ 死信详情 + **DeadLetterRow 类型对齐真实响应**
+ *   （原类型臆测：action/error/attempts/failed_at 字段实际不存在，列表 3/4 列恒空；
+ *   dev 实测真实形状=type/state/last_error/retried/max_retry/last_failed_at）
+ * - 同日弹层形态批：任务详情/死信详情 dialog→右抽屉 620px（详情=抽屉/动作=对话框
+ *   全仓统一，docs/design/frontend-ui.md §弹层形态；表单类 提交任务/新建任务定义 仍 dialog）
+ * - 同日定义管理批：任务定义行补详情抽屉（行数据直显零请求——GET 单查端点前后端均无，
+ *   04 号 §3.7 拆页前最小闭环）+编辑对话框（updateJob patch 全字段：cron/params/
+ *   description/dept/timeout_secs；action_id/trigger_type 上游无改口只读展示）；
+ *   运行记录提交人空值渲染「系统定时」标签——cron 定时触发上游显式留空（设计如此，
+ *   taskrunner cron.go「无用户参与」），手动提交经网关恒填 actor，空=系统归因
  */
+import { formatDateTime } from '@/utils/datetime'
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
+import FilterBar from '@/components/FilterBar/index.vue'
 import { useAutoFilterRun, useTableFit } from '@vea/hooks'
 import { usePermission } from '@/common/auth'
 import {
   ElAlert, ElBadge, ElButton, ElCard, ElDialog, ElForm, ElFormItem, ElInput, ElInputNumber,
   ElMessage, ElMessageBox, ElOption, ElSelect, ElSwitch, ElTabPane, ElTabs, ElTable,
-  ElTableColumn, ElTag, ElDescriptions, ElDescriptionsItem,
+  ElTableColumn, ElTag, ElDescriptions, ElDescriptionsItem, ElDrawer,
 } from 'element-plus'
 import ProTable from '@/components/ProTable/index.vue'
+import CronBuilder from '@/components/CronBuilder/index.vue'
 import type { ProTableColumn } from '@/components/ProTable/types'
 import {
-  cancelTaskApi, createJobApi, getTaskApi, listDeadLettersApi, listJobsApi, listRunsApi,
+  cancelTaskApi, createJobApi, getTaskApi, listDeadLettersApi, listJobActionsApi, listJobsApi, listRunsApi,
   retryTaskApi, submitTaskApi, triggerJobApi, updateJobApi,
-  RUN_STATUS, type DeadLetterRow, type TaskDetail, type TaskJobRow, type TaskRunRow,
+  RUN_STATUS, type DeadLetterRow, type JobActionRow, type TaskDetail, type TaskJobRow, type TaskRunRow,
 } from '@/api/task'
 
 // keep-alive 契约：name=动态路由名（菜单 code task_center，组件路径 task/list/index）
@@ -76,6 +91,7 @@ function jumpWaterline(key: string) {
 onMounted(() => {
   fetchWaterline()
   waterlineTimer = setInterval(fetchWaterline, 30_000)
+  probeDead()
 })
 onUnmounted(() => {
   if (waterlineTimer) clearInterval(waterlineTimer)
@@ -124,7 +140,8 @@ const runColumns: ProTableColumn[] = [
   { prop: 'status', label: '状态', width: 100, align: 'center', slot: 'status' },
   { prop: 'attempts', label: '次数', width: 70, align: 'center' },
   { prop: 'duration_ms', label: '耗时(ms)', width: 90, align: 'right' },
-  { prop: 'submitted_by', label: '提交人', minWidth: 120 },
+  // 提交人空值=cron 定时触发（上游显式留空）——渲染「系统定时」标签做审计归因，勿显示裸空白
+  { prop: 'submitted_by', label: '提交人', minWidth: 120, slot: 'submittedBy' },
   { prop: 'enqueued_at', label: '入队时间', width: 170, slot: 'time' },
   { prop: 'actions', label: '操作', width: 250, fixed: 'right', slot: 'actions', wrap: true },
 ]
@@ -202,9 +219,34 @@ async function onRetryDead(row: DeadLetterRow) {
     await retryTaskApi(row.task_id)
     ElMessage.success('已重新入队（死信移出）')
     fetchDead()
+    probeDead()
   } catch (err: unknown) {
     const resp = (err as { response?: { data?: { message?: string } } })?.response?.data
     ElMessage.error(resp?.message ?? '重试失败')
+  }
+}
+
+// ─── 死信详情（2026-11-03 排障批——行数据直显零请求：request_id/job_id/dept/attempts
+//   + params/error 全文；原表格仅 4 列，排障关键字段恰好都未展示）───
+const deadDetailVisible = ref(false)
+const deadDetail = ref<DeadLetterRow | null>(null)
+
+function openDeadDetail(row: DeadLetterRow) {
+  deadDetail.value = row
+  deadDetailVisible.value = true
+}
+
+// 红点数据源修正（2026-11-03）：原绑定 deadList.length 只在首入死信 Tab 后才可能亮——
+// 提醒语义失效；改为 mounted 静默探测 page_size=1（零成本），非空即亮，重试成功后复探。
+// 刻意不挂水位条 dead 计数（那是 job_runs/PG 语义，与死信 Tab asynq archived/Redis 不同源）
+const deadHasAny = ref(false)
+
+async function probeDead() {
+  try {
+    const res = await listDeadLettersApi({ page: 1, page_size: 1 })
+    deadHasAny.value = (res.list?.length ?? 0) > 0
+  } catch {
+    /* 探测失败不亮点——不与 Tab 拉取竞争，静默降级 */
   }
 }
 
@@ -224,7 +266,7 @@ const jobColumns: ProTableColumn[] = [
   { prop: 'enabled', label: '启用', width: 80, align: 'center', slot: 'enabled' },
   { prop: 'description', label: '说明', minWidth: 160 },
   { prop: 'updated_at', label: '更新时间', width: 170, slot: 'time' },
-  { prop: 'actions', label: '操作', width: 200, fixed: 'right', slot: 'jobActions', wrap: true },
+  { prop: 'actions', label: '操作', width: 240, fixed: 'right', slot: 'jobActions', wrap: true },
 ]
 
 async function onToggleJob(row: TaskJobRow, enabled: boolean) {
@@ -265,6 +307,7 @@ const jobForm = reactive({
 function openCreateJob() {
   jobError.value = ''
   Object.assign(jobForm, { action_id: '', trigger_type: 'cron', cron_spec: '', dept: '', timeout_secs: 0, description: '', paramsText: '{}' })
+  void loadActionOptions() // 定义表单动作下拉与提交对话框共数据源（懒加载/失败回退同款）
   jobVisible.value = true
 }
 
@@ -303,12 +346,117 @@ async function submitJob() {
   }
 }
 
+// ─── 任务定义详情（2026-11-03 定义管理批——行数据直显零请求：列表投影 TaskJobRow 全字段；
+//   GET 单查端点前后端均无，04 号 §3.7 拆页前最小闭环。形态=右抽屉 620px，params 长文
+//   配复制钮（audit-copy-body 配方：#header 槽 title+复制））───
+const jobDetailVisible = ref(false)
+const jobDetail = ref<TaskJobRow | null>(null)
+
+function openJobDetail(row: TaskJobRow) {
+  jobDetail.value = row
+  jobDetailVisible.value = true
+}
+
+const jobDetailParamsText = computed(() => (jobDetail.value ? jobParamsText(jobDetail.value.params) : ''))
+
+async function copyJobParams() {
+  if (!jobDetailParamsText.value) return
+  try {
+    await navigator.clipboard.writeText(jobDetailParamsText.value)
+    ElMessage.success('params 已复制')
+  } catch {
+    ElMessage.error('复制失败')
+  }
+}
+
+// ─── 编辑任务定义（2026-11-03 定义管理批——updateJob patch 指针语义：省略字段=不改；
+//   cron/params/description/dept/timeout_secs 可改，action_id/trigger_type 上游无改口
+//   只读展示；enabled 走行内开关不进表单（双入口漂移防））───
+const jobEditVisible = ref(false)
+const jobEditSaving = ref(false)
+const jobEditError = ref('')
+const jobEditForm = reactive({
+  job_id: '',
+  action_id: '',
+  trigger_type: '',
+  cron_spec: '',
+  dept: '',
+  timeout_secs: 0,
+  description: '',
+  paramsText: '{}',
+})
+
+function openJobEdit(row: TaskJobRow) {
+  jobEditError.value = ''
+  Object.assign(jobEditForm, {
+    job_id: row.job_id,
+    action_id: row.action_id,
+    trigger_type: row.trigger_type,
+    cron_spec: row.cron_spec,
+    dept: row.dept,
+    timeout_secs: row.timeout_secs,
+    description: row.description,
+    paramsText: jobParamsText(row.params) || '{}',
+  })
+  jobEditVisible.value = true
+}
+
+async function submitJobEdit() {
+  if (jobEditForm.trigger_type === 'cron' && !jobEditForm.cron_spec.trim()) {
+    jobEditError.value = 'cron 表达式不能为空'
+    return
+  }
+  // 空白=置空对象（上游禁 params 显式 null——{} 为合法清空形态）
+  let params: unknown = {}
+  if (jobEditForm.paramsText.trim()) {
+    try {
+      params = JSON.parse(jobEditForm.paramsText)
+    } catch {
+      jobEditError.value = 'params 须为合法 JSON'
+      return
+    }
+  }
+  jobEditSaving.value = true
+  jobEditError.value = ''
+  try {
+    await updateJobApi({
+      job_id: jobEditForm.job_id,
+      ...(jobEditForm.trigger_type === 'cron' ? { cron_spec: jobEditForm.cron_spec.trim() } : {}),
+      params,
+      description: jobEditForm.description,
+      dept: jobEditForm.dept.trim(),
+      ...(jobEditForm.timeout_secs ? { timeout_secs: jobEditForm.timeout_secs } : {}),
+    })
+    ElMessage.success('任务定义已更新')
+    jobEditVisible.value = false
+    jobsTableRef.value?.refresh()
+  } catch (err: unknown) {
+    const resp = (err as { response?: { data?: { message?: string } } })?.response?.data
+    jobEditError.value = resp?.message ?? '更新失败，请稍后重试'
+  } finally {
+    jobEditSaving.value = false
+  }
+}
+
 // ─── 提交任务（task:submit；受理≠成功——结果经查询获取）───
 // 交互（2026-10-13）：运行记录页首主按钮+对话框（原独立 Tab 收敛）。admin（task:manage）
 // =任务定义下拉自动补全+带出定义默认参数（无参定义隐藏参数区）；operator（仅 task:submit，
 // 无 /jobs 读权限——B13 数据面权限边界）暂保持 action 输入，选单依赖 P5-S4 动作注册表读端点
 const submitVisible = ref(false)
 const submitForm = reactive({ action: '', dept: '', timeout_secs: 0, paramsText: '' })
+// S4 B4-1：动作下拉数据（提交对话框 operator 分支 + 新建定义表弹窗共用；加载失败回退手填输入——降级不阻塞）
+const actionOptions = ref<JobActionRow[]>([])
+const actionOptionsFailed = ref(false)
+const actionLabel = (a: JobActionRow) => (a.name ? `${a.name}（${a.action_id}）` : a.action_id)
+
+async function loadActionOptions() {
+  if (actionOptions.value.length || actionOptionsFailed.value) return
+  try {
+    actionOptions.value = await listJobActionsApi()
+  } catch {
+    actionOptionsFailed.value = true // 回退手填（端点不可达不阻塞提交）
+  }
+}
 const submitBusy = ref(false)
 const submitError = ref('')
 const submittedId = ref('')
@@ -335,6 +483,7 @@ async function openSubmit() {
   submitError.value = ''
   submittedId.value = ''
   Object.assign(submitForm, { action: '', dept: '', timeout_secs: 0, paramsText: '' })
+  void loadActionOptions()
   selectedJobId.value = ''
   jobOptions.value = []
   if (canManageJobs.value) {
@@ -368,7 +517,7 @@ async function onSubmitTask() {
   // 真实边界在后端 task:submit，此处权限码不作任何业务许可判断
   const action = canManageJobs.value ? (selectedJob.value?.action_id ?? '') : submitForm.action
   if (!action.trim()) {
-    submitError.value = canManageJobs.value ? '请选择任务定义' : '请输入 action（须在服务端动作注册表内）'
+    submitError.value = canManageJobs.value ? '请选择任务定义' : '请选择动作'
     return
   }
   if (submitForm.paramsText.length > 64 * 1024) {
@@ -406,7 +555,7 @@ async function onSubmitTask() {
 
 function formatTime(iso?: string | null): string {
   if (!iso) return '—'
-  return new Date(iso).toLocaleString('zh-CN', { hour12: false })
+  return formatDateTime(iso)
 }
 
 const deadTable = ref()
@@ -442,35 +591,40 @@ useTableFit(deadTable, () => deadList.value)
               <div />
             </template>
             <template #search>
-              <el-form inline @submit.prevent>
-                <el-form-item label="序号">
-                  <el-input v-model="runsSearch.seq" placeholder="任务序号，如 135" clearable class="!w-28" />
-                </el-form-item>
-                <el-form-item label="链路追踪">
-                  <el-input v-model="runsSearch.request_id" placeholder="request_id 精确查（排障用）" clearable class="!w-52" />
-                </el-form-item>
-                <el-form-item label="动作">
-                  <el-input v-model="runsSearch.action" placeholder="action" clearable class="!w-36" />
-                </el-form-item>
-                <el-form-item label="状态">
-                  <el-select v-model="runsSearch.status" placeholder="全部" clearable class="!w-32">
+              <FilterBar :visible="4">
+                <!-- placeholder 式（筛选规范 v2 ⑧：禁 label 前缀敬语式，全仓形态统一 2026-10-29） -->
+                <div>
+                  <el-input v-model="runsSearch.seq" placeholder="任务序号，如 135" clearable class="!w-[140px]" />
+                </div>
+                <div>
+                  <el-input v-model="runsSearch.request_id" placeholder="request_id（排障）" clearable class="!w-[180px]" />
+                </div>
+                <div>
+                  <el-input v-model="runsSearch.action" placeholder="action" clearable class="!w-[120px]" />
+                </div>
+                <div>
+                  <el-select v-model="runsSearch.status" placeholder="全部状态" clearable class="!w-[110px]">
                     <el-option v-for="(v, k) in RUN_STATUS" :key="k" :label="v.label" :value="k" />
                   </el-select>
-                </el-form-item>
-                <el-form-item label="只看我提交的">
-                  <el-switch v-model="runsSearch.mine" />
-                </el-form-item>
-                <el-form-item class="ml-auto !mr-0">
+                </div>
+                <div>
+                  <el-switch v-model="runsSearch.mine" active-text="只看我提交的" />
+                </div>
+                <div class="ml-auto !mr-0" data-ignore>
                   <el-button @click="onResetRuns">重置</el-button>
-                </el-form-item>
+                </div>
 
-              </el-form>
+              </FilterBar>
             </template>
 
             <template #status="{ row }">
               <el-tag :type="statusInfo((row as TaskRunRow).status).tag" size="small">
                 {{ statusInfo((row as TaskRunRow).status).label }}
               </el-tag>
+            </template>
+            <template #submittedBy="{ row }">
+              <el-tag v-if="!(row as TaskRunRow).submitted_by" size="small" type="info">系统定时</el-tag>
+              <template v-else>{{ (row as TaskRunRow).submitted_by }}</template>
             </template>
             <template #time="{ row }">{{ formatTime((row as TaskRunRow).enqueued_at) }}</template>
             <template #actions="{ row }">
@@ -512,8 +666,10 @@ useTableFit(deadTable, () => deadList.value)
             </template>
             <template #time="{ row }">{{ formatTime((row as TaskJobRow).updated_at) }}</template>
             <template #jobActions="{ row }">
+              <el-button link type="primary" size="small" @click="openJobDetail(row as TaskJobRow)">详情</el-button>
+              <el-button v-permission="'task:manage'" link type="primary" size="small" @click="openJobEdit(row as TaskJobRow)">编辑</el-button>
               <el-button
-                v-permission="'task:manage'" link type="primary" size="small"
+                v-permission="'task:manage'" link type="warning" size="small"
                 :disabled="!(row as TaskJobRow).enabled"
                 @click="onTriggerJob(row as TaskJobRow)"
               >手动触发</el-button>
@@ -521,21 +677,26 @@ useTableFit(deadTable, () => deadList.value)
           </ProTable>
         </el-tab-pane>
 
-        <!-- ── Tab3 死信（第三位——需人工介入的告警面）（只读+重试；无 total 按页号翻；红点=存在待处理死信） ── -->
+        <!-- ── Tab3 死信（第三位——需人工介入的告警面）（只读+详情/重试；无 total 按页号翻；
+             红点=探测有死信（mounted 即探，不依赖首入 Tab）） ── -->
         <el-tab-pane name="dead">
           <template #label>
-            <el-badge is-dot :hidden="!deadList.length" type="danger">死信</el-badge>
+            <el-badge is-dot :hidden="!deadHasAny" type="danger">死信</el-badge>
           </template>
           <div class="min-h-0 flex-initial">
             <el-table ref="deadTable" :data="deadList" v-loading="deadLoading" row-key="task_id" height="100%">
-            <el-table-column prop="task_id" label="任务 ID" min-width="210" show-overflow-tooltip />
-            <el-table-column prop="action" label="动作" width="150" show-overflow-tooltip />
-            <el-table-column prop="error" label="最后错误" min-width="220" show-overflow-tooltip />
-            <el-table-column prop="failed_at" label="失败时间" width="170">
-              <template #default="{ row }">{{ formatTime((row as DeadLetterRow).failed_at) }}</template>
+            <el-table-column prop="task_id" label="任务 ID" min-width="200" show-overflow-tooltip />
+            <el-table-column prop="type" label="类型" min-width="150" show-overflow-tooltip />
+            <el-table-column prop="last_error" label="最后错误" min-width="220" show-overflow-tooltip />
+            <el-table-column label="已重试" width="90" align="center">
+              <template #default="{ row }">{{ (row as DeadLetterRow).retried ?? '—' }} / {{ (row as DeadLetterRow).max_retry ?? '—' }}</template>
             </el-table-column>
-            <el-table-column label="操作" width="110" fixed="right">
+            <el-table-column prop="last_failed_at" label="失败时间" width="170">
+              <template #default="{ row }">{{ formatTime((row as DeadLetterRow).last_failed_at) }}</template>
+            </el-table-column>
+            <el-table-column label="操作" width="150" fixed="right">
               <template #default="{ row }">
+                <el-button link type="primary" size="small" @click="openDeadDetail(row as DeadLetterRow)">详情</el-button>
                 <el-button
                   v-permission="'task:operate'" link type="danger" size="small"
                   @click="onRetryDead(row as DeadLetterRow)"
@@ -556,8 +717,8 @@ useTableFit(deadTable, () => deadList.value)
       </el-tabs>
     </el-card>
 
-    <!-- 任务详情（job_runs 快照 + live_state） -->
-    <el-dialog v-model="detailVisible" title="任务详情" width="720px">
+    <!-- 任务详情（job_runs 快照 + live_state）——详情=右抽屉统一形态（docs/design/frontend-ui.md §弹层形态，长文档 620px） -->
+    <el-drawer v-model="detailVisible" title="任务详情" size="620px">
       <div v-loading="detailLoading">
         <template v-if="detail">
           <el-descriptions :column="2" border>
@@ -568,7 +729,10 @@ useTableFit(deadTable, () => deadList.value)
               {{ statusInfo(detail.status).label }}
               <el-tag v-if="detail.live_state" size="small" class="ml-2">实时：{{ detail.live_state }}</el-tag>
             </el-descriptions-item>
-            <el-descriptions-item label="提交人">{{ detail.submitted_by }}</el-descriptions-item>
+            <el-descriptions-item label="提交人">
+              <el-tag v-if="!detail.submitted_by" size="small" type="info">系统定时</el-tag>
+              <template v-else>{{ detail.submitted_by }}</template>
+            </el-descriptions-item>
             <el-descriptions-item label="耗时">{{ detail.duration_ms }} ms / {{ detail.attempts }} 次</el-descriptions-item>
             <el-descriptions-item label="入队">{{ formatTime(detail.enqueued_at) }}</el-descriptions-item>
             <el-descriptions-item label="完成">{{ formatTime(detail.finished_at) }}</el-descriptions-item>
@@ -584,10 +748,67 @@ useTableFit(deadTable, () => deadList.value)
         </template>
         <div v-else-if="!detailLoading" class="text-sm text-gray-400">未查到该任务</div>
       </div>
-    </el-dialog>
+    </el-drawer>
+
+    <!-- 死信详情（2026-11-03 排障批——行数据直显零请求；真实字段 type/state/重试账 + last_error 全文；
+         原臆测字段 request_id/job_id/dept/params 在 asynq archived 投影中不存在，dev 实测取证后删除。
+         形态=右抽屉 620px（docs/design/frontend-ui.md §弹层形态长文档，与审计请求详情/Panic 详情齐平）） -->
+    <el-drawer v-model="deadDetailVisible" title="死信详情" size="620px">
+      <template v-if="deadDetail">
+        <el-descriptions :column="2" border>
+          <el-descriptions-item label="任务 ID" :span="2">{{ deadDetail.task_id }}</el-descriptions-item>
+          <el-descriptions-item label="类型">{{ deadDetail.type || '—' }}</el-descriptions-item>
+          <el-descriptions-item label="状态">{{ deadDetail.state || '—' }}</el-descriptions-item>
+          <el-descriptions-item label="已重试">{{ deadDetail.retried ?? '—' }}</el-descriptions-item>
+          <el-descriptions-item label="重试上限">{{ deadDetail.max_retry ?? '—' }}</el-descriptions-item>
+          <el-descriptions-item label="失败时间" :span="2">{{ formatTime(deadDetail.last_failed_at) }}</el-descriptions-item>
+        </el-descriptions>
+        <div class="mt-3">
+          <div class="text-xs text-gray-400 mb-1">最后错误（全文）</div>
+          <pre class="whitespace-pre-wrap text-xs text-[var(--el-color-danger)] bg-gray-50 dark:bg-gray-800 p-2 rounded">{{ deadDetail.last_error || '（无）' }}</pre>
+        </div>
+      </template>
+    </el-drawer>
+
+    <!-- 任务定义详情（2026-11-03 定义管理批——行数据直显零请求；右抽屉 620px 同任务/死信详情，
+         params 长文配复制钮在 #header 槽） -->
+    <el-drawer v-model="jobDetailVisible" size="620px">
+      <template #header>
+        <div class="flex items-center gap-2">
+          <span class="font-semibold">任务定义详情</span>
+          <el-button v-if="jobDetailParamsText" link type="primary" size="small" data-testid="job-copy-params" @click="copyJobParams">复制 params</el-button>
+        </div>
+      </template>
+      <template v-if="jobDetail">
+        <el-descriptions :column="2" border>
+          <el-descriptions-item label="任务 ID" :span="2">{{ jobDetail.job_id }}</el-descriptions-item>
+          <el-descriptions-item label="动作">{{ jobDetail.action_id }}</el-descriptions-item>
+          <el-descriptions-item label="触发">
+            <el-tag size="small" :type="jobDetail.trigger_type === 'cron' ? 'warning' : 'info'">
+              {{ jobDetail.trigger_type === 'cron' ? '定时' : jobDetail.trigger_type }}
+            </el-tag>
+          </el-descriptions-item>
+          <el-descriptions-item label="cron 表达式">{{ jobDetail.trigger_type === 'cron' ? jobDetail.cron_spec : '—' }}</el-descriptions-item>
+          <el-descriptions-item label="归属">{{ jobDetail.dept || '—' }}</el-descriptions-item>
+          <el-descriptions-item label="启用">
+            <el-tag size="small" :type="jobDetail.enabled ? 'success' : 'info'">{{ jobDetail.enabled ? '启用' : '停用' }}</el-tag>
+          </el-descriptions-item>
+          <el-descriptions-item label="超时（秒）">{{ jobDetail.timeout_secs || '默认 30s' }}</el-descriptions-item>
+          <el-descriptions-item label="创建人">{{ jobDetail.created_by || '—' }}</el-descriptions-item>
+          <el-descriptions-item label="归属服务">{{ jobDetail.owner_service || '—' }}</el-descriptions-item>
+          <el-descriptions-item label="创建时间">{{ formatTime(jobDetail.created_at) }}</el-descriptions-item>
+          <el-descriptions-item label="更新时间">{{ formatTime(jobDetail.updated_at) }}</el-descriptions-item>
+          <el-descriptions-item label="说明" :span="2">{{ jobDetail.description || '—' }}</el-descriptions-item>
+        </el-descriptions>
+        <div class="mt-3">
+          <div class="text-xs text-gray-400 mb-1">params（定义级默认参数）</div>
+          <pre class="whitespace-pre-wrap text-xs bg-gray-50 dark:bg-gray-800 p-2 rounded">{{ jobDetailParamsText || '（无）' }}</pre>
+        </div>
+      </template>
+    </el-drawer>
 
     <!-- 提交任务（admin=定义下拉带默认参数；operator=action 输入——P5-S4 读端点后统一选单） -->
-    <el-dialog v-model="submitVisible" title="提交任务" width="560px">
+    <el-dialog :close-on-click-modal="false" v-model="submitVisible" title="提交任务" width="560px">
       <el-alert
         title="提交≠执行成功：受理后由队列异步执行，结果在「运行记录」查询"
         type="info" show-icon :closable="false" class="mb-4"
@@ -602,14 +823,23 @@ useTableFit(deadTable, () => deadList.value)
             <el-option v-for="j in jobOptions" :key="j.job_id" :label="jobLabel(j)" :value="j.job_id" />
           </el-select>
         </el-form-item>
-        <el-form-item v-else label="action" required>
-          <el-input v-model="submitForm.action" placeholder="服务端动作注册表内的 action_id" />
+        <el-form-item v-else label="动作" required>
+          <el-select
+            v-if="!actionOptionsFailed"
+            v-model="submitForm.action" filterable placeholder="选择动作（可搜索）" class="!w-[320px]" data-testid="action-select"
+          >
+            <el-option v-for="a in actionOptions" :key="a.action_id" :label="actionLabel(a)" :value="a.action_id">
+              <span>{{ actionLabel(a) }}</span>
+              <span v-if="a.description" class="text-xs text-gray-400 ml-2">{{ a.description }}</span>
+            </el-option>
+          </el-select>
+          <el-input v-else v-model="submitForm.action" placeholder="action_id（回退手填）" title="动作清单加载失败时的手填回退" />
         </el-form-item>
         <el-form-item label="归属标签">
           <el-input v-model="submitForm.dept" placeholder="dept（可选）" />
         </el-form-item>
         <el-form-item label="超时（秒）">
-          <el-input-number v-model="submitForm.timeout_secs" :min="0" :max="86400" />
+          <el-input-number v-model="submitForm.timeout_secs" :min="0" :max="86400" :controls="false" />
           <span class="text-xs text-gray-400 ml-2">0=默认 30s</span>
         </el-form-item>
         <el-form-item v-if="showSubmitParams" label="params">
@@ -626,11 +856,21 @@ useTableFit(deadTable, () => deadList.value)
     </el-dialog>
 
     <!-- 新建任务定义 -->
-    <el-dialog v-model="jobVisible" title="新建任务定义" width="560px">
+    <el-dialog :close-on-click-modal="false" v-model="jobVisible" title="新建任务定义" width="560px">
       <el-alert v-if="jobError" :title="jobError" type="error" show-icon class="mb-4" :closable="false" />
       <el-form label-width="100px">
-        <el-form-item label="action_id" required>
-          <el-input v-model="jobForm.action_id" placeholder="服务端动作注册表内" />
+        <el-form-item label="动作" required>
+          <!-- 手填 action_id 改动作下拉（与提交对话框同款：注册表清单可搜索、描述随行、加载失败回退手填） -->
+          <el-select
+            v-if="!actionOptionsFailed"
+            v-model="jobForm.action_id" filterable placeholder="选择动作（可搜索）" class="!w-[320px]" data-testid="job-action-select"
+          >
+            <el-option v-for="a in actionOptions" :key="a.action_id" :label="actionLabel(a)" :value="a.action_id">
+              <span>{{ actionLabel(a) }}</span>
+              <span v-if="a.description" class="text-xs text-gray-400 ml-2">{{ a.description }}</span>
+            </el-option>
+          </el-select>
+          <el-input v-else v-model="jobForm.action_id" placeholder="action_id（回退手填）" title="动作清单加载失败时的手填回退" />
         </el-form-item>
         <el-form-item label="触发类型">
           <el-select v-model="jobForm.trigger_type" class="!w-40">
@@ -639,13 +879,14 @@ useTableFit(deadTable, () => deadList.value)
           </el-select>
         </el-form-item>
         <el-form-item v-if="jobForm.trigger_type === 'cron'" label="cron 表达式">
-          <el-input v-model="jobForm.cron_spec" placeholder="如 0 3 * * *（每日 3 点）" />
+          <!-- S4 B4-2：cron 构造器（预设/专家双模式——产物仍 cron_spec 五段，taskrunner 零改动） -->
+          <CronBuilder v-model="jobForm.cron_spec" />
         </el-form-item>
         <el-form-item label="归属标签">
           <el-input v-model="jobForm.dept" placeholder="dept（可选）" />
         </el-form-item>
         <el-form-item label="超时（秒）">
-          <el-input-number v-model="jobForm.timeout_secs" :min="0" :max="86400" />
+          <el-input-number v-model="jobForm.timeout_secs" :min="0" :max="86400" :controls="false" />
         </el-form-item>
         <el-form-item label="说明">
           <el-input v-model="jobForm.description" />
@@ -658,6 +899,49 @@ useTableFit(deadTable, () => deadList.value)
       <template #footer>
         <el-button @click="jobVisible = false">取消</el-button>
         <el-button type="primary" :loading="jobSaving" @click="submitJob">创建</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 编辑任务定义（2026-11-03 定义管理批——updateJob patch：cron/params/description/
+         dept/timeout_secs 可改；action_id/trigger_type 上游无改口、enabled 走行内开关） -->
+    <el-dialog :close-on-click-modal="false" v-model="jobEditVisible" title="编辑任务定义" width="560px">
+      <el-alert title="动作与触发类型创建后不可修改；启停用行内开关" type="info" show-icon :closable="false" class="mb-4" />
+      <el-alert v-if="jobEditError" :title="jobEditError" type="error" show-icon class="mb-4" :closable="false" />
+      <el-form label-width="100px">
+        <el-form-item label="任务 ID">
+          <span class="text-sm">{{ jobEditForm.job_id }}</span>
+        </el-form-item>
+        <el-form-item label="动作">
+          <span class="text-sm">{{ jobEditForm.action_id }}</span>
+        </el-form-item>
+        <el-form-item label="触发类型">
+          <el-tag size="small" :type="jobEditForm.trigger_type === 'cron' ? 'warning' : 'info'">
+            {{ jobEditForm.trigger_type === 'cron' ? '定时' : jobEditForm.trigger_type }}
+          </el-tag>
+        </el-form-item>
+        <el-form-item v-if="jobEditForm.trigger_type === 'cron'" label="cron 表达式">
+          <CronBuilder v-model="jobEditForm.cron_spec" />
+        </el-form-item>
+        <el-form-item label="归属标签">
+          <el-input v-model="jobEditForm.dept" placeholder="dept（可选）" />
+        </el-form-item>
+        <el-form-item label="超时（秒）">
+          <el-input-number v-model="jobEditForm.timeout_secs" :min="0" :max="86400" :controls="false" />
+          <span class="text-xs text-gray-400 ml-2">0=不修改</span>
+        </el-form-item>
+        <el-form-item label="说明">
+          <el-input v-model="jobEditForm.description" placeholder="说明（清空即移除）" />
+        </el-form-item>
+        <el-form-item label="params">
+          <el-input v-model="jobEditForm.paramsText" type="textarea" :rows="4" />
+          <div class="text-xs text-[var(--el-color-danger)] mt-1">
+            ⚠ 勿填写口令/密钥/PII（同提交表单口径）；清空=置为空对象（无参数）
+          </div>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="jobEditVisible = false">取消</el-button>
+        <el-button type="primary" :loading="jobEditSaving" @click="submitJobEdit">保存</el-button>
       </template>
     </el-dialog>
   </div>

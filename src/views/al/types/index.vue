@@ -7,10 +7,12 @@
  *   编辑器不拦破坏性操作，仅提示语义
  * - 废弃=幂等危险操作（deprecated 后数据写门关闭）；历史抽屉按 op/version 展示
  */
-import { computed, reactive, ref } from 'vue'
+import { apiErrorBody } from '@/utils/apiError'
+import { formatDateTime } from '@/utils/datetime'
+import { computed, reactive, ref, watch} from 'vue'
 import { useTableFit } from '@vea/hooks'
 import {
-  ElButton, ElCard, ElDrawer, ElForm, ElFormItem, ElInput, ElMessage, ElMessageBox,
+  ElButton, ElCard, ElDrawer, ElForm, ElFormItem, ElInput, ElEmpty, ElInputNumber, ElMessage, ElMessageBox, ElPagination,
   ElSwitch, ElTable, ElTableColumn, ElTag, ElSelect, ElOption, ElAlert,
   ElDialog,
 } from 'element-plus'
@@ -30,14 +32,21 @@ const rows = computed(() => typesQuery.data.value?.list ?? [])
 // 类型清单客户端筛选（筛选规范：关键字匹配类型名 + 状态过滤；即时生效）
 const typeFilter = ref('')
 const typeStatusFilter = ref<'' | 'active' | 'deprecated'>('')
+// 客户端分页（2026-10-29 击穿阈值整改：e2e 测试类型持续累积至 241 行——
+// 「全量内滚 ≤50 行」豁免失效，按规范升面板型分页；端点全量小列表零后端改动）
+const typePageSize = ref(20)
+const typePage = ref(1)
 const filteredRows = computed(() =>
-  rows.value.filter((t) => {
-    const kw = typeFilter.value.trim().toLowerCase()
-    if (kw && !t.type_name.toLowerCase().includes(kw)) return false
-    if (typeStatusFilter.value === 'active' && t.status !== 'active') return false
-    if (typeStatusFilter.value === 'deprecated' && t.status !== 'deprecated') return false
-    return true
-  }),
+  rows.value
+    .filter((t) => {
+      const kw = typeFilter.value.trim().toLowerCase()
+      if (kw && !t.type_name.toLowerCase().includes(kw)) return false
+      if (typeStatusFilter.value === 'active' && t.status !== 'active') return false
+      if (typeStatusFilter.value === 'deprecated' && t.status !== 'deprecated') return false
+      return true
+    })
+    // created_at 降序（新建在前——分页后新建项必在首页可见，E2E/用户同理）
+    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()),
 )
 
 function refresh() {
@@ -55,7 +64,20 @@ const editorForm = reactive({
   type_name: '',
   version: 0, // evolve 乐观锁（create 不用）
   fields: [] as AlFieldDef[],
+  uniqueFields: [] as string[], // 唯一键（标量组合——多源汇聚整体去重，2026-10-27 拍板）
 })
+
+const pagedTypeRows = computed(() =>
+  filteredRows.value.slice((typePage.value - 1) * typePageSize.value, typePage.value * typePageSize.value),
+)
+
+// 筛选变化回首页（分页配方）
+watch([typeFilter, typeStatusFilter], () => { typePage.value = 1 })
+
+/** 可作唯一键的标量字段（int/string；随字段行输入实时派生） */
+const uniqueKeyOptions = computed(() =>
+  editorForm.fields.filter((f) => (f.type === 'int' || f.type === 'string') && f.name.trim()).map((f) => f.name.trim()),
+)
 const formRef = ref<FormInstance>()
 
 const editorRules = {
@@ -71,6 +93,7 @@ function openCreate() {
   editorForm.type_name = ''
   editorForm.version = 0
   editorForm.fields = [{ name: '', type: 'string', required: false }]
+  editorForm.uniqueFields = []
   editorVisible.value = true
 }
 
@@ -80,6 +103,7 @@ function openEvolve(row: AlTypeDef) {
   editorForm.type_name = row.type_name
   editorForm.version = row.version
   editorForm.fields = row.fields.map((f) => ({ ...f }))
+  editorForm.uniqueFields = [...(row.unique_fields ?? [])]
   editorVisible.value = true
 }
 
@@ -94,25 +118,36 @@ function removeFieldRow(i: number) {
 async function submitEditor() {
   const valid = await formRef.value?.validate().catch(() => false)
   if (!valid) return
-  const fields = editorForm.fields.filter((f) => f.name.trim())
+  const fields = editorForm.fields
+    .filter((f) => f.name.trim())
+    // 约束键按类型剥离（后端注册校验对语义错配 422——提交前清干净）：
+    // int/int_list 无 max_chars；string/string_list 无 max_list_items
+    .map((f) => {
+      if (f.type === 'int' || f.type === 'int_list') return { ...f, max_chars: undefined }
+      if (f.type === 'string' || f.type === 'string_list') return { ...f, max_list_items: undefined }
+      return f
+    })
   if (!fields.length) {
     editorError.value = '至少定义一个字段'
     return
   }
+  // 唯一键清选：仅保留仍存在的标量字段（删行/改类型后残留选择清干净）
+  const scalarNames = new Set(fields.filter((f) => f.type === 'int' || f.type === 'string').map((f) => f.name.trim()))
+  const uniqueFields = editorForm.uniqueFields.filter((n) => scalarNames.has(n))
   editorSaving.value = true
   editorError.value = ''
   try {
     if (editorMode.value === 'create') {
-      await registerAlTypeApi({ type_name: editorForm.type_name.trim(), fields })
+      await registerAlTypeApi({ type_name: editorForm.type_name.trim(), fields, unique_fields: uniqueFields })
       ElMessage.success(`类型「${editorForm.type_name}」已注册`)
     } else {
-      await evolveAlTypeApi({ type_name: editorForm.type_name, fields, version: editorForm.version })
+      await evolveAlTypeApi({ type_name: editorForm.type_name, fields, unique_fields: uniqueFields, version: editorForm.version })
       ElMessage.success(`类型「${editorForm.type_name}」schema 已演进（v${editorForm.version + 1}）`)
     }
     editorVisible.value = false
     refresh()
   } catch (err: unknown) {
-    const resp = (err as { response?: { data?: { code?: number; message?: string } } })?.response?.data
+    const resp = apiErrorBody(err)
     if (resp?.code === 100008) {
       // activelist 跨服务码段（≠zhuzhao 10006）——版本冲突统一 409+100008
       editorError.value = '版本冲突：类型已被他人变更，关闭后重新打开编辑（乐观锁）'
@@ -169,7 +204,7 @@ function fieldSummary(fields: AlFieldDef[] | undefined): string {
 
 function formatTime(iso?: string): string {
   if (!iso) return '—'
-  return new Date(iso).toLocaleString('zh-CN', { hour12: false })
+  return formatDateTime(iso)
 }
 
 const typesTable = ref()
@@ -179,13 +214,7 @@ useTableFit(typesTable, () => rows.value)
 <template>
   <div class="fill-page p-4">
     <el-card shadow="never">
-      <template #header>
-        <div class="flex items-center justify-between">
-          <span class="font-semibold">活动类型</span>
-          <el-button v-permission="'activelist:type:manage'" type="primary" @click="openCreate">注册类型</el-button>
-        </div>
-      </template>
-
+      <!-- 工具行（卡片头收敛批 2026-10-30：按钮入工具行右——筛选栏「动作钉右」同款） -->
       <div class="mb-2 flex items-center gap-2 flex-none">
         <el-input v-model="typeFilter" placeholder="按类型名过滤" clearable size="small" class="!w-[200px]" />
         <el-select v-model="typeStatusFilter" placeholder="全部状态" clearable size="small" class="!w-[110px]">
@@ -193,9 +222,13 @@ useTableFit(typesTable, () => rows.value)
           <el-option label="已废弃" value="deprecated" />
         </el-select>
         <span class="text-xs text-gray-400">筛选即时生效</span>
+        <el-button v-permission="'activelist:type:manage'" type="primary" size="small" class="ml-auto !mr-0" @click="openCreate">注册类型</el-button>
       </div>
       <div class="min-h-0 flex-initial">
-        <el-table ref="typesTable" :data="filteredRows" v-loading="typesQuery.isLoading.value" row-key="type_name" height="100%">
+        <el-table ref="typesTable" :data="pagedTypeRows" v-loading="typesQuery.isLoading.value" row-key="type_name" height="100%">
+        <template #empty>
+          <el-empty description="暂无活动类型——「注册类型」创建，或调整筛选" :image-size="60" />
+        </template>
         <el-table-column prop="type_name" label="类型名" min-width="160" />
         <el-table-column label="状态" width="100" align="center">
           <template #default="{ row }">
@@ -226,11 +259,21 @@ useTableFit(typesTable, () => rows.value)
         </el-table-column>
       </el-table>
       </div>
+
+      <!-- 面板型分页（钉右+total 必显——分页统一约定；2026-10-29 击穿阈值整改） -->
+      <div class="mt-3 flex justify-end">
+        <el-pagination
+          v-model:current-page="typePage" v-model:page-size="typePageSize"
+          :page-sizes="[20, 50, 100]" :total="filteredRows.length"
+          layout="total, sizes, prev, pager, next"
+        />
+      </div>
     </el-card>
 
     <!-- 注册/演进共用编辑器 -->
     <el-dialog
       v-model="editorVisible"
+      :close-on-click-modal="false"
       :title="editorMode === 'create' ? '注册类型' : `演进「${editorForm.type_name}」（当前 v${editorForm.version}）`"
       width="640px"
     >
@@ -240,19 +283,59 @@ useTableFit(typesTable, () => rows.value)
           <el-input
             v-model="editorForm.type_name"
             :disabled="editorMode === 'evolve'"
-            placeholder="如 ip_blocklist（小写字母开头）"
+            placeholder="如 ip_blocklist" title="小写字母开头"
           />
         </el-form-item>
         <el-form-item label="字段定义">
           <div class="w-full">
-            <div v-for="(f, i) in editorForm.fields" :key="i" class="flex items-center gap-2 mb-2">
-              <el-input v-model="f.name" placeholder="字段名" class="!w-40" />
-              <el-select v-model="f.type" class="!w-32">
-                <el-option v-for="t in FIELD_TYPES" :key="t" :label="t" :value="t" />
+            <div v-for="(f, i) in editorForm.fields" :key="i" class="mb-2">
+              <div class="flex items-center gap-2">
+                <el-input v-model="f.name" placeholder="字段名" class="!w-40" />
+                <el-select v-model="f.type" class="!w-32">
+                  <el-option v-for="t in FIELD_TYPES" :key="t" :label="t" :value="t" />
+                </el-select>
+                <!-- 开/关双态同文案：关闭态药丸不再空白（走查反馈——点开才知道是什么开关） -->
+                <el-switch
+                  v-model="f.required" active-text="必填" inactive-text="必填"
+                  inline-prompt class="mr-1"
+                />
+                <el-switch v-model="f.sensitive" active-text="敏感" inactive-text="敏感" inline-prompt />
+                <el-button
+                  link type="danger" class="ml-auto"
+                  :disabled="editorForm.fields.length <= 1" @click="removeFieldRow(i)"
+                >删</el-button>
+              </div>
+              <!-- 约束行（随类型显隐；2026-10-27 拍板：字符上限/项数上限两级护栏） -->
+              <div v-if="f.type !== 'int'" class="flex items-center gap-2 mt-1 pl-1">
+                <template v-if="f.type === 'string' || f.type === 'string_list'">
+                  <span class="text-xs text-gray-400 flex-none">字符上限</span>
+                  <el-input-number
+                    v-model="f.max_chars" :min="0" :max="65535" :controls="false"
+                    placeholder="默认 255" class="!w-24" data-testid="al-field-maxchars"
+                    title="string/string_list 单值字符上限；留空=默认 255"
+                  />
+                </template>
+                <template v-if="f.type === 'int_list' || f.type === 'string_list'">
+                  <span class="text-xs text-gray-400 flex-none">项数上限</span>
+                  <el-input-number
+                    v-model="f.max_list_items" :min="0" :max="65535" :controls="false"
+                    placeholder="默认 100" class="!w-24" data-testid="al-field-maxlistitems"
+                    title="int_list/string_list 项数上限；留空=默认 100"
+                  />
+                </template>
+              </div>
+            </div>
+            <!-- 唯一键（2026-10-27 拍板）：标量组合，写路径对活跃行查重 409；
+                 选项随字段行实时派生（仅 int/string） -->
+            <div class="flex items-center gap-2 mt-1">
+              <span class="text-xs text-gray-400 flex-none">唯一键</span>
+              <el-select
+                v-model="editorForm.uniqueFields" multiple filterable collapse-tags
+                placeholder="无唯一键" title="可选；多源汇聚去重用" class="!w-full"
+                data-testid="al-unique-fields"
+              >
+                <el-option v-for="n in uniqueKeyOptions" :key="n" :label="n" :value="n" />
               </el-select>
-              <el-switch v-model="f.required" active-text="必填" inline-prompt class="mr-1" />
-              <el-switch v-model="f.sensitive" active-text="敏感" inline-prompt />
-              <el-button link type="danger" :disabled="editorForm.fields.length <= 1" @click="removeFieldRow(i)">删</el-button>
             </div>
             <el-button size="small" @click="addFieldRow">+ 添加字段</el-button>
             <div class="text-xs text-gray-400 mt-2">
@@ -270,12 +353,13 @@ useTableFit(typesTable, () => rows.value)
     </el-dialog>
 
     <!-- 变更历史 -->
-    <el-drawer v-model="historyVisible" :title="`「${historyType}」变更历史（新→旧）`" size="480px">
+    <el-drawer v-model="historyVisible" :title="`「${historyType}」变更历史（新→旧）`" size="560px">
       <div v-loading="historyLoading">
         <div v-for="(h, i) in historyRows" :key="i" class="mb-3 pb-3 border-b border-gray-100 last:border-0">
           <div class="flex items-center gap-2 text-sm">
             <el-tag size="small" :type="h.op === 'register' ? 'success' : 'warning'">{{ h.op }}</el-tag>
             <span class="text-gray-500">v{{ h.version }}</span>
+            <span v-if="h.changed_by" class="text-xs text-gray-500">{{ h.changed_by }}</span>
             <span class="text-xs text-gray-400 ml-auto">{{ formatTime(h.created_at) }}</span>
           </div>
           <div class="text-xs text-gray-500 mt-1">{{ fieldSummary(h.fields) }}</div>

@@ -1,8 +1,9 @@
 <script setup lang="ts">
-  import { computed, nextTick, ref, watch } from 'vue'
+  import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
   import { ElScrollbar, type ScrollbarInstance } from 'element-plus'
   import { useRouter } from 'vue-router'
   import { useI18n } from 'vue-i18n'
+  import Sortable from 'sortablejs'
   import { appConfig } from '@/config/app'
   import ContextMenu from '@/components/ContextMenu/index.vue'
   import type { ContextMenuSchema } from '@/components/ContextMenu/types'
@@ -18,6 +19,7 @@
 
   const tagsViewRef = ref<HTMLElement>()
   const scrollbarRef = ref<ScrollbarInstance>()
+  const listRef = ref<HTMLElement>()
   const routers = computed(() => permissionStore.routers)
   const visitedViews = computed(() => tagsViewStore.visitedViews)
   const activeTag = computed(() =>
@@ -40,6 +42,21 @@
     scrollbarRef.value?.wrapRef?.scrollBy({ left, behavior: 'smooth' })
   }
 
+  // 溢出导航（2026-11-03 业界对齐——Chrome/VS Code 形态）：箭头仅溢出时渲染，
+  // 页签区滚轮横滚（活动页签自动滚入为既有 moveActiveIntoView）
+  const tagsOverflow = ref(false)
+  const updateOverflow = () => {
+    const wrap = scrollbarRef.value?.wrapRef
+    tagsOverflow.value = !!wrap && wrap.scrollWidth > wrap.clientWidth + 1
+  }
+  const onTagsWheel = (e: WheelEvent) => {
+    // 纵向滚轮转横向滚动（页签条无纵向内容）
+    if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
+      scrollbarRef.value?.wrapRef?.scrollBy({ left: e.deltaY })
+      e.preventDefault()
+    }
+  }
+
   const navigateTo = (view?: TagView) => push(view?.fullPath || defaultPath.value)
 
   const closeTag = async (view: TagView) => {
@@ -51,6 +68,19 @@
     if (!wasActive) return
 
     await navigateTo(visitedViews.value[index] ?? visitedViews.value[index - 1])
+  }
+
+  // 中键关闭（2026-11-03 业界对齐批——浏览器页签惯例）：button=1 auxclick 触发关闭；
+  // mousedown 同键先行 preventDefault——压掉两类原生默认行为（Chromium 中键滚轮模式、
+  // 链接中键新开标签页）。affix 首页由 closeTag 内既有守卫兜住。
+  const onTagMouseDown = (e: MouseEvent) => {
+    if (e.button === 1) e.preventDefault()
+  }
+  const onTagAuxClick = (view: TagView, e: MouseEvent) => {
+    if (e.button === 1) {
+      e.preventDefault()
+      void closeTag(view)
+    }
   }
 
   const closeAllTags = async () => {
@@ -152,11 +182,60 @@
     },
     { immediate: true, flush: 'post' }
   )
+
+  // 溢出状态联动：页签数量/宽度变化（ResizeObserver）与滚动位置（scroll 事件）双路更新
+  watch(visitedViews, () => nextTick(updateOverflow))
+  let overflowObserver: ResizeObserver | undefined
+
+  // 拖拽排序（2026-11-03 批次②——Chrome/VS Code 页签形态，sortablejs 与 FormDesigner
+  // 画布同依赖）：affix 首页钉首位不可拖不可越（filter+onMove 双闸）；顺序以 store 为
+  // 唯一事实源——onEnd 先回滚 Sortable 的手动 DOM 搬移（vuedraggable 同款防漂移），
+  // 再 moveView 让 keyed v-for 按状态重排，杜绝两套 DOM 事实源竞争。
+  let sortable: Sortable | null = null
+  onMounted(() => {
+    if (listRef.value) {
+      sortable = Sortable.create(listRef.value, {
+        animation: 160,
+        filter: `.${prefixCls}__item--affix`,
+        onMove(evt) {
+          return !(evt.related as HTMLElement | undefined)?.classList.contains(
+            `${prefixCls}__item--affix`
+          )
+        },
+        onEnd(evt) {
+          const { item, from, oldIndex, newIndex } = evt
+          if (oldIndex == null || newIndex == null || oldIndex === newIndex) return
+          item.remove()
+          from.insertBefore(item, from.children[oldIndex] ?? null)
+          tagsViewStore.moveView(oldIndex, newIndex)
+        }
+      })
+    }
+    const wrap = scrollbarRef.value?.wrapRef
+    if (wrap) {
+      overflowObserver = new ResizeObserver(updateOverflow)
+      overflowObserver.observe(wrap)
+      wrap.addEventListener('scroll', updateOverflow, { passive: true })
+      // wheel 需非被动监听（preventDefault）——直接挂 wrap，绕过 EP 内部绑定
+      wrap.addEventListener('wheel', onTagsWheel, { passive: false })
+    }
+    updateOverflow()
+  })
+  onBeforeUnmount(() => {
+    sortable?.destroy()
+    overflowObserver?.disconnect()
+    const wrap = scrollbarRef.value?.wrapRef
+    if (wrap) {
+      wrap.removeEventListener('scroll', updateOverflow)
+      wrap.removeEventListener('wheel', onTagsWheel)
+    }
+  })
 </script>
 
 <template>
   <div ref="tagsViewRef" :id="prefixCls" :class="prefixCls">
     <button
+      v-if="tagsOverflow"
       :class="[`${prefixCls}__tool`, `${prefixCls}__tool--first`]"
       type="button"
       :title="t('common.scrollTagsLeft')"
@@ -167,8 +246,10 @@
     </button>
 
     <div :class="`${prefixCls}__viewport`">
+      <!-- wheel 只走 onMounted 挂在 wrap 上的非被动监听：ElScrollbar 单根且无 wheel emit，
+           模板再挂 @wheel 会经冒泡与 wrap 监听各触发一次 → scrollBy 双倍（2026-11-03 复核实证） -->
       <ElScrollbar ref="scrollbarRef" :class="`${prefixCls}__scrollbar`">
-        <div :class="`${prefixCls}__list`">
+        <div ref="listRef" :class="`${prefixCls}__list`">
           <ContextMenu
             v-for="item in visitedViews"
             :key="item.path"
@@ -177,6 +258,8 @@
               `${prefixCls}__item`,
               { [`${prefixCls}__item--affix`]: item.affix, 'is-active': isActive(item) }
             ]"
+            @mousedown="onTagMouseDown"
+            @auxclick="onTagAuxClick(item, $event)"
           >
             <div :class="`${prefixCls}__item-body`">
               <RouterLink :to="item.fullPath" :class="`${prefixCls}__link`">
@@ -199,6 +282,7 @@
     </div>
 
     <button
+      v-if="tagsOverflow"
       :class="`${prefixCls}__tool`"
       type="button"
       :title="t('common.scrollTagsRight')"

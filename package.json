@@ -21,22 +21,31 @@
     "lint:fix": "eslint . --fix",
     "test": "vitest run",
     "test:e2e": "playwright test",
+    "audit:prod": "pnpm audit --prod --registry=https://registry.npmjs.org",
+    "gate": "pnpm run lint && pnpm run typecheck && pnpm run test && pnpm run audit:prod && pnpm run build && pnpm run test:e2e",
     "codegen": "bash scripts/codegen.sh",
-    "clean": "rimraf dist dist-pro dist-dev dist-test node_modules/.cache"
+    "clean": "rimraf dist dist-pro dist-dev dist-test node_modules/.cache",
+    "hooks": "sh scripts/install-git-hooks.sh",
+    "commit-lint": "python3 scripts/commit-policy.py pending",
+    "test:commit-lint": "python3 scripts/test-commit-policy.py"
   },
   "dependencies": {
     "@iconify-icons/mdi": "^1.2.48",
     "@iconify/vue": "^5.0.3",
+    "@logicflow/core": "2.2.5",
     "@tanstack/vue-query": "^5.104.0",
     "@vueuse/core": "^14.4.0",
     "axios": "^1.20.0",
+    "cropperjs": "^1.7.0",
     "echarts": "^6.1.0",
     "element-plus": "2.14.4",
+    "md-editor-v3": "7.1.0",
     "nprogress": "^0.2.0",
     "pinia": "^4.0.2",
     "pinia-plugin-persistedstate": "^4.7.1",
+    "sortablejs": "^1.15.7",
     "vue": "3.5.43",
-    "vue-i18n": "11.4.8",
+    "vue-i18n": "11.4.16",
     "vue-router": "^5.2.0"
   },
   "devDependencies": {
@@ -44,6 +53,7 @@
     "@playwright/test": "^1.63.0",
     "@types/node": "^26.2.0",
     "@types/nprogress": "^0.2.3",
+    "@types/sortablejs": "^1.15.9",
     "@unocss/transformer-variant-group": "^66.7.5",
     "@vitejs/plugin-vue": "^6.0.8",
     "@vitejs/plugin-vue-jsx": "^5.1.6",
@@ -59,7 +69,7 @@
     "typescript": "^5.7.0",
     "unocss": "^66.7.5",
     "unplugin-element-plus": "0.10.0",
-    "vite": "8.2.1",
+    "vite": "8.3.4",
     "vitest": "^5.0.2",
     "vue-tsc": "^3.3.9"
   }

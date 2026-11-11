@@ -13,12 +13,14 @@
  * - 2026-10-12 两栏改版：类型选择由下拉改**左右双栏**（左类型清单分组+搜索，右数据区）——
  *   类型全集与废弃态一眼可见；废弃只读/门控语义不变
  */
+import { apiErrorBody } from '@/utils/apiError'
+import { formatDateTime } from '@/utils/datetime'
 import { computed, reactive, ref, watch } from 'vue'
 import { useTableFit } from '@vea/hooks'
 import {
-  ElAlert, ElButton, ElCard, ElDescriptions, ElDescriptionsItem, ElDialog, ElDrawer,
+  ElAlert, ElButton, ElCard, ElCheckbox, ElDescriptions, ElDescriptionsItem, ElDialog, ElDrawer,
   ElEmpty, ElForm, ElFormItem, ElInput, ElInputNumber, ElMessage, ElMessageBox,
-  ElTable, ElTableColumn, ElTag,
+  ElOption, ElSelect, ElTable, ElTableColumn, ElTag,
 } from 'element-plus'
 import { useRouter } from 'vue-router'
 import { useQuery } from '@tanstack/vue-query'
@@ -85,6 +87,8 @@ async function fetchPage(cursor: AlCursor | null) {
     const res = await listAlDataApi(selectedType.value, {
       page_size: pageSize.value,
       include_deleted: true,
+      ...(filt.q ? { q: filt.q } : {}),
+      ...(filt.field && filt.value ? { field: filt.field, value: filt.value } : {}),
       ...(cursor ? { after_created_at: cursor.after_created_at, after_id: cursor.after_id } : {}),
     })
     if (seq !== fetchSeq) return // 已切别的类型——弃置过期响应
@@ -109,7 +113,34 @@ function goPrev() {
   fetchPage(popCursor(cursorStack.value))
 }
 
+// ─── 搜索/筛选（2026-10-28：q 全标量字段模糊 + 字段/值精确——后端同批交付）───
+// 变更即查（筛选栏配方：文本 300ms 防抖）；筛选变更重置游标从头查
+const filt = reactive({ q: '', field: '', value: '' })
+const scalarFieldNames = computed(() =>
+  schema.value.filter((f) => f.type === 'int' || f.type === 'string').map((f) => f.name),
+)
+let filtTimer: ReturnType<typeof setTimeout> | undefined
+function scheduleFiltFetch() {
+  clearTimeout(filtTimer)
+  filtTimer = setTimeout(() => {
+    resetCursor(cursorStack.value)
+    fetchPage(null)
+  }, 300)
+}
+function resetFilt() {
+  clearTimeout(filtTimer)
+  filt.q = ''
+  filt.field = ''
+  filt.value = ''
+  resetCursor(cursorStack.value)
+  fetchPage(null)
+}
+
 watch(selectedType, () => {
+  clearTimeout(filtTimer)
+  filt.q = ''
+  filt.field = ''
+  filt.value = ''
   resetCursor(cursorStack.value)
   list.value = []
   fetchPage(null)
@@ -142,6 +173,7 @@ function toFormFieldValue(f: AlFieldDef, doc?: AlDataDoc): { value: unknown; tex
 }
 
 function openCreate() {
+  if (!selectedDef.value || isDeprecated.value) return
   formIsCreate.value = true
   formError.value = ''
   formData.value = {}
@@ -169,12 +201,29 @@ function openEdit(row: AlDataDoc) {
   formVisible.value = true
 }
 
-/** 表单值 → 提交 body（list 文本按行拆分；int_list 转 number[]） */
+/** 列表文本 → 项数组（容积分隔：换行/逗号/分号中英文皆可——Excel 列粘贴与
+ *  逗号串直接可用；trim + 剔空。校验与提交共用此解析，无第二份分隔语义） */
+function parseListLines(text: string | undefined): string[] {
+  return (text ?? '').split(/[\n,，;；]+/).map((s) => s.trim()).filter(Boolean)
+}
+
+/** 去重（保序，首个出现位留原值）写回文本域 */
+function dedupList(name: string) {
+  const lines = parseListLines(listText.value[name])
+  const seen = new Set<string>()
+  const out = lines.filter((s) => !seen.has(s) && seen.add(s))
+  const removed = lines.length - out.length
+  listText.value[name] = out.join('\n')
+  if (removed > 0) ElMessage.success(`已去重 ${removed} 项`)
+  else ElMessage.info('无重复项')
+}
+
+/** 表单值 → 提交 body（list 文本经 parseListLines 拆分；int_list 转 number[]） */
 function buildDataBody(): Record<string, unknown> {
   const out: Record<string, unknown> = {}
   for (const f of schema.value) {
     if (f.type === 'int_list' || f.type === 'string_list') {
-      const lines = (listText.value[f.name] ?? '').split('\n').map((s) => s.trim()).filter(Boolean)
+      const lines = parseListLines(listText.value[f.name])
       out[f.name] = f.type === 'int_list' ? lines.map(Number) : lines
     } else {
       const v = formData.value[f.name]
@@ -185,17 +234,36 @@ function buildDataBody(): Record<string, unknown> {
 }
 
 async function submitForm() {
-  // required 手检（动态 prop 校验在此场景过重——四类型封闭手检即可）
+  // required + 长度手检（动态 prop 校验在此场景过重——四类型封闭手检即可；
+  // 长度上限与后端 checkValue 同源语义：字符数非字节，0/缺省=255——2026-10-27 拍板）
   for (const f of schema.value) {
-    if (!f.required) continue
-    if (f.type === 'int_list' || f.type === 'string_list') {
-      if (!(listText.value[f.name] ?? '').trim()) {
+    if (f.required) {
+      if (f.type === 'int_list' || f.type === 'string_list') {
+        if (!parseListLines(listText.value[f.name]).length) {
+          formError.value = `「${f.name}」为必填`
+          return
+        }
+      } else if (formData.value[f.name] === undefined || formData.value[f.name] === '') {
         formError.value = `「${f.name}」为必填`
         return
       }
-    } else if (formData.value[f.name] === undefined || formData.value[f.name] === '') {
-      formError.value = `「${f.name}」为必填`
-      return
+    }
+    if (f.type === 'int_list' || f.type === 'string_list') {
+      const items = parseListLines(listText.value[f.name])
+      const itemLimit = f.max_list_items || 100
+      if (items.length > itemLimit) {
+        formError.value = `「${f.name}」共 ${items.length} 项，超上限 ${itemLimit}`
+        return
+      }
+    }
+    if (f.type === 'string_list') {
+      const limit = f.max_chars || 255
+      const lines = parseListLines(listText.value[f.name])
+      const bad = lines.findIndex((s) => [...s].length > limit)
+      if (bad >= 0) {
+        formError.value = `「${f.name}」第 ${bad + 1} 项超长（上限 ${limit} 字符）`
+        return
+      }
     }
   }
   formSaving.value = true
@@ -212,8 +280,10 @@ async function submitForm() {
     formVisible.value = false
     refresh()
   } catch (err: unknown) {
-    const resp = (err as { response?: { data?: { code?: number; message?: string } } })?.response?.data
-    if (resp?.code === 100008) {
+    const resp = apiErrorBody(err)
+    // 100008(CONFLICT) 双语义分档：版本冲突仅存在于更新路径（插入无乐观锁）；
+    // 插入态透传后端原文（唯一键冲突等——否则被误标成「版本冲突」）
+    if (!formIsCreate.value && resp?.code === 100008) {
       formError.value = '版本冲突：该行已被他人变更，关闭后重开编辑（乐观锁）'
     } else {
       formError.value = resp?.message ?? '保存失败，请稍后重试'
@@ -259,12 +329,13 @@ function rowClass({ row }: { row: AlDataDoc }): string {
 
 // ─── 导出/导入 ───
 async function onExport() {
+  const type = selectedType.value
   try {
-    const blob = await exportAlDataApi(selectedType.value)
+    const blob = await exportAlDataApi(type)
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `${selectedType.value}_${new Date().toISOString().slice(0, 10)}.json`
+    a.download = `${type}_${new Date().toISOString().slice(0, 10)}.json`
     a.click()
     URL.revokeObjectURL(url)
   } catch (err: unknown) {
@@ -273,43 +344,89 @@ async function onExport() {
   }
 }
 
+const IMPORT_MAX_BYTES = 1024 * 1024
 const importVisible = ref(false)
+const importType = ref('')
 const importText = ref('')
+const importReading = ref(false)
 const importBusy = ref(false)
 const importError = ref('')
 const importResult = ref('')
+const replaceConfirmed = ref(false)
+let importReadSeq = 0
+const importPayload = computed(() => importText.value.trim())
+const importFormatError = computed(() => {
+  if (!importPayload.value) return ''
+  if (new TextEncoder().encode(importPayload.value).length > IMPORT_MAX_BYTES) {
+    return '导入内容超过 1 MiB'
+  }
+  try {
+    if (Array.isArray(JSON.parse(importPayload.value))) return ''
+  } catch {
+    // 无效 JSON 与非数组同样不能确认。
+  }
+  return '导入内容须为有效的 JSON 数组'
+})
+const importReady = computed(() =>
+  importVisible.value && importType.value === selectedType.value && !isDeprecated.value
+  && !importReading.value && !importBusy.value && !!importPayload.value && !importFormatError.value,
+)
 
-function openImport() {
-  importText.value = ''
+function editImportText(value: string) {
+  ++importReadSeq
+  importReading.value = false
+  importText.value = value
   importError.value = ''
   importResult.value = ''
+  replaceConfirmed.value = false
+}
+
+function openImport() {
+  if (importBusy.value || !selectedType.value || isDeprecated.value) return
+  editImportText('')
+  importType.value = selectedType.value
   importVisible.value = true
 }
 
 async function onImportFile(ev: Event) {
-  const file = (ev.target as HTMLInputElement).files?.[0]
-  if (!file) return
-  if (file.size > 1024 * 1024) {
-    importError.value = '文件超过 1MB（网关实际上限——非 activelist 自身）'
+  const input = ev.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (!file || importBusy.value) return
+  // 换文件先撤销上一份内容的确认。允许随后重选同一文件。
+  input.value = ''
+  editImportText('')
+  if (file.size > IMPORT_MAX_BYTES) {
+    importError.value = '文件超过 1 MiB'
     return
   }
-  importText.value = await file.text()
+  const readSeq = importReadSeq
+  const isCurrentRead = () => readSeq === importReadSeq && importVisible.value
+  importReading.value = true
+  try {
+    const contents = await file.text()
+    if (isCurrentRead()) importText.value = contents
+  } catch {
+    if (isCurrentRead()) importError.value = '读取文件失败，请重新选择文件'
+  } finally {
+    if (isCurrentRead()) importReading.value = false
+  }
 }
 
 async function submitImport() {
-  if (!importText.value.trim()) {
-    importError.value = '请选择文件或粘贴 JSON 数组'
-    return
-  }
+  if (!importReady.value || !replaceConfirmed.value) return
+  const type = importType.value
+  const payload = importPayload.value
   importBusy.value = true
   importError.value = ''
+  importResult.value = ''
+  replaceConfirmed.value = false
   try {
-    const res = await importAlDataApi(selectedType.value, importText.value)
-    importResult.value = `导入完成：新增 ${res.inserted ?? '?'} 行${res.skipped ? `，跳过 ${res.skipped} 行` : ''}`
-    refresh()
+    const res = await importAlDataApi(type, payload)
+    importResult.value = `已替换为 ${res.rows} 行（清除原有 ${res.deleted} 行）`
+    ElMessage.warning(`导入为全量替换：已清除原有 ${res.deleted} 行`)
+    if (selectedType.value === type) refresh()
   } catch (err: unknown) {
-    const resp = (err as { response?: { data?: { message?: string } } })?.response?.data
-    importError.value = resp?.message ?? '导入失败，请检查 JSON 格式'
+    importError.value = apiErrorBody(err).message ?? '未能确认导入结果，请核对数据后重试'
   } finally {
     importBusy.value = false
   }
@@ -325,7 +442,7 @@ function cellText(f: AlFieldDef, row: AlDataDoc): string {
 
 function formatTime(iso?: string): string {
   if (!iso) return '—'
-  return new Date(iso).toLocaleString('zh-CN', { hour12: false })
+  return formatDateTime(iso)
 }
 
 // ─── 行详情抽屉（点行开——动态 schema 行的全字段视图；编辑/删除收进抽屉底部）───
@@ -434,20 +551,35 @@ useTableFit(dataTable, () => list.value)
           type="warning" show-icon :closable="false" class="mb-3"
         />
 
-        <el-empty v-if="!listLoading && !list.length" description="暂无数据">
+        <!-- 搜索/筛选（2026-10-28）：关键字全标量字段模糊 + 单字段精确；变更即查 300ms 防抖 -->
+        <div v-if="selectedType" class="flex flex-wrap items-center gap-4 mb-3">
+          <el-input
+            v-model="filt.q" placeholder="关键字（全字段模糊）" class="!w-[220px]" clearable
+            data-testid="al-data-q" @input="scheduleFiltFetch"
+          />
+          <el-select
+            v-model="filt.field" placeholder="筛选字段" clearable class="!w-[140px]"
+            data-testid="al-data-field" @change="scheduleFiltFetch"
+          >
+            <el-option v-for="n in scalarFieldNames" :key="n" :label="n" :value="n" />
+          </el-select>
+          <el-input
+            v-model="filt.value" placeholder="字段值（精确）" class="!w-[160px]" clearable
+            :disabled="!filt.field" data-testid="al-data-value" @input="scheduleFiltFetch"
+          />
+          <el-button size="small" @click="resetFilt">重置</el-button>
+        </div>
+
+        <el-empty v-if="selectedType && !listLoading && !list.length" description="暂无数据">
           <el-button v-if="!isDeprecated" v-permission="'activelist:data:write'" type="primary" @click="openCreate">写入首条</el-button>
         </el-empty>
-        <template v-else>
+        <template v-else-if="selectedType">
           <!-- min-h-0 flex-1 + height 100%：表格吃满剩余视口内部滚动（fill 链，与 ProTable 同款） -->
           <div class="min-h-0 flex-initial">
             <el-table ref="dataTable" :data="list" v-loading="listLoading" row-key="id" :row-class-name="rowClass" height="100%" @row-click="openDetail">
             <el-table-column prop="id" label="ID" width="90" />
-            <el-table-column label="状态" width="76" align="center">
-              <template #default="{ row }">
-                <el-tag v-if="(row as AlDataDoc).status === 'deleted'" size="small" type="info">已删除</el-tag>
-                <span v-else class="text-xs text-gray-300">—</span>
-              </template>
-            </el-table-column>
+            <!-- 状态列已移除（2026-10-28 走查）：软删行由整行灰态+操作列「恢复」承载，
+                 活跃行整列横线是纯噪音 -->
             <!-- 动态列：schema 驱动（sensitive 原样显示——脱敏属日志侧语义） -->
             <el-table-column
               v-for="f in schema" :key="f.name" :label="f.name" :min-width="140" show-overflow-tooltip
@@ -486,16 +618,28 @@ useTableFit(dataTable, () => list.value)
     </div>
 
     <!-- 写入/编辑（schema 驱动表单——四类型） -->
-    <el-dialog v-model="formVisible" :title="formIsCreate ? `写入「${selectedType}」` : `编辑 #${editing.id}`" width="560px">
+    <el-dialog :close-on-click-modal="false" v-model="formVisible" :title="formIsCreate ? `写入「${selectedType}」` : `编辑 #${editing.id}`" width="560px">
       <el-alert v-if="formError" :title="formError" type="error" show-icon class="mb-4" :closable="false" />
       <el-form label-width="120px">
         <el-form-item v-for="f in schema" :key="f.name" :label="f.name" :required="f.required">
-          <el-input-number v-if="f.type === 'int'" v-model="(formData[f.name] as number | undefined)" class="!w-48" />
-          <el-input v-else-if="f.type === 'string'" v-model="(formData[f.name] as string | undefined)" />
+          <el-input-number v-if="f.type === 'int'" v-model="(formData[f.name] as number | undefined)" :controls="false" class="!w-48" />
           <el-input
-            v-else v-model="listText[f.name]" type="textarea" :rows="3"
-            :placeholder="f.type === 'int_list' ? '每行一个整数' : '每行一项'"
+            v-else-if="f.type === 'string'" v-model="(formData[f.name] as string | undefined)"
+            :maxlength="f.max_chars || 255" show-word-limit clearable
           />
+          <template v-else>
+            <el-input
+              v-model="listText[f.name]" type="textarea" :rows="3" clearable
+              :placeholder="f.type === 'int_list' ? '每行一个整数，逗号分隔亦可' : '每行一项，逗号/分号分隔亦可'"
+            />
+            <div v-if="(listText[f.name] ?? '').trim()" class="flex items-center gap-2 mt-1">
+              <span
+                class="text-xs"
+                :class="parseListLines(listText[f.name]).length > (f.max_list_items || 100) ? 'text-red-500' : 'text-gray-400'"
+              >共 {{ parseListLines(listText[f.name]).length }} 项 / 上限 {{ f.max_list_items || 100 }}</span>
+              <el-button link type="primary" size="small" @click="dedupList(f.name)">去重</el-button>
+            </div>
+          </template>
         </el-form-item>
       </el-form>
       <template #footer>
@@ -504,24 +648,42 @@ useTableFit(dataTable, () => list.value)
       </template>
     </el-dialog>
 
-    <!-- 导入（JSON 数组与导出对称；网关上限 1MB） -->
-    <el-dialog v-model="importVisible" title="导入数据" width="560px">
-      <el-alert v-if="importError" :title="importError" type="error" show-icon class="mb-4" :closable="false" />
-      <el-alert v-if="importResult" :title="importResult" type="success" show-icon class="mb-4" :closable="false" />
-      <input type="file" accept=".json,application/json" class="mb-3" @change="onImportFile">
-      <el-input
-        v-model="importText" type="textarea" :rows="8"
-        placeholder='或直接粘贴 JSON 数组（与导出格式对称）：[{"data":{...}},...]'
+    <!-- 导入（JSON 数组；网关上限 1 MiB） -->
+    <el-dialog
+      v-model="importVisible"
+      :close-on-click-modal="false"
+      :close-on-press-escape="!importBusy"
+      :show-close="!importBusy"
+      destroy-on-close
+      title="导入数据（全量替换）"
+      width="560px"
+    >
+      <el-alert
+        title="导入为全量替换：将先清除该类型全部数据（含已删除行），再写入文件内容，不可撤销"
+        type="warning" show-icon :closable="false" class="mb-4"
       />
-      <div class="text-xs text-gray-400 mt-2">网关实际上限 1MB；格式校验失败整批不入（同事务）</div>
+      <el-alert v-if="importError || importFormatError" :title="importError || importFormatError" type="error" show-icon class="mb-4" :closable="false" />
+      <el-alert v-if="importResult" :title="importResult" type="success" show-icon class="mb-4" :closable="false" />
+      <input type="file" accept=".json,application/json" class="mb-3" :disabled="importBusy" @change="onImportFile">
+      <span v-if="importReading" class="ml-2 text-sm" role="status">正在读取文件…</span>
+      <el-input
+        :model-value="importText" type="textarea" :rows="8" :disabled="importBusy"
+        placeholder='[{"id":"1","status":"active","data":{"name":"示例"}}]'
+        @update:model-value="editImportText"
+      />
+      <div class="text-xs text-gray-400 mt-2">可粘贴 JSON 数组或选择文件。每行须包含正整数 ID 字符串，浏览器导入上限 1 MiB。导入空数组会清空数据。</div>
+      <el-checkbox v-model="replaceConfirmed" class="mt-2" :disabled="!importReady">
+        我已知晓导入会<span class="text-red-500 font-bold">清除「{{ importType }}」全部现有数据（含已删除行）</span>
+      </el-checkbox>
       <template #footer>
-        <el-button @click="importVisible = false">关闭</el-button>
-        <el-button type="primary" :loading="importBusy" @click="submitImport">导入</el-button>
+        <el-button :disabled="importBusy || importType !== selectedType" @click="onExport">导出当前数据</el-button>
+        <el-button :disabled="importBusy" @click="importVisible = false">关闭</el-button>
+        <el-button type="danger" :loading="importBusy" :disabled="!importReady || !replaceConfirmed" @click="submitImport">导入（替换）</el-button>
       </template>
     </el-dialog>
 
     <!-- 行详情抽屉：动态 schema 全字段 + 系统字段；编辑/删除收进底部（废弃类型随只读隐藏编辑） -->
-    <el-drawer v-model="detailVisible" :title="detailRow ? `数据详情 #${detailRow.id}` : '数据详情'" size="440px">
+    <el-drawer v-model="detailVisible" :title="detailRow ? `数据详情 #${detailRow.id}` : '数据详情'" size="560px">
       <el-descriptions v-if="detailRow" :column="1" border size="small">
         <el-descriptions-item v-for="f in schema" :key="f.name" :label="f.name">
           {{ cellText(f, detailRow as AlDataDoc) }}

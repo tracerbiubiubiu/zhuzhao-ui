@@ -32,8 +32,11 @@
 
       <div class="login-tools">
         <ThemeSwitch v-model="appStore.isDark" />
-        <span class="tool-divider"></span>
-        <LocaleDropdown color="var(--login-tool-color)" />
+        <!-- 语言切换器随 appConfig.ui.locale 闸门隐藏（i18n 口径——未启用不露出，勿直挂） -->
+        <template v-if="appConfig.ui.locale">
+          <span class="tool-divider"></span>
+          <LocaleDropdown color="var(--login-tool-color)" />
+        </template>
       </div>
     </header>
 

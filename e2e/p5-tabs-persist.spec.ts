@@ -1,0 +1,83 @@
+import { expect, test } from '@playwright/test'
+import { loadState } from './helpers'
+import { uiLogin } from './ui'
+
+/**
+ * 页签栏业界对齐批（2026-11-03——持久化/中键关闭/拖拽排序）
+ *
+ * 打真实栈（admin 登录 → 系统管理页开第二枚页签）：
+ * ① 持久化：F5 后页签集（含顺序）原样恢复——单枚页签集与「fresh boot 只建当前路由
+ *   页签」不可区分，故必开两枚；恢复走「持久化元数据按当前会话路由表校验重建」
+ *   （tagsView store restoreViews，权限过滤语义）。
+ * ② 中键关闭：浏览器页签惯例——关活动页签回邻页签，且关闭态持久化（reload 不复活）。
+ *   （本仓无常驻 affix 页签——路由表未用 meta.affix，页签全可关可拖）
+ * ③ 拖拽排序：sortablejs 交换顺序（store 为唯一事实源），且顺序持久化（reload 保持）。
+ * 断言全走「前后集合相等」口径，不硬编码菜单标题（防文案漂移假红）。
+ */
+
+const tabs = (page: import('@playwright/test').Page) => page.locator('.v-tags-view__item')
+
+test('页签持久化：开两页 → F5 → 页签集与顺序原样恢复，活动页保持', async ({ page }) => {
+  const { admin } = loadState()
+  await uiLogin(page, admin.employeeNo, admin.password)
+  await expect(page).toHaveURL(/#\/home/, { timeout: 30_000 })
+
+  // 开第二个页签（admin 管理面——持久化恢复区分 fresh boot 的关键）
+  await page.goto('/#/system/user')
+  await expect(tabs(page)).toHaveCount(2, { timeout: 15_000 })
+
+  const before = await tabs(page).allInnerTexts()
+  expect(before.length, '页签集非平凡（首页+第二枚）').toBeGreaterThanOrEqual(2)
+
+  await page.reload()
+  await expect(tabs(page)).toHaveCount(before.length)
+  const after = await tabs(page).allInnerTexts()
+  expect(after, '页签集含顺序原样恢复').toEqual(before)
+  // 活动页=F5 前所在页（URL 不变——活动高亮由路由驱动）
+  await expect(page).toHaveURL(/#\/system\/user/)
+})
+
+test('中键关闭：关活动页签回邻页签，且关闭态持久化（reload 不复活）', async ({ page }) => {
+  const { admin } = loadState()
+  await uiLogin(page, admin.employeeNo, admin.password)
+  await expect(page).toHaveURL(/#\/home/, { timeout: 30_000 })
+
+  await page.goto('/#/system/user')
+  await expect(tabs(page)).toHaveCount(2, { timeout: 15_000 })
+
+  // 中键关活动页签（最后开的一枚）→ 关闭后回邻页签（navigateTo 兜底）
+  await tabs(page).last().click({ button: 'middle' })
+  await expect(tabs(page)).toHaveCount(1)
+  await expect(page).toHaveURL(/#\/home/, { timeout: 15_000 })
+
+  // 关闭态持久化：reload 后不复活（storage 已随 removeView 写回）
+  await page.reload()
+  await expect(tabs(page)).toHaveCount(1)
+})
+
+test('拖拽排序：交换页签顺序且顺序持久化', async ({ page }) => {
+  const { admin } = loadState()
+  await uiLogin(page, admin.employeeNo, admin.password)
+  await expect(page).toHaveURL(/#\/home/, { timeout: 30_000 })
+
+  // 开两枚页签（共三枚）
+  await page.goto('/#/system/user')
+  await expect(tabs(page)).toHaveCount(2, { timeout: 15_000 })
+  await page.goto('/#/system/role')
+  await expect(tabs(page)).toHaveCount(3, { timeout: 15_000 })
+
+  const before = await tabs(page).allInnerTexts()
+  expect(before.length).toBe(3)
+
+  // 拖最后一枚到第二枚位置（左移交换）——拖拽不触发导航（仍在 role 页）
+  await tabs(page).nth(2).dragTo(tabs(page).nth(1))
+  const after = await tabs(page).allInnerTexts()
+  expect(after, '末位页签左移一位，其余保持').toEqual([before[0], before[2], before[1]])
+  await expect(page).toHaveURL(/#\/system\/role/)
+
+  // 顺序持久化：reload 后保持拖后顺序
+  await page.reload()
+  await expect(tabs(page)).toHaveCount(3)
+  const restored = await tabs(page).allInnerTexts()
+  expect(restored, '拖后顺序经持久化恢复保持').toEqual([before[0], before[2], before[1]])
+})

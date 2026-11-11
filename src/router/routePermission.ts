@@ -17,9 +17,11 @@ export const ROUTE_CODE_PREFIX = 'route:'
  * - `/403`：无权限页自身（不豁免会自锁——跳入后再校验永无 route:/403 码）
  * - `/profile`：个人中心（§3.2④ 菜单外静态补充路由——无 route: 码，任何登录用户可达）
  * - `/my-org`：「我的组织」自服务面（§3.2④ 同款——owner/admin 经 L3 见委托控件，委托端点跳 Casbin）
+ * - `/messages`：消息中心（G-23 实施 000076——铃铛对全员渲染，inbox 为严格自数据且端点已移 selfService；
+ *   菜单行惰性化后无 route: 码，任何登录用户可达）
  * redirect 中转、404 页在 isExemptRoute 内另行判定。
  */
-export const ROUTE_EXEMPT_PATHS = ['/home', '/login', '/change-password', '/session-error', '/403', '/profile', '/my-org']
+export const ROUTE_EXEMPT_PATHS = ['/home', '/login', '/change-password', '/session-error', '/403', '/profile', '/my-org', '/messages']
 
 /** 404 页自身（catch-all 命中时的路由名）——不参与校验，否则会自锁 */
 const NOT_FOUND_ROUTE_NAME = 'NotFound'

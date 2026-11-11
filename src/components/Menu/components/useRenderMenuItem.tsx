@@ -1,11 +1,16 @@
-import { ElSubMenu, ElMenuItem } from 'element-plus'
 import { unref, type ComputedRef } from 'vue'
+import { ElSubMenu, ElMenuItem, ElTooltip } from 'element-plus'
+import { useI18n } from 'vue-i18n'
 import { hasOneShowingChild } from '../helper'
 import { useRenderMenuTitle } from './useRenderMenuTitle'
 import { isUrl, pathResolve } from '@/utils/routerHelper'
 const prefixCls = 'v-submenu'
 
-export const useRenderMenuItem = (menuMode: ComputedRef<'vertical' | 'horizontal'>) => {
+export const useRenderMenuItem = (
+  menuMode: ComputedRef<'vertical' | 'horizontal'>,
+  isCollapsed?: ComputedRef<boolean>
+) => {
+  const { t } = useI18n()
   const { renderMenuTitle } = useRenderMenuTitle()
 
   // allRouters: AppRouteRecordRaw[] = [],
@@ -22,20 +27,28 @@ export const useRenderMenuItem = (menuMode: ComputedRef<'vertical' | 'horizontal
           (!onlyOneChild?.children || onlyOneChild?.noShowingChildren) &&
           !meta?.alwaysShow
         ) {
-          return (
+          const merged = onlyOneChild ? { ...meta, ...(onlyOneChild.meta ?? {}) } : meta
+          const item = (
             <ElMenuItem index={onlyOneChild ? pathResolve(fullPath, onlyOneChild.path) : fullPath}>
-              {{
-                default: () =>
-                  renderMenuTitle(onlyOneChild ? { ...meta, ...(onlyOneChild.meta ?? {}) } : meta)
-              }}
+              {{ default: () => renderMenuTitle(merged) }}
             </ElMenuItem>
           )
+          // 收起态叶子项补 tooltip：EP collapse 对叶子不产 popper（目录项有原生子菜单
+          // popper、叶子无——2026-11-02 双列/混合收起态走查）；展开态文字可见不需要
+          if (unref(isCollapsed) && unref(menuMode) === 'vertical') {
+            return (
+              <ElTooltip content={t(String(merged.title ?? ''))} placement="right" showAfter={150}>
+                {item}
+              </ElTooltip>
+            )
+          }
+          return item
         } else {
           return (
             <ElSubMenu
               index={fullPath}
               teleported
-              popperClass={unref(menuMode) === 'vertical' ? `${prefixCls}-popper--vertical` : ''}
+              popperClass={unref(menuMode) === 'vertical' ? `${prefixCls}-popper--vertical` : `${prefixCls}-popper--horizontal`}
             >
               {{
                 title: () => renderMenuTitle(meta),

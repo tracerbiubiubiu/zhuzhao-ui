@@ -1,0 +1,8 @@
+
+
+# Local reference documents and audit artifacts (maintained docs live in docs/)
+/doc/
+/deliverables/
+/outputs/
+/audit-reports/
+/.codex/

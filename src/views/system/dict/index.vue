@@ -9,6 +9,7 @@ import { reactive, ref } from 'vue'
 import {
   ElAlert, ElButton, ElCard, ElDialog, ElForm, ElInput, ElInputNumber, ElMessage, ElMessageBox,
   ElSwitch, ElTable, ElTableColumn, ElTag,
+  ElEmpty,
 } from 'element-plus'
 import { useTableFit } from '@vea/hooks'
 import {
@@ -24,7 +25,17 @@ defineOptions({ name: 'system_dict_page' })
 const types = ref<DictTypeRow[]>([])
 const typesLoading = ref(false)
 const selectedType = ref<DictTypeRow | null>(null)
+// 豁免登记（分页约定 §禁伪装全量）：双表 page_size=100 拉近全量——字典量级
+// 设计为小（类型/项各 ≤ 数十）；超 100 静默截断属异常场景可接受（docs/design/frontend-ui.md
+// 分页统一约定在册豁免，量级增长时改真分页）。
 const keyword = ref('')
+// 客户端触发即时化（2026-10-28 筛选 v2 整改）：输入 300ms 防抖即查——
+// 服务端 keyword 过滤不变，仅去掉按钮/回车触发旧形态
+let kwTimer: ReturnType<typeof setTimeout> | undefined
+function onKeywordInput() {
+  clearTimeout(kwTimer)
+  kwTimer = setTimeout(() => fetchTypes(), 300)
+}
 
 async function fetchTypes() {
   typesLoading.value = true
@@ -168,7 +179,7 @@ async function onToggleItem(row: DictItemRow, enabled: boolean) {
 
 async function onDeleteItem(row: DictItemRow) {
   try {
-    await ElMessageBox.confirm(`确认删除字典项「${row.label}」？`, '删除', { type: 'warning' })
+    await ElMessageBox.confirm(`确认删除字典项「${row.label}」？已选用该项的存量工单将只显示原始编码（建议改用「停用」——存量值不受影响）`, '删除', { type: 'warning' })
   } catch { return }
   try {
     await deleteDictItemApi(row.id)
@@ -188,7 +199,7 @@ useTableFit(itemsTable, () => items.value)
 </script>
 
 <template>
-  <!-- 填充链(docs/frontend-standard.md):双栏等高,两表各自内部滚动 -->
+  <!-- 填充链(docs/design/frontend-ui.md):双栏等高,两表各自内部滚动 -->
   <div class="fill-page p-4">
     <div class="flex flex-1 gap-4 min-h-0">
       <!-- 左：类型 -->
@@ -200,8 +211,7 @@ useTableFit(itemsTable, () => items.value)
           </div>
         </template>
         <el-form inline @submit.prevent class="mb-2">
-          <el-input v-model="keyword" placeholder="code/name 搜索" clearable class="!w-48" @keyup.enter="fetchTypes" />
-          <el-button class="ml-2" @click="fetchTypes">搜索</el-button>
+          <el-input v-model="keyword" placeholder="code/name 过滤" clearable class="!w-[160px]" @input="onKeywordInput" />
         </el-form>
         <div class="min-h-0 flex-initial">
         <el-table
@@ -209,6 +219,11 @@ useTableFit(itemsTable, () => items.value)
           :data="types" v-loading="typesLoading" row-key="id" highlight-current-row height="100%"
           @current-change="(r: DictTypeRow | null) => r && selectType(r)"
         >
+          <template #empty>
+            <el-empty description="暂无类型——新建后维护键值" :image-size="60">
+              <el-button v-permission="'dict:manage'" type="primary" size="small" @click="openTypeCreate">新建首个类型</el-button>
+            </el-empty>
+          </template>
           <el-table-column prop="code" label="code" min-width="120" />
           <el-table-column prop="name" label="名称" min-width="100" />
           <el-table-column label="启用" width="70" align="center">
@@ -263,7 +278,7 @@ useTableFit(itemsTable, () => items.value)
     </div>
 
     <!-- 新建类型 -->
-    <el-dialog v-model="typeVisible" title="新建字典类型" width="440px">
+    <el-dialog :close-on-click-modal="false" v-model="typeVisible" title="新建字典类型" width="440px">
       <el-input v-model="typeForm.code" placeholder="code（如 env_type）" class="mb-3" />
       <el-input v-model="typeForm.name" placeholder="名称" class="mb-3" />
       <el-input v-model="typeForm.remark" placeholder="备注（可选）" />
@@ -275,10 +290,10 @@ useTableFit(itemsTable, () => items.value)
     </el-dialog>
 
     <!-- 新增项 -->
-    <el-dialog v-model="itemVisible" :title="`新增字典项（${selectedType?.code ?? ''}）`" width="440px">
+    <el-dialog :close-on-click-modal="false" v-model="itemVisible" :title="`新增字典项（${selectedType?.code ?? ''}）`" width="440px">
       <el-input v-model="itemForm.code" placeholder="code" class="mb-3" />
       <el-input v-model="itemForm.label" placeholder="标签（业务表单显示）" class="mb-3" />
-      <el-input-number v-model="itemForm.sort_order" :min="0" class="mb-3" />
+      <el-input-number v-model="itemForm.sort_order" :min="0" :controls="false" class="mb-3" />
       <el-input v-model="itemForm.remark" placeholder="备注（可选）" />
       <el-alert v-if="itemError" :title="itemError" type="error" show-icon class="mt-3" :closable="false" />
       <template #footer>
@@ -290,7 +305,7 @@ useTableFit(itemsTable, () => items.value)
 </template>
 
 <style scoped>
-/* 双栏等高填充(docs/frontend-standard.md):卡片弹性列,卡片体弹性化,表格区由页内 wrap 控高 */
+/* 双栏等高填充(docs/design/frontend-ui.md):卡片弹性列,卡片体弹性化,表格区由页内 wrap 控高 */
 .dict-pane {
   display: flex;
   flex: 1;

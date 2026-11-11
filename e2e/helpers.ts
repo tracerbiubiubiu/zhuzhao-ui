@@ -45,18 +45,33 @@ interface ApiOptions {
   body?: unknown
 }
 
-/** 裸 API 调用（Node fetch；信封与 HTTP 状态原样透出，由调用方分流） */
+/** 标准栈同一user_id共享20rps/40burst桶；夹具与浏览器、不同device/token也共用。
+ * 仅在密集夹具完成或API分派后强制reload前，预留完整补桶窗40/20s+100ms。
+ * 不是失败后重试；不改变真实限流，改测试栈规则时须同批核此预算。 */
+export async function waitUserRateBudget(): Promise<void> {
+  await new Promise((done) => setTimeout(done, 2100))
+}
+
+/** 裸 API 调用（Node fetch；信封与 HTTP 状态原样透出，由调用方分流）。
+ *  仅 429 退避重试一次：串行 spec 密集预置（登录+profile+orgs+建单+分派…）会打穿每用户 20rps/burst 40 桶
+ *  （p5 五 spec 连跑实证 http=429 code=10007）；桶 1s 回填，退避 1.1s 足够；其他状态码原样透出不掩盖缺陷。 */
 export async function api<T = unknown>(path: string, opts: ApiOptions = {}): Promise<{ status: number; env: Envelope<T> | null }> {
-  const res = await fetch(`${API_BASE}${path}`, {
-    method: opts.method ?? 'GET',
-    headers: {
-      'content-type': 'application/json',
-      ...(opts.token ? { authorization: `Bearer ${opts.token}` } : {}),
-    },
-    body: opts.body === undefined ? undefined : JSON.stringify(opts.body),
-  })
-  const env = (await res.json().catch(() => null)) as Envelope<T> | null
-  return { status: res.status, env }
+  const once = async () => {
+    const res = await fetch(`${API_BASE}${path}`, {
+      method: opts.method ?? 'GET',
+      headers: {
+        'content-type': 'application/json',
+        ...(opts.token ? { authorization: `Bearer ${opts.token}` } : {}),
+      },
+      body: opts.body === undefined ? undefined : JSON.stringify(opts.body),
+    })
+    const env = (await res.json().catch(() => null)) as Envelope<T> | null
+    return { status: res.status, env }
+  }
+  const first = await once()
+  if (first.status !== 429) return first
+  await new Promise((r) => setTimeout(r, 1100))
+  return once()
 }
 
 export async function apiLogin(employeeNo: string, password: string, deviceId: string): Promise<{ status: number; env: Envelope<TokenPair> | null }> {
@@ -64,6 +79,53 @@ export async function apiLogin(employeeNo: string, password: string, deviceId: s
     method: 'POST',
     body: { employee_no: employeeNo, password, device_id: deviceId },
   })
+}
+
+/** 信封 code=0 断言并取 data——失败抛出含 http 状态/信封 code/message 的错误
+ *  （防 `.env!.data[0]` 式解构在瞬态非零信封时只剩 TypeError，吞掉真实原因） */
+export async function mustData<T>(call: Promise<{ status: number; env: Envelope<T> | null }>, label: string): Promise<T> {
+  const r = await call
+  if (r.env?.code !== 0) {
+    throw new Error(`${label} 失败：http=${r.status} code=${r.env?.code ?? 'non-json'} message=${r.env?.message ?? ''}`)
+  }
+  return r.env.data
+}
+
+/** 临时工单类型（后端默认六状态图，open→assigned/closed 与 incident 同）——给依赖「新单初始态=open」的
+ *  用例隔离自动分派规则：dev 栈是共享走查环境，可能存在 incident 全量命中规则（任何 incident 新单即刻
+ *  assigned——2026-10-26 实证致 s2-home/s10/p5-s3a-transition 三 spec 假红）。
+ *  transitionMeta 可选：create 端点不带 meta，须建后经 /ticket-types/update 全量替换（version 省略=不做 CAS）；
+ *  cleanup 须在工单软删之后调用（类型删除守卫只拒有存活工单的类型，软删不阻）。 */
+export async function tempTicketType(
+  h: { token: string },
+  prefix: string,
+  transitionMeta?: Record<string, unknown>,
+): Promise<{ code: string; cleanup: () => Promise<void> }> {
+  const code = `${prefix}_${Date.now().toString(36)}`
+  await mustData(api('/api/v1/ticket-types', { ...h, method: 'POST', body: { code, name: `E2E 临时类型 ${code}` } }), `POST /ticket-types(${code})`)
+  if (transitionMeta) {
+    await mustData(api('/api/v1/ticket-types/update', { ...h, method: 'POST', body: { code, transition_meta: transitionMeta } }), `POST /ticket-types/update(${code} meta)`)
+  }
+  return {
+    code,
+    cleanup: async () => {
+      // 类型删除守卫拒「有存活工单」——先删引用工单再删类型（2026-11-02 清理实证：
+      // 旧实现 .catch 静默吞「资源冲突」致 73 个类型跨日累积）；失败上抛不静默，
+      // 类型残留当轮显形（运行态列表卫生）。
+      const d1 = await api('/api/v1/ticket-types/delete', { ...h, method: 'POST', body: { code } }).catch(() => null)
+      if (d1?.env?.code !== 0) {
+        const list = await api(`/api/v1/tickets?type_code=${code}&page_size=100`, { ...h, method: 'GET' }).catch(() => null)
+        const rows = ((list?.env?.data as { list?: Array<{ id: string }> } | null)?.list ?? []) as Array<{ id: string }>
+        for (const t of rows) {
+          await api('/api/v1/tickets/delete', { ...h, method: 'POST', body: { id: t.id } }).catch(() => {})
+        }
+        const d2 = await api('/api/v1/ticket-types/delete', { ...h, method: 'POST', body: { code } }).catch(() => null)
+        if (d2?.env?.code !== 0) {
+          console.warn(`[cleanup] 临时类型 ${code} 删除仍失败（code=${d2?.env?.code}）——类型残留需人工核查`)
+        }
+      }
+    },
+  }
 }
 
 // ─── 直写 DB（panic 预造等无 API 触发面的场景——复核①：容器名/凭据 env 可覆盖）───
@@ -85,6 +147,28 @@ export function psql(sql: string): string {
 export function pgAvailable(): boolean {
   try {
     psql('SELECT 1')
+    return true
+  } catch {
+    return false
+  }
+}
+
+// ─── taskrunner SQLite（宿主形态 data/taskrunner.db——jobs 定义无 API 删除面，
+// E2E 建的任务定义清理走此直删；兄弟仓路径，env 覆盖适配非标准布局）───
+
+export const TASKRUNNER_DB = process.env.E2E_TASKRUNNER_DB
+  ?? resolve(here, '../../taskrunner/data/taskrunner.db')
+
+export function taskrunnerSqlite(sql: string): string {
+  return execSync(
+    `sqlite3 ${JSON.stringify(TASKRUNNER_DB)} ${JSON.stringify(sql)}`,
+    { timeout: 10_000 },
+  ).toString().trim()
+}
+
+export function taskrunnerDbAvailable(): boolean {
+  try {
+    taskrunnerSqlite('SELECT 1')
     return true
   } catch {
     return false

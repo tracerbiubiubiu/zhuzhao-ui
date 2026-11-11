@@ -22,7 +22,7 @@ test('W5 冒烟：审计日志页渲染+工号过滤+请求详情弹窗', async 
   await expect(page.getByRole('columnheader', { name: 'request_id' })).toBeVisible()
 
   // 按自身工号过滤——登录与本页查询刚产生审计行，必非空
-  await page.getByPlaceholder('如 E000001（含已删用户）').fill(state.admin.employeeNo)
+  await page.getByPlaceholder('工号，如 E000001').fill(state.admin.employeeNo)
   const rows = page.locator('.el-table__row')
   await expect(rows.first()).toBeVisible({ timeout: 10_000 })
   const count = await rows.count()
@@ -31,7 +31,8 @@ test('W5 冒烟：审计日志页渲染+工号过滤+请求详情弹窗', async 
   // 请求详情弹窗（2026-10-12 由「载荷」升级：descriptions 全上下文 + request_body 美化区）
   // ——内容级断言延续（2026-10-02 加固）：pre 必须非空（'（无 body）' 占位亦算）
   await rows.first().getByRole('button', { name: '详情' }).click()
-  const dlg = page.locator('.el-dialog').filter({ hasText: '请求详情' })
+  // 2026-10-28 走查批适配：详情由居中弹窗改右侧抽屉（看报文保留列表上下文）
+  const dlg = page.locator('.el-drawer').filter({ hasText: '请求详情' })
   await expect(dlg).toBeVisible()
   const preText = await dlg.locator('pre').innerText({ timeout: 10_000 })
   expect(preText.trim().length, '载荷 pre 内容为空——美化区未渲染').toBeGreaterThan(0)
@@ -52,11 +53,13 @@ test('W5 冒烟：审计日志页渲染+工号过滤+请求详情弹窗', async 
   }
   try {
     await page.getByRole('tab', { name: 'Panic 聚合' }).click()
-    await expect(page.getByText('Panic 聚合（同指纹计数——最近优先）')).toBeVisible({ timeout: 10_000 })
+    // 2026-10-30 卡片头收敛批适配：卡头已删——以表头挂载为可达断言
+    await expect(page.getByRole('columnheader', { name: '最近发生' })).toBeVisible({ timeout: 10_000 })
 
     if (canSeed) {
       // 有数据态：行渲染 + 路径列非空 + 翻页（P2-8 真闭合——25 行 > pageSize 20）
-      const panicPane = page.locator('.el-tab-pane').filter({ hasText: 'Panic 聚合' })
+      // 2026-10-30 卡片头收敛批适配：卡头删除后 pane 内无「Panic 聚合」文本——按列锚定位
+      const panicPane = page.locator('.el-tab-pane').filter({ hasText: '最近发生' })
       const panicRows = panicPane.locator('.el-table__row')
       await expect(panicRows.first()).toBeVisible({ timeout: 10_000 })
       const firstPageCount = await panicRows.count()
