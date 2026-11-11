@@ -1,6 +1,6 @@
 # AGENTS.md — zhuzhao-ui 前端协作协议
 
-> 本文件对每次在本仓库工作的 AI/协作方生效。设计 SSOT 在主仓 `zhuzhao/docs/phase4/01-frontend-design.md`。
+> 本文件对每次在本仓库工作的 AI/协作方生效。当前UI设计见本仓 [docs/design/frontend-ui.md](docs/design/frontend-ui.md)，阶段来源回链主仓 `zhuzhao/docs/phase4/01-frontend-design.md`。后续全站改造按[重设计合同](docs/design/frontend-redesign.md)与主仓[规划总账](../zhuzhao/docs/review/planning-backlog.md)实施，文档落档不代表页面已改造。
 
 ## 开源定位与公司信息隔离基线（2026-10-09 定，全仓强制；SSOT=主仓 standards.md §1.1）
 
@@ -14,7 +14,7 @@
 
 ## 前端门禁（每批交付前必跑）
 
-> 测试策略与纪律（分层职责/不 mock 决策/变异验牙/FE4 哨兵/豁免登记/独占跑）SSOT = [docs/guides/testing.md](./docs/guides/testing.md)。
+> 测试策略与纪律（大量合成mock/contract/real分层、变异验牙、FE4哨兵、豁免登记、真实栈独占跑）SSOT = [docs/guides/testing.md](./docs/guides/testing.md)。所有者已确认大量mock为持续前提；旧“不mock中间层”不再是禁令。mock用于开发、状态/交互/视觉，契约检查防样本漂移，关键真实栈门禁保留；新增mock工具与命令须按U02/U07实施，不能将当前`test:e2e`静默改成stub套件。
 
 ```bash
 pnpm lint          # ESLint（纯检查；自动修复用 pnpm lint:fix，修复后重跑 lint）
@@ -22,7 +22,7 @@ pnpm typecheck     # vue-tsc --noEmit（codegen 类型**部分接线**：入参 
 pnpm test          # Vitest（动态路由解析/请求层单飞刷新/keep-alive 防漂移断言等——31 文件 / 244 用例，含六哨兵矩阵：apiPaths 前缀/viewNames/epImports 导入/tableFit/分页覆盖/uiConventions——全表见 docs/guides/testing.md「防漂移哨兵矩阵」）
 pnpm audit --prod  # npm 供应链（对称 Go 侧 govulncheck；镜像源无 audit 端点时加 --registry=https://registry.npmjs.org）
 pnpm build         # 产物构建
-pnpm test:e2e      # Playwright（S1–S8/S10/S12/S16–S17/FE3·FE4/W4·W5/P4/P5 穿插池——30 spec / 42 用例；打真实栈不用 stub——W5 需 activelist/taskrunner 上游，前提见下）
+pnpm test:e2e      # 现有关键真实栈Playwright（S1–S8/S10/S12/S16–S17/FE3·FE4/W4·W5/P4/P5 穿插池——30 spec / 42 用例；本发现范围不改为stub——W5 需 activelist/taskrunner 上游，前提见下）
 pnpm gate          # 六件门禁一键串行（lint → typecheck → test → audit:prod → build → test:e2e）——交付前跑这一条；任一红即停，E2E 不得再被「本地人工验收」口径静默跳过（2026-10-25 E2E 补齐批教训）
 ```
 
@@ -30,9 +30,9 @@ pnpm gate          # 六件门禁一键串行（lint → typecheck → test → 
 
 **测试账号纪律**：E000001（superadmin种子号）密码终态恒为`admin12345`；人工/agent多账号测试一律用专属E000002+，禁止修改E000001。仅acceptance/globalSetup既定幂等例外流或主仓break-glass复原可收敛其值，权威见主仓runbook §4。
 
-**纪律**：门禁不全绿不得标记完成；E2E 打真后端（菜单可见性/权限码必须打真实数据）；CI（`.github/workflows/ci.yml`）跑 lint/typecheck/build/audit/test——E2E 与 Go 仓 acceptance 同口径走本地人工验收；**推送后核实 CI run 转绿才算交付闭环**（`gh run list`/`gh run watch`——本地绿≠CI 绿：CI 单仓 checkout/全新安装等环境差曾致挂（2026-10-02 三连挂教训），README badge 仅为被动入口，跨仓依赖的测试改动合入前先过一遍「CI 无同级仓」假设）。
+**纪律**：门禁不全绿不得标记完成；关键真实栈E2E仍打真后端（菜单/资源权限、迁移、服务调用与写动作必须有真实证据），mock/contract通过不能替代；CI（`.github/workflows/ci.yml`）跑 lint/typecheck/build/audit/test——现有真实栈E2E与Go仓acceptance同口径走本地执行，不能静默省略；**推送后核实 CI run 转绿才算交付闭环**（`gh run list`/`gh run watch`——本地绿≠CI绿）。每批分别披露mock、contract、real及视觉/键盘结果；未实现的测试工具不写作已运行。
 
-**i18n 口径（2026-10-02 拍板，主仓 02 §5.4 检查点结论文）**：英文面**显式暂不启用**——触发器=外部协作者/英文用户出现（未命中）。`src/locales/` 骨架与 en 词包为**预留基建勿删**（含 `login.*Placeholder` 闲置键）；新页面文案直接中文，勿新增半成品键。**切换器已随 2026-11-03 批隐藏**（`appConfig.ui.locale=false` 闸门——ToolHeader/Login 双挂载点同源，露出即承诺而 en 词包仅骨架；翻案时回 `true` 即恢复）。翻案时方案见 02 §5.4（key 映射层），需连带迁移 `e2e/ui.ts` 登录锚点（共用登录锚点的spec须同步核对）。
+**i18n 口径**：当前英文面显式暂不启用，`src/locales/`骨架与en词包保留（含`login.*Placeholder`闲置键）；新页面中文，勿新增半成品键。P6.1的U02固定复核本轮语言范围、资产责任与后续复评窗口，不再仅挂“英文用户出现”。切换器仍由`appConfig.ui.locale=false`隐藏，本次文档不启用它；后续改变时同步词包、页面、`e2e/ui.ts`及调用者，历史方案见主仓Phase4的02号§5.4。
 
 ## 类型生成（codegen，随契约批）
 
@@ -66,6 +66,8 @@ pnpm gate          # 六件门禁一键串行（lint → typecheck → test → 
 - **计数/状态声明须与实测一致**：改 E2E/单测数量或修复状态时，以实际输出和本节快照核对，README只保留入口不复制数字；「全部修复」类表述须有逐项证据（docs/review/reports/或主仓当轮收据为凭）
 
 ## 前端 UI 规范（2026-10-08 制定）
+
+本节是现行实现规则；全站替代方案与[逐页清单](docs/design/frontend-pages.json)已落档，U02/U07负责设计和验证底座，U03–U06负责P6.3业务/全站改造。不得凭新文稿宣称UI已改造，也不将下述历史具体尺寸/弹层/滚动规则视为永久不可重审；对应任务实施时同批修订权威规范、代码和验收。
 
 **新增/改动任何页面前必读 [docs/design/frontend-ui.md](docs/design/frontend-ui.md)**——铁律：**页面不动，所有页面锁定视口，一切滚动条都在内部元素上**（列表页=表格内滚+分页钉底；内容页=内容区容器内滚）；**详情=右抽屉/动作=对话框**（详情类禁开 dialog——2026-11-03 七处详情全抽屉归位，宽度两档：键值 560/长文 620，§弹层形态）。文档含三种页面骨架配方、表格列宽（内容列 `minWidth`，全固定宽=宽屏右侧死区）、分页口径（ProTable 统一 `[10,20,50,100]` 默认 20；cursor/面板型见文档）、弹层形态纪律、滚动归属（Backtop 盯 `.v-app-view`）、踩坑记录（数量随事故增长，以文档为准勿引死数）与新增页 checklist。
 

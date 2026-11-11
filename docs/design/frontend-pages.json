@@ -1,0 +1,1351 @@
+{
+  "schema_version": 1,
+  "audit_date": "2026-11-11",
+  "repository": "zhuzhao-ui",
+  "baseline": "73a18d39f695f093992d3447027a57c442e50686",
+  "companion_zhuzhao_baseline": "5c0e248deb03c1f8477b0cac052597113f599f03",
+  "review_mode": "static_design_review_with_existing_private_regression",
+  "runtime_started": true,
+  "accounts_changed": true,
+  "controlled_files_modified": true,
+  "coverage": {
+    "route_view_files": 27,
+    "shared_groups": 9,
+    "planned_entries": 4,
+    "excluded_view_helpers": [
+      "src/views/intel/query/IntelResult.vue",
+      "src/views/Login/components/LoginForm.vue"
+    ],
+    "exclusion_note": "两个辅助组件仍已阅读，统计在shared中，不计入路由文件数"
+  },
+  "batch_map": {
+    "UX0": {
+      "tasks": [
+        "U01"
+      ],
+      "phase": "P6.0"
+    },
+    "UX1": {
+      "tasks": [
+        "U02",
+        "U07"
+      ],
+      "phase": "P6.1"
+    },
+    "UX2": {
+      "tasks": [
+        "U03",
+        "U04"
+      ],
+      "phase": "P6.3"
+    },
+    "UX3": {
+      "tasks": [
+        "U05",
+        "U06"
+      ],
+      "phase": "P6.3"
+    },
+    "UX4": {
+      "tasks": [
+        "A01",
+        "A02",
+        "A03",
+        "A04",
+        "A05",
+        "A06",
+        "A07"
+      ],
+      "phase": "same_phase_as_owning_task"
+    },
+    "UX5": {
+      "tasks": [
+        "U07"
+      ],
+      "phase": "each_owning_task_release_gate"
+    }
+  },
+  "pages": [
+    {
+      "id": "home",
+      "page": "首页",
+      "route": "/home",
+      "path": "src/views/Home/index.vue",
+      "journey": "个人进入平台→识别身份与待办→进入有权业务",
+      "shape": "dashboard",
+      "evidence": [
+        {
+          "repository": "zhuzhao-ui",
+          "path": "src/views/Home/index.vue",
+          "symbol": "onMounted / goTickets / goDetail"
+        }
+      ],
+      "finding_status": "static_reviewed_runtime_pending",
+      "finding_ids": [
+        "FE-PRE-01",
+        "FE-PRE-02",
+        "FE-PRE-07",
+        "FE-PRE-08"
+      ],
+      "note": "发现编号含跨页规范问题；并非每项均已实机复现",
+      "batches": [
+        "UX0",
+        "UX1",
+        "UX2"
+      ],
+      "acceptance": [
+        "不绑home的自定义角色与空业务菜单点击Logo、刷新、关完页签均无404循环",
+        "无业务权限不发相应请求；失败显示不可用而不是0",
+        "首页数字、口径、深链、列表真实结果一致"
+      ],
+      "task_ids": [
+        "U01",
+        "U02",
+        "U06"
+      ]
+    },
+    {
+      "id": "login",
+      "page": "登录",
+      "route": "/login",
+      "path": "src/views/Login/Login.vue",
+      "journey": "登录→验证码按需→加载会话→安全默认目的地",
+      "shape": "auth",
+      "evidence": [
+        {
+          "repository": "zhuzhao-ui",
+          "path": "src/views/Login/Login.vue",
+          "symbol": "template / LoginForm.doLogin"
+        },
+        {
+          "repository": "zhuzhao-ui",
+          "path": "src/views/Login/components/LoginForm.vue",
+          "symbol": "doLogin / submit / template"
+        }
+      ],
+      "finding_status": "static_reviewed_runtime_pending",
+      "finding_ids": [
+        "FE-PRE-01",
+        "FE-PRE-07",
+        "FE-PRE-09"
+      ],
+      "note": "发现编号含跨页规范问题；并非每项均已实机复现",
+      "batches": [
+        "UX0",
+        "UX1",
+        "UX3"
+      ],
+      "acceptance": [
+        "真实可见label、autocomplete、错误关联与验证码键盘刷新",
+        "空菜单/临时会话失败/强制改密/安全redirect均有明确去向",
+        "与控制台字体、品牌、亮暗及缩放相协调"
+      ],
+      "task_ids": [
+        "U01",
+        "U02",
+        "U06",
+        "U07"
+      ]
+    },
+    {
+      "id": "change-password",
+      "page": "修改密码",
+      "route": "/change-password",
+      "path": "src/views/ChangePassword/index.vue",
+      "journey": "强制或自愿改密→验证→恢复会话导航",
+      "shape": "auth-form",
+      "evidence": [
+        {
+          "repository": "zhuzhao-ui",
+          "path": "src/views/ChangePassword/index.vue",
+          "symbol": "handleSubmit"
+        }
+      ],
+      "finding_status": "static_reviewed_runtime_pending",
+      "finding_ids": [
+        "FE-PRE-01",
+        "FE-PRE-07",
+        "FE-PRE-09"
+      ],
+      "note": "发现编号含跨页规范问题；并非每项均已实机复现",
+      "batches": [
+        "UX0",
+        "UX3"
+      ],
+      "acceptance": [
+        "旧/新/确认密码错误定位清楚，键盘完成",
+        "窄屏/200%下420px目标宽度不裁切内容",
+        "改密后无权目标可安全回工作台"
+      ],
+      "task_ids": [
+        "U01",
+        "U06",
+        "U07"
+      ]
+    },
+    {
+      "id": "profile",
+      "page": "个人中心",
+      "route": "/profile",
+      "path": "src/views/Profile/index.vue",
+      "journey": "资料/头像维护→个人API凭据创建或撤销",
+      "shape": "content-form-and-table",
+      "evidence": [
+        {
+          "repository": "zhuzhao-ui",
+          "path": "src/views/Profile/index.vue",
+          "symbol": "handleSubmit / submitPat"
+        }
+      ],
+      "finding_status": "static_reviewed_runtime_pending",
+      "finding_ids": [
+        "FE-PRE-03",
+        "FE-PRE-07",
+        "FE-PRE-08",
+        "FE-PRE-10",
+        "FE-PRE-11"
+      ],
+      "note": "发现编号含跨页规范问题；并非每项均已实机复现",
+      "batches": [
+        "UX1",
+        "UX3"
+      ],
+      "acceptance": [
+        "资料空值清空与未改字段合同一致",
+        "凭据一次明文有明确保存确认、复制失败反馈",
+        "分组/表单宽度/列表状态/离开保护一致"
+      ],
+      "task_ids": [
+        "U06"
+      ]
+    },
+    {
+      "id": "my-org",
+      "page": "我的组织",
+      "route": "/my-org",
+      "path": "src/views/MyOrg/index.vue",
+      "journey": "选择所属组织→查看上下文→有权时管理名册委托",
+      "shape": "master-detail-cards",
+      "evidence": [
+        {
+          "repository": "zhuzhao-ui",
+          "path": "src/views/MyOrg/index.vue",
+          "symbol": "loadOrgs / loadRoster / onSelectOrg"
+        }
+      ],
+      "finding_status": "static_reviewed_runtime_pending",
+      "finding_ids": [
+        "FE-PRE-07",
+        "FE-PRE-08",
+        "FE-PRE-09",
+        "FE-PRE-11"
+      ],
+      "note": "发现编号含跨页规范问题；并非每项均已实机复现",
+      "batches": [
+        "UX1",
+        "UX3"
+      ],
+      "acceptance": [
+        "组织卡键盘可选、选中态可读、长组织名不截断必要信息",
+        "普通成员403是只读态而非系统失败；其他错误有重试",
+        "快速切组织不显示旧组织成员；委托写操作按真实权限验证"
+      ],
+      "task_ids": [
+        "U06"
+      ]
+    },
+    {
+      "id": "messages",
+      "page": "消息中心",
+      "route": "/messages",
+      "path": "src/views/message/center/index.vue",
+      "journey": "筛选通知→标已读→跟深链；查看当前待办",
+      "shape": "message-list-tabs",
+      "evidence": [
+        {
+          "repository": "zhuzhao-ui",
+          "path": "src/views/message/center/index.vue",
+          "symbol": "fetchTop / openItem / readAll"
+        }
+      ],
+      "finding_status": "static_reviewed_runtime_pending",
+      "finding_ids": [
+        "FE-PRE-02",
+        "FE-PRE-07",
+        "FE-PRE-08",
+        "FE-PRE-09"
+      ],
+      "note": "发现编号含跨页规范问题；并非每项均已实机复现",
+      "batches": [
+        "UX1",
+        "UX3"
+      ],
+      "acceptance": [
+        "通知和派生待办语义分清，错误不显示暂无",
+        "消息/待办行键盘可用；深链无权或对象已删有可恢复反馈",
+        "通知已读动作和当前待办集合各自与数据源一致"
+      ],
+      "task_ids": [
+        "U06"
+      ]
+    },
+    {
+      "id": "tickets",
+      "page": "工单列表",
+      "route": "/tickets",
+      "path": "src/views/ticket/list/index.vue",
+      "journey": "查找筛选→阅读工单→本页显式多选→批量标签",
+      "shape": "data-table",
+      "evidence": [
+        {
+          "repository": "zhuzhao-ui",
+          "path": "src/views/ticket/list/index.vue",
+          "symbol": "applyRouteFilters / fetcher / onExport"
+        }
+      ],
+      "finding_status": "static_reviewed_runtime_pending",
+      "finding_ids": [
+        "FE-PRE-03",
+        "FE-PRE-04",
+        "FE-PRE-05",
+        "FE-PRE-07",
+        "FE-PRE-08",
+        "FE-PRE-09"
+      ],
+      "note": "发现编号含跨页规范问题；并非每项均已实机复现",
+      "batches": [
+        "UX1",
+        "UX2"
+      ],
+      "acceptance": [
+        "收起筛选仍显示所有生效条件；URL/列表/导出同口径",
+        "本页全选/半选/清空可解释，切筛选清选择",
+        "逐项资源授权、部分成功、重复幂等、失败重试和不可见404同形"
+      ],
+      "task_ids": [
+        "U03",
+        "U06"
+      ]
+    },
+    {
+      "id": "ticket-create",
+      "page": "发起工单",
+      "route": "/tickets/new",
+      "path": "src/views/ticket/create/index.vue",
+      "journey": "选类型→填基础/动态字段/富文本附件→检查→提交",
+      "shape": "dynamic-form",
+      "evidence": [
+        {
+          "repository": "zhuzhao-ui",
+          "path": "src/views/ticket/create/index.vue",
+          "symbol": "loadTypeFields / handleSubmit"
+        }
+      ],
+      "finding_status": "static_reviewed_runtime_pending",
+      "finding_ids": [
+        "FE-PRE-03",
+        "FE-PRE-07",
+        "FE-PRE-08",
+        "FE-PRE-10"
+      ],
+      "note": "发现编号含跨页规范问题；并非每项均已实机复现",
+      "batches": [
+        "UX1",
+        "UX2"
+      ],
+      "acceptance": [
+        "类型字段加载失败可重试且不允许空合同提交",
+        "多步长表单、必填错误、富文本草稿和离开提醒清楚",
+        "提交成功但后续刷新失败不误导重复建单；字段/权限与后端一致"
+      ],
+      "task_ids": [
+        "U04",
+        "U06"
+      ]
+    },
+    {
+      "id": "ticket-detail",
+      "page": "工单详情",
+      "route": "/tickets/:id",
+      "path": "src/views/ticket/detail/index.vue",
+      "journey": "阅读上下文→状态动作/分派→评论/标签/抄送/附件",
+      "shape": "domain-detail",
+      "evidence": [
+        {
+          "repository": "zhuzhao-ui",
+          "path": "src/views/ticket/detail/index.vue",
+          "symbol": "doTransition / addTag / removeTag / submitAssign"
+        }
+      ],
+      "finding_status": "static_reviewed_runtime_pending",
+      "finding_ids": [
+        "FE-PRE-03",
+        "FE-PRE-05",
+        "FE-PRE-07",
+        "FE-PRE-08",
+        "FE-PRE-10",
+        "FE-PRE-11"
+      ],
+      "note": "发现编号含跨页规范问题；并非每项均已实机复现",
+      "batches": [
+        "UX1",
+        "UX2"
+      ],
+      "acceptance": [
+        "列表/首页/详情优先级和状态词表一致",
+        "读可见的协作动作与update/assign/close权限区分",
+        "主内容/上下文侧栏/讨论可扫读，附件单独失败可恢复，切单不串数据"
+      ],
+      "task_ids": [
+        "U04",
+        "U06"
+      ]
+    },
+    {
+      "id": "ticket-types",
+      "page": "工单类型与模板",
+      "route": "/tickets/types",
+      "path": "src/views/ticket/type/index.vue",
+      "journey": "管理类型/模板→字段/状态图配置→校验→版本发布",
+      "shape": "configuration-designer",
+      "evidence": [
+        {
+          "repository": "zhuzhao-ui",
+          "path": "src/views/ticket/type/index.vue",
+          "symbol": "submitType / openFields / saveFields"
+        }
+      ],
+      "finding_status": "static_reviewed_runtime_pending",
+      "finding_ids": [
+        "FE-PRE-03",
+        "FE-PRE-07",
+        "FE-PRE-09",
+        "FE-PRE-10",
+        "FE-PRE-12"
+      ],
+      "note": "发现编号含跨页规范问题；并非每项均已实机复现",
+      "batches": [
+        "UX1",
+        "UX2"
+      ],
+      "acceptance": [
+        "复杂配置改为可审的独立编辑区，简单动作保持轻量",
+        "画布/JSON/专家表格同源但业务模式清楚；校验定位且键盘可替代拖拽",
+        "草稿/版本/发布与存量工单版本合同一致，无未保存数据静默丢失"
+      ],
+      "task_ids": [
+        "U04"
+      ]
+    },
+    {
+      "id": "ticket-rules",
+      "page": "自动分派规则",
+      "route": "/tickets/rules",
+      "path": "src/views/ticket/rules/index.vue",
+      "journey": "理解规则排序→新建目标组织/处理人规则→启停/删除",
+      "shape": "configuration-list",
+      "evidence": [
+        {
+          "repository": "zhuzhao-ui",
+          "path": "src/views/ticket/rules/index.vue",
+          "symbol": "openCreate / submit / onToggle"
+        }
+      ],
+      "finding_status": "static_reviewed_runtime_pending",
+      "finding_ids": [
+        "FE-PRE-03",
+        "FE-PRE-07",
+        "FE-PRE-11"
+      ],
+      "note": "发现编号含跨页规范问题；并非每项均已实机复现",
+      "batches": [
+        "UX1",
+        "UX2"
+      ],
+      "acceptance": [
+        "priority/keyword/target_user等实现说明改业务语言，详细帮助可访问",
+        "创建入口/优先级/目标人展示一致",
+        "目标人属于目标组织仍由服务端验证，人员搜索信息可靠"
+      ],
+      "task_ids": [
+        "U04"
+      ]
+    },
+    {
+      "id": "tasks",
+      "page": "任务中心",
+      "route": "/tasks",
+      "path": "src/views/task/list/index.vue",
+      "journey": "提交或管理任务→查看运行/重试/死信/队列",
+      "shape": "execution-console",
+      "evidence": [
+        {
+          "repository": "zhuzhao-ui",
+          "path": "src/views/task/list/index.vue",
+          "symbol": "fetchRuns / fetchJobs / onSubmitTask"
+        }
+      ],
+      "finding_status": "static_reviewed_runtime_pending",
+      "finding_ids": [
+        "FE-PRE-03",
+        "FE-PRE-04",
+        "FE-PRE-07",
+        "FE-PRE-08",
+        "FE-PRE-10",
+        "FE-PRE-12"
+      ],
+      "note": "发现编号含跨页规范问题；并非每项均已实机复现",
+      "batches": [
+        "UX1",
+        "UX3",
+        "UX4"
+      ],
+      "acceptance": [
+        "运行/定义/死信的可见和请求权限一致",
+        "来源深链可还原mine/status筛选，水位与运行列表不混淆统计范围",
+        "复杂参数有结构化主模式与高级JSON，失败/取消/重试状态清楚"
+      ],
+      "task_ids": [
+        "U06",
+        "A04"
+      ]
+    },
+    {
+      "id": "al-data",
+      "page": "活动列表数据",
+      "route": "/al/data",
+      "path": "src/views/al/data/index.vue",
+      "journey": "选类型→筛选浏览→写入/恢复→导入替换/导出",
+      "shape": "master-detail-data",
+      "evidence": [
+        {
+          "repository": "zhuzhao-ui",
+          "path": "src/views/al/data/index.vue",
+          "symbol": "fetchPage / submitForm / submitImport"
+        }
+      ],
+      "finding_status": "static_reviewed_runtime_pending",
+      "finding_ids": [
+        "FE-PRE-03",
+        "FE-PRE-07",
+        "FE-PRE-08",
+        "FE-PRE-09",
+        "FE-PRE-11"
+      ],
+      "note": "发现编号含跨页规范问题；并非每项均已实机复现",
+      "batches": [
+        "UX1",
+        "UX3"
+      ],
+      "acceptance": [
+        "侧栏/结果区可用宽度与窄屏退化正确",
+        "游标无total语义保留，筛选改动重置游标",
+        "导入显示目标/范围/条数/不可逆替换确认和结果，空数组清空显式警示"
+      ],
+      "task_ids": [
+        "U06"
+      ]
+    },
+    {
+      "id": "al-types",
+      "page": "活动类型",
+      "route": "/al/types",
+      "path": "src/views/al/types/index.vue",
+      "journey": "筛选类型→注册/演进schema→查看历史/废弃",
+      "shape": "schema-configuration",
+      "evidence": [
+        {
+          "repository": "zhuzhao-ui",
+          "path": "src/views/al/types/index.vue",
+          "symbol": "submitEditor / openHistory"
+        }
+      ],
+      "finding_status": "static_reviewed_runtime_pending",
+      "finding_ids": [
+        "FE-PRE-03",
+        "FE-PRE-07",
+        "FE-PRE-08",
+        "FE-PRE-10"
+      ],
+      "note": "发现编号含跨页规范问题；并非每项均已实机复现",
+      "batches": [
+        "UX1",
+        "UX3"
+      ],
+      "acceptance": [
+        "类型状态/字段限制/唯一键用业务可理解说明",
+        "废弃只读与禁止动作有明确解释",
+        "复杂字段编辑/历史/空态符合统一配置模式"
+      ],
+      "task_ids": [
+        "U06"
+      ]
+    },
+    {
+      "id": "intel",
+      "page": "情报查询",
+      "route": "/intel",
+      "path": "src/views/intel/query/index.vue",
+      "journey": "查询→理解当前结果→查找本机历史→重查/复制",
+      "shape": "query-workbench",
+      "evidence": [
+        {
+          "repository": "zhuzhao-ui",
+          "path": "src/views/intel/query/index.vue",
+          "symbol": "loadHistory / recordHistory / rerun / query"
+        }
+      ],
+      "finding_status": "static_reviewed_runtime_pending",
+      "finding_ids": [
+        "FE-PRE-06",
+        "FE-PRE-07",
+        "FE-PRE-08",
+        "FE-PRE-09"
+      ],
+      "note": "发现编号含跨页规范问题；并非每项均已实机复现",
+      "batches": [
+        "UX1",
+        "UX3"
+      ],
+      "acceptance": [
+        "左右主从和tabs原型以相同任务数据比较后冻结",
+        "本机最近500条/成功查询元数据/重查非旧快照清楚",
+        "当前输入、展示查询值、来源/时间/陈旧状态一致，复制有键盘入口"
+      ],
+      "task_ids": [
+        "U05"
+      ]
+    },
+    {
+      "id": "audit",
+      "page": "审计",
+      "route": "/audit",
+      "path": "src/views/audit/log/index.vue",
+      "journey": "按请求筛选→查看报文；Panic/路由对账诊断",
+      "shape": "diagnostic-tabs",
+      "evidence": [
+        {
+          "repository": "zhuzhao-ui",
+          "path": "src/views/audit/log/index.vue",
+          "symbol": "fetcher / openPayload / runReconcile"
+        }
+      ],
+      "finding_status": "static_reviewed_runtime_pending",
+      "finding_ids": [
+        "FE-PRE-04",
+        "FE-PRE-07",
+        "FE-PRE-08",
+        "FE-PRE-09"
+      ],
+      "note": "发现编号含跨页规范问题；并非每项均已实机复现",
+      "batches": [
+        "UX1",
+        "UX3"
+      ],
+      "acceptance": [
+        "诊断技术词保留但摘要/高级细节分层",
+        "隐藏筛选显示生效范围；长报文复制/键盘/原位失败可恢复",
+        "审计/Panic/对账三个数据面的权限、时点和空态区分"
+      ],
+      "task_ids": [
+        "U06"
+      ]
+    },
+    {
+      "id": "users",
+      "page": "用户管理",
+      "route": "/system/user",
+      "path": "src/views/system/user/index.vue",
+      "journey": "筛选用户→创建/编辑/禁用→角色/组织分配",
+      "shape": "management-table",
+      "evidence": [
+        {
+          "repository": "zhuzhao-ui",
+          "path": "src/views/system/user/index.vue",
+          "symbol": "submitEdit / submitRoles / submitOrgs"
+        }
+      ],
+      "finding_status": "static_reviewed_runtime_pending",
+      "finding_ids": [
+        "FE-PRE-03",
+        "FE-PRE-07",
+        "FE-PRE-08",
+        "FE-PRE-10"
+      ],
+      "note": "发现编号含跨页规范问题；并非每项均已实机复现",
+      "batches": [
+        "UX1",
+        "UX3"
+      ],
+      "acceptance": [
+        "主操作/行操作更多菜单/危险动作层级一致",
+        "整体替换角色/组织明确影响范围和确认",
+        "失败不显示空列表；长姓名、多组织、窄屏可用"
+      ],
+      "task_ids": [
+        "U06"
+      ]
+    },
+    {
+      "id": "roles",
+      "page": "角色管理",
+      "route": "/system/role",
+      "path": "src/views/system/role/index.vue",
+      "journey": "创建/复制角色→分配菜单按钮→确认有效权限",
+      "shape": "management-and-permission-tree",
+      "evidence": [
+        {
+          "repository": "zhuzhao-ui",
+          "path": "src/views/system/role/index.vue",
+          "symbol": "openAssignMenus / submitAssignMenus"
+        }
+      ],
+      "finding_status": "static_reviewed_runtime_pending",
+      "finding_ids": [
+        "FE-PRE-01",
+        "FE-PRE-03",
+        "FE-PRE-07",
+        "FE-PRE-10",
+        "FE-PRE-11"
+      ],
+      "note": "发现编号含跨页规范问题；并非每项均已实机复现",
+      "batches": [
+        "UX0",
+        "UX1",
+        "UX3"
+      ],
+      "acceptance": [
+        "创建只读/自定义最小角色不导致公共首页失效",
+        "页面/按钮/继承/整体替换含义可解释，不误认勾页面就可写",
+        "树搜索/全选/半选/保存/冲突反馈可靠"
+      ],
+      "task_ids": [
+        "U01",
+        "U06"
+      ]
+    },
+    {
+      "id": "menus",
+      "page": "菜单词表",
+      "route": "/system/menu",
+      "path": "src/views/system/menu/index.vue",
+      "journey": "浏览只读导航词表→理解页面按钮绑定→进入有权角色分配",
+      "shape": "read-only-tree",
+      "evidence": [
+        {
+          "repository": "zhuzhao-ui",
+          "path": "src/views/system/menu/index.vue",
+          "symbol": "toAssign"
+        }
+      ],
+      "finding_status": "static_reviewed_runtime_pending",
+      "finding_ids": [
+        "FE-PRE-03",
+        "FE-PRE-07",
+        "FE-PRE-08",
+        "FE-PRE-11"
+      ],
+      "note": "发现编号含跨页规范问题；并非每项均已实机复现",
+      "batches": [
+        "UX1",
+        "UX3"
+      ],
+      "acceptance": [
+        "只读词表技术标识放专家/诊断信息层",
+        "无role页权限时不暴露不可达的分配按钮",
+        "大量节点搜索/展开/键盘/长permission可读"
+      ],
+      "task_ids": [
+        "U06"
+      ]
+    },
+    {
+      "id": "orgs",
+      "page": "组织管理",
+      "route": "/system/org",
+      "path": "src/views/system/org/index.vue",
+      "journey": "树定位组织→新增子级/移动→维护组织",
+      "shape": "hierarchy-tree",
+      "evidence": [
+        {
+          "repository": "zhuzhao-ui",
+          "path": "src/views/system/org/index.vue",
+          "symbol": "expandToLevel / openCreate / submitEdit"
+        }
+      ],
+      "finding_status": "static_reviewed_runtime_pending",
+      "finding_ids": [
+        "FE-PRE-03",
+        "FE-PRE-07",
+        "FE-PRE-08",
+        "FE-PRE-09",
+        "FE-PRE-11"
+      ],
+      "note": "发现编号含跨页规范问题；并非每项均已实机复现",
+      "batches": [
+        "UX1",
+        "UX3"
+      ],
+      "acceptance": [
+        "层级面包屑/树/选中同步且键盘可达",
+        "深树/长名称/大量同级不遮挡主动作",
+        "移动/虚拟组/权限/错误反馈用业务语言并保留服务端守卫"
+      ],
+      "task_ids": [
+        "U06"
+      ]
+    },
+    {
+      "id": "dicts",
+      "page": "字典",
+      "route": "/system/dict",
+      "path": "src/views/system/dict/index.vue",
+      "journey": "选类型→维护项→启停影响业务表单",
+      "shape": "master-detail-config",
+      "evidence": [
+        {
+          "repository": "zhuzhao-ui",
+          "path": "src/views/system/dict/index.vue",
+          "symbol": "fetchTypes / fetchItems / submitItem"
+        }
+      ],
+      "finding_status": "static_reviewed_runtime_pending",
+      "finding_ids": [
+        "FE-PRE-03",
+        "FE-PRE-07",
+        "FE-PRE-08",
+        "FE-PRE-11"
+      ],
+      "note": "发现编号含跨页规范问题；并非每项均已实机复现",
+      "batches": [
+        "UX1",
+        "UX3"
+      ],
+      "acceptance": [
+        "类型/项超过100时无静默截断，真实分页或显式穷尽",
+        "左栏宽度按任务确定，右项编辑空间充足",
+        "code/label错误译为业务字段；启停/级联删除风险清楚"
+      ],
+      "task_ids": [
+        "U06"
+      ]
+    },
+    {
+      "id": "notification-config",
+      "page": "通知配置",
+      "route": "/system/notification",
+      "path": "src/views/system/notification/index.vue",
+      "journey": "模板→订阅规则→发送记录排障",
+      "shape": "configuration-tabs",
+      "evidence": [
+        {
+          "repository": "zhuzhao-ui",
+          "path": "src/views/system/notification/index.vue",
+          "symbol": "fetchTemplates / fetchRules / fetchLogs / submitTpl"
+        }
+      ],
+      "finding_status": "static_reviewed_runtime_pending",
+      "finding_ids": [
+        "FE-PRE-03",
+        "FE-PRE-07",
+        "FE-PRE-08",
+        "FE-PRE-10"
+      ],
+      "note": "发现编号含跨页规范问题；并非每项均已实机复现",
+      "batches": [
+        "UX1",
+        "UX3"
+      ],
+      "acceptance": [
+        "创建在统一区块主操作位置，长实现说明移帮助/高级区",
+        "变量选择与预览、系统只读模板明确",
+        "模板/规则/日志失败与空态分别反馈，日志筛选可解释"
+      ],
+      "task_ids": [
+        "U06"
+      ]
+    },
+    {
+      "id": "settings",
+      "page": "系统设置",
+      "route": "/system/setting",
+      "path": "src/views/system/setting/index.vue",
+      "journey": "查看运行参数→编辑→统一保存/恢复默认",
+      "shape": "grouped-settings-form",
+      "evidence": [
+        {
+          "repository": "zhuzhao-ui",
+          "path": "src/views/system/setting/index.vue",
+          "symbol": "saveDirty / resetRow / dirtyKeys"
+        }
+      ],
+      "finding_status": "static_reviewed_runtime_pending",
+      "finding_ids": [
+        "FE-PRE-03",
+        "FE-PRE-07",
+        "FE-PRE-08",
+        "FE-PRE-09",
+        "FE-PRE-10"
+      ],
+      "note": "发现编号含跨页规范问题；并非每项均已实机复现",
+      "batches": [
+        "UX1",
+        "UX3"
+      ],
+      "acceptance": [
+        "设置按用户任务分组，内部key仅诊断高级区",
+        "帮助可聚焦/键盘打开，当前/默认/覆盖语义可理解",
+        "未保存离开保护、批量保存部分失败、保存后刷新失败各有反馈"
+      ],
+      "task_ids": [
+        "U06"
+      ]
+    },
+    {
+      "id": "forbidden",
+      "page": "无权限",
+      "route": "/403",
+      "path": "src/views/Error/403.vue",
+      "journey": "理解缺少权限→安全回默认页或上一步",
+      "shape": "error-recovery",
+      "evidence": [
+        {
+          "repository": "zhuzhao-ui",
+          "path": "src/views/Error/403.vue",
+          "symbol": "backHome"
+        }
+      ],
+      "finding_status": "static_reviewed_runtime_pending",
+      "finding_ids": [
+        "FE-PRE-01",
+        "FE-PRE-07",
+        "FE-PRE-09"
+      ],
+      "note": "发现编号含跨页规范问题；并非每项均已实机复现",
+      "batches": [
+        "UX0",
+        "UX3"
+      ],
+      "acceptance": [
+        "没有业务菜单也可安全返回，不循环",
+        "错误标题、恢复动作、键盘焦点可读"
+      ],
+      "task_ids": [
+        "U01",
+        "U06"
+      ]
+    },
+    {
+      "id": "not-found",
+      "page": "页面不存在",
+      "route": "/:pathMatch(.*)*",
+      "path": "src/views/Error/404.vue",
+      "journey": "识别失效/错误链接→恢复到安全目的地",
+      "shape": "error-recovery",
+      "evidence": [
+        {
+          "repository": "zhuzhao-ui",
+          "path": "src/views/Error/404.vue",
+          "symbol": "errorClick"
+        }
+      ],
+      "finding_status": "static_reviewed_runtime_pending",
+      "finding_ids": [
+        "FE-PRE-01",
+        "FE-PRE-07",
+        "FE-PRE-09"
+      ],
+      "note": "发现编号含跨页规范问题；并非每项均已实机复现",
+      "batches": [
+        "UX0",
+        "UX3"
+      ],
+      "acceptance": [
+        "addRouters为空或首项不可用仍有稳定回退",
+        "失效链接无重复404循环且不误当会话失效"
+      ],
+      "task_ids": [
+        "U01",
+        "U06"
+      ]
+    },
+    {
+      "id": "session-error",
+      "page": "会话加载失败",
+      "route": "/session-error",
+      "path": "src/views/Error/SessionError.vue",
+      "journey": "临时网络/服务异常→保留会话→重试原目的地",
+      "shape": "session-recovery",
+      "evidence": [
+        {
+          "repository": "zhuzhao-ui",
+          "path": "src/views/Error/SessionError.vue",
+          "symbol": "retry"
+        }
+      ],
+      "finding_status": "static_reviewed_runtime_pending",
+      "finding_ids": [
+        "FE-PRE-07",
+        "FE-PRE-09"
+      ],
+      "note": "发现编号含跨页规范问题；并非每项均已实机复现",
+      "batches": [
+        "UX1",
+        "UX3"
+      ],
+      "acceptance": [
+        "保留既有会话及安全redirect处理",
+        "重试/返回/错误解释可键盘操作；服务恢复后回合法目标"
+      ],
+      "task_ids": [
+        "U06"
+      ]
+    },
+    {
+      "id": "redirect",
+      "page": "页签刷新中转",
+      "route": "/redirect/:path(.*)",
+      "path": "src/views/Redirect/Redirect.vue",
+      "journey": "刷新当前页签→保留筛选上下文→返回",
+      "shape": "technical-navigation",
+      "evidence": [
+        {
+          "repository": "zhuzhao-ui",
+          "path": "src/views/Redirect/Redirect.vue",
+          "symbol": "script setup 的 replace 分支"
+        }
+      ],
+      "finding_status": "static_reviewed_runtime_pending",
+      "finding_ids": [],
+      "note": "未建立本页独有缺陷；复用全站设计/恢复合同，待运行验收",
+      "batches": [
+        "UX0",
+        "UX5"
+      ],
+      "acceptance": [
+        "现有中转组件未建立独有缺陷，纳入壳层回归",
+        "刷新不丢必要query/不出现幽灵页签或404循环"
+      ],
+      "task_ids": [
+        "U01"
+      ]
+    }
+  ],
+  "shared": [
+    {
+      "id": "shell",
+      "title": "应用壳层与导航",
+      "paths": [
+        "src/layout/Layout.vue",
+        "src/layout/components/AppView.vue",
+        "src/layout/components/PrimaryNav.vue",
+        "src/components/Logo/index.vue",
+        "src/components/TagsView/index.vue",
+        "src/router/index.ts",
+        "src/router/routes.ts",
+        "src/permission.ts"
+      ],
+      "finding_ids": [
+        "FE-PRE-01",
+        "FE-PRE-07",
+        "FE-PRE-09"
+      ],
+      "batches": [
+        "UX0",
+        "UX1",
+        "UX5"
+      ],
+      "status": "static_reviewed_runtime_pending",
+      "task_ids": [
+        "U01",
+        "U02",
+        "U07"
+      ]
+    },
+    {
+      "id": "tables",
+      "title": "列表与筛选",
+      "paths": [
+        "src/components/ProTable/index.vue",
+        "src/components/ProTable/Tools.vue",
+        "src/components/FilterBar/index.vue",
+        "src/common/hooks/src/useCrud.ts"
+      ],
+      "finding_ids": [
+        "FE-PRE-04",
+        "FE-PRE-05",
+        "FE-PRE-08",
+        "FE-PRE-09"
+      ],
+      "batches": [
+        "UX1",
+        "UX2"
+      ],
+      "status": "static_reviewed_runtime_pending",
+      "task_ids": [
+        "U02",
+        "U03",
+        "U07"
+      ]
+    },
+    {
+      "id": "design-tokens",
+      "title": "主题与视觉基础",
+      "paths": [
+        "src/common/styles/src/var.css",
+        "src/common/styles/src/index.less",
+        "uno.config.ts"
+      ],
+      "finding_ids": [
+        "FE-PRE-07"
+      ],
+      "batches": [
+        "UX1",
+        "UX5"
+      ],
+      "status": "static_reviewed_runtime_pending",
+      "task_ids": [
+        "U02",
+        "U07"
+      ]
+    },
+    {
+      "id": "badges",
+      "title": "消息/待办全局入口",
+      "paths": [
+        "src/components/NavbarBadge.vue"
+      ],
+      "finding_ids": [
+        "FE-PRE-01",
+        "FE-PRE-02"
+      ],
+      "batches": [
+        "UX0",
+        "UX1"
+      ],
+      "status": "static_reviewed_runtime_pending",
+      "task_ids": [
+        "U01",
+        "U02"
+      ]
+    },
+    {
+      "id": "picker",
+      "title": "人员选择",
+      "paths": [
+        "src/components/UserPicker/index.vue"
+      ],
+      "finding_ids": [
+        "FE-PRE-11"
+      ],
+      "batches": [
+        "UX2",
+        "UX3"
+      ],
+      "status": "static_reviewed_runtime_pending",
+      "task_ids": [
+        "U03",
+        "U04",
+        "U06"
+      ]
+    },
+    {
+      "id": "form-designer",
+      "title": "字段设计器",
+      "paths": [
+        "src/components/FormDesigner/index.vue",
+        "src/components/FormDesigner/CanvasPane.vue",
+        "src/components/FormDesigner/PropertyPane.vue"
+      ],
+      "finding_ids": [
+        "FE-PRE-09",
+        "FE-PRE-10",
+        "FE-PRE-12"
+      ],
+      "batches": [
+        "UX1",
+        "UX2",
+        "UX4"
+      ],
+      "status": "static_reviewed_runtime_pending",
+      "task_ids": [
+        "U04",
+        "U07"
+      ]
+    },
+    {
+      "id": "flow-designer",
+      "title": "流程画布",
+      "paths": [
+        "src/components/FlowGraphDesigner/index.vue",
+        "src/components/FlowGraphDesigner/mapper.ts",
+        "src/components/FlowGraphDesigner/lint.ts"
+      ],
+      "finding_ids": [
+        "FE-PRE-09",
+        "FE-PRE-10",
+        "FE-PRE-12"
+      ],
+      "batches": [
+        "UX1",
+        "UX2",
+        "UX4"
+      ],
+      "status": "static_reviewed_runtime_pending",
+      "task_ids": [
+        "U04",
+        "U07"
+      ]
+    },
+    {
+      "id": "attachments-richtext",
+      "title": "附件与富文本",
+      "paths": [
+        "src/components/TicketAttachments.vue",
+        "src/components/RichtextField.vue",
+        "src/components/RichtextView.vue",
+        "src/components/useRichtextDraft.ts"
+      ],
+      "finding_ids": [
+        "FE-PRE-08",
+        "FE-PRE-10"
+      ],
+      "batches": [
+        "UX1",
+        "UX2"
+      ],
+      "status": "static_reviewed_runtime_pending",
+      "task_ids": [
+        "U03",
+        "U04"
+      ]
+    },
+    {
+      "id": "login-and-intel-subviews",
+      "title": "登录表单与情报结果",
+      "paths": [
+        "src/views/Login/components/LoginForm.vue",
+        "src/views/intel/query/IntelResult.vue"
+      ],
+      "finding_ids": [
+        "FE-PRE-06",
+        "FE-PRE-09"
+      ],
+      "batches": [
+        "UX1",
+        "UX3"
+      ],
+      "status": "static_reviewed_runtime_pending",
+      "task_ids": [
+        "U05",
+        "U06",
+        "U07"
+      ]
+    }
+  ],
+  "planned": [
+    {
+      "id": "model-connections",
+      "page": "既有模型/外部Agent/知识服务连接配置",
+      "status": "planned_not_implemented",
+      "journey": "引用已有服务→凭据引用/场景/能力/授权范围→连通性验证→提供方深链",
+      "task_ids": [
+        "A01",
+        "A03",
+        "A05",
+        "A07"
+      ],
+      "constraint": "仅调用已有API；内网仅内部模型；无部署/GPU/训练或知识库运营复制",
+      "acceptance": [
+        "前端不持久化服务密钥明文",
+        "能力/连接失败/限流/数据域约束可解释",
+        "外部专业配置深链与本地生命周期清楚分工"
+      ]
+    },
+    {
+      "id": "domain-agent-config",
+      "page": "平台业务领域Agent配置",
+      "status": "planned_not_implemented",
+      "journey": "选择领域模板→绑定既有模型API/工具白名单/提示或skill版本/授权预算→验证发布",
+      "task_ids": [
+        "A05",
+        "A06"
+      ],
+      "constraint": "允许平台特有领域Agent；不做通用Agent开发平台、全能画布或任意脚本市场",
+      "acceptance": [
+        "工具白名单/预算/数据域由服务端裁决",
+        "本地与外部引用版本可追溯",
+        "发布/停用/回滚和受控运行证据完整"
+      ]
+    },
+    {
+      "id": "controlled-session-plan",
+      "page": "受控会话、计划预览与确认",
+      "status": "planned_not_implemented",
+      "journey": "业务上下文对话→结构化计划→目标/时间/权限影响预览→用户确认或取消",
+      "task_ids": [
+        "A01",
+        "A02",
+        "A03",
+        "A04",
+        "A05"
+      ],
+      "constraint": "当前用户授权执行；模型建议不是授权；MCP是接入协议而非提权通道",
+      "acceptance": [
+        "来源/数据时间/过滤范围明确",
+        "建单和计划任务展示结构化目标、时区、重复规则、影响范围",
+        "取消、超时、权限变化不会被静默执行"
+      ]
+    },
+    {
+      "id": "run-evidence",
+      "page": "任务结果与生命周期运行证据",
+      "status": "planned_not_implemented",
+      "journey": "查看外部平台结果/本地动作回执→定位失败→授权重试/人工交接→原平台深链",
+      "task_ids": [
+        "A01",
+        "A02",
+        "A04",
+        "A05",
+        "U06"
+      ],
+      "constraint": "来源投影与本地生命周期区分；可靠意图依赖主仓R01 P6.1；不复制SOC/SOAR专业分析或通用编排站",
+      "acceptance": [
+        "来源/更新时间/相关运行ID/版本/深链完整",
+        "部分成功/失败/未知/重试中与系统事实可区分",
+        "模型输出和工具回执不混同，跨域跳转有权限边界"
+      ]
+    }
+  ],
+  "limitations": [
+    "没有浏览器截图/真实角色运行验证，不代表视觉或a11y已经验收",
+    "发现包含规范调整和新增能力，非全部已复现运行缺陷",
+    "大量合成mock保留并扩展；关键契约/授权仍需真栈",
+    "本次只修改文档/清单/协作测试口径，没有源码、依赖、配置或账号变更"
+  ],
+  "product_principle": "数据聚合与安全全生命周期管控；专业平台能力接入/消费/跳转，保留平台特有领域Agent双轨，不复制SOC/SIEM/SOAR/CMDB/TI/知识运营平台",
+  "existing_platforms": "用户确认已有SOC/SIEM、SOAR、CMDB、TI、企业Agent/知识平台；API能力、授权、数据合同待核",
+  "schedule_source": "../../../zhuzhao/docs/review/planning-backlog.md",
+  "implementation_status": "planned_not_implemented",
+  "change_scope": "documentation_only",
+  "account_scope": "仅独立栈合成夹具账号；共享账号不变，私有库已回收",
+  "shared_accounts_changed": false,
+  "static_review": {
+    "runtime_started": false,
+    "accounts_changed": false
+  },
+  "delivery_regression": {
+    "six_checks_passed": true,
+    "unit_files": 31,
+    "unit_tests": 244,
+    "real_e2e_passed": 42,
+    "fail": 0,
+    "skip": 0,
+    "flaky": 0,
+    "scope": "现有实现；私有配置只隔离地址/代理/DNS/输出，不改spec/globalSetup/helpers",
+    "new_design_runtime_verified": false,
+    "owner_specific_logo_reproduced": false,
+    "full_site_visual_a11y_verified": false,
+    "evidence": "zhuzhao/docs/review/reports/pre-phase6-replanning-2026-11-11.md"
+  }
+}

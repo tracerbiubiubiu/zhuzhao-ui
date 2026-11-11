@@ -17,7 +17,7 @@ Vite 使用 base 模式，监听 `http://127.0.0.1:4000`，`/api`、`/al` 代理
 
 ## 真实栈前置条件
 
-E2E 不用 stub：基础服务为 PG/Redis/app，活动列表和任务场景另需 activelist/taskrunner。以下示例均为开发配置，每段在标明的仓库根目录、各自终端运行；密钥只在本地开发匹配，不用于生产。
+以下是现有关键真实栈E2E的准备步骤，该发现范围不换成stub；大量合成mock用于开发、页面状态与视觉，分层合同见[测试指南](testing.md)。基础服务为PG/Redis/app，活动列表和任务场景另需activelist/taskrunner。以下示例均为开发配置，每段在标明的仓库根目录、各自终端运行；密钥只在本地开发匹配，不用于生产。
 
 先在 **zhuzhao** 根目录启动 PG/Redis，并显式完成迁移与所需角色/菜单绑定种子，顺序以主仓 [runbook](../../../zhuzhao/docs/ops/runbook.md) 为准。然后启动 app：
 
