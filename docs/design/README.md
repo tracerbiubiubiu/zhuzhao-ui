@@ -15,3 +15,5 @@ Phase5 已验收并合入 main。全项目演进中的[全站重设计](frontend
 详设候选见[施工合同](frontend-implementation-contract.md)、[原型说明](prototypes/README.md)和[六视图离线原型](prototypes/lifecycle-workspace.html)。代表样板已做离线尺寸/交互检查，仍未接Vue/真实API，也不替代全站迁移；设备首期已确认人工登录。
 
 全项目后续旅程在[页面清单](frontend-pages.json)的future_business_journeys分P7/P8/P9列最薄首期与增强条件；不是额外已建页面。主线见[全项目路线](../../../zhuzhao/docs/roadmap.md)。
+
+2026-11-12双模式补充：[施工合同](frontend-implementation-contract.md#独立模式与企业统一认证的最小接线)与[逐页清单](frontend-pages.json)为现有登录、账号、角色和菜单页补充完整独立模式及企业adapter的最小接线。E01-UAA-P/R在相应企业激活前交付功能和来源只读/拒写反馈，U06后续统一视觉；当前只是候选合同，尚未实现或真实联调。身份/授权与排期权威仍回主仓，不在UI保存企业秘密或直调企业数据API。

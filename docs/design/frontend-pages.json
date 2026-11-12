@@ -64,6 +64,18 @@
         "U07"
       ],
       "phase": "each_owning_task_release_gate"
+    },
+    "UX6": {
+      "tasks": [
+        "E01"
+      ],
+      "milestones": [
+        "E01-UAA-P",
+        "E01-UAA-R"
+      ],
+      "phase": "P6.1公共接线及真实企业激活前",
+      "scope": "现有登录及IAM页的双模式最小功能/来源边界；U06后续统一视觉，不等待全站重做",
+      "status": "planned_not_implemented"
     }
   },
   "pages": [
@@ -134,19 +146,29 @@
       "batches": [
         "UX0",
         "UX1",
-        "UX3"
+        "UX3",
+        "UX6"
       ],
       "acceptance": [
         "真实可见label、autocomplete、错误关联与验证码键盘刷新",
         "空菜单/临时会话失败/强制改密/安全redirect均有明确去向",
-        "与控制台字体、品牌、亮暗及缩放相协调"
+        "与控制台字体、品牌、亮暗及缩放相协调",
+        "独立模式无企业配置/adapter/MQ仍可本地登录；模式和本地入口政策由后端控制，不允许浏览器参数或故障自动切换",
+        "企业登录进入后端授权入口；SPA不保存secret/直调企业token或profile，回调结果经规范会话链加载权限并使用safeLanding",
+        "合成企业成功/取消/过期/失败及无授权/空菜单有安全落点；真实企业激活前另验实际提供方，不能以静态页证明SSO通过"
       ],
       "task_ids": [
         "U01",
         "U02",
         "U06",
-        "U07"
-      ]
+        "U07",
+        "E01"
+      ],
+      "required_delivery_milestones": [
+        "E01-UAA-P",
+        "E01-UAA-R"
+      ],
+      "dual_mode_scope": "2026-11-12追加候选合同，未实施/未真实联调；原本地旅程保留，企业来源接管另验"
     },
     {
       "id": "change-password",
@@ -680,16 +702,26 @@
       "note": "发现编号含跨页规范问题；并非每项均已实机复现",
       "batches": [
         "UX1",
-        "UX3"
+        "UX3",
+        "UX6"
       ],
       "acceptance": [
         "主操作/行操作更多菜单/危险动作层级一致",
         "整体替换角色/组织明确影响范围和确认",
-        "失败不显示空列表；长姓名、多组织、窄屏可用"
+        "失败不显示空列表；长姓名、多组织、窄屏可用",
+        "独立模式保留创建/编辑/禁用和角色/组织分配；企业模式显示对象/字段管理来源、同步时点及待生效/失败状态",
+        "仅纳管对象/字段只读或受控操作，非纳管按本地权限可写；整体替换不能覆盖中央绑定，后端来源拒写有可操作反馈且不报保存成功",
+        "账号切换/停用和撤权后清理旧会话数据/路由；最小双模式接线随E01-UAA-P/R，不等待U06全站视觉"
       ],
       "task_ids": [
-        "U06"
-      ]
+        "U06",
+        "E01"
+      ],
+      "required_delivery_milestones": [
+        "E01-UAA-P",
+        "E01-UAA-R"
+      ],
+      "dual_mode_scope": "2026-11-12追加候选合同，未实施/未真实联调；原本地旅程保留，企业来源接管另验"
     },
     {
       "id": "roles",
@@ -717,17 +749,27 @@
       "batches": [
         "UX0",
         "UX1",
-        "UX3"
+        "UX3",
+        "UX6"
       ],
       "acceptance": [
         "创建只读/自定义最小角色不导致公共首页失效",
         "页面/按钮/继承/整体替换含义可解释，不误认勾页面就可写",
-        "树搜索/全选/半选/保存/冲突反馈可靠"
+        "树搜索/全选/半选/保存/冲突反馈可靠",
+        "独立模式保留角色管理、用户/组织赋角与角色菜单分配；企业纳管角色和绑定展示来源/同步时点并限制写入，非纳管角色继续按本地权限管理",
+        "混合来源整体替换、继承和组织赋角不得恢复已失效且无其他合法来源的受管授权；后端拒写不显示成功",
+        "最小功能/只读反馈随E01-UAA-P/R，U06后续统一视觉；角色同名不自动取得本地内置管理员语义"
       ],
       "task_ids": [
         "U01",
-        "U06"
-      ]
+        "U06",
+        "E01"
+      ],
+      "required_delivery_milestones": [
+        "E01-UAA-P",
+        "E01-UAA-R"
+      ],
+      "dual_mode_scope": "2026-11-12追加候选合同，未实施/未真实联调；原本地旅程保留，企业来源接管另验"
     },
     {
       "id": "menus",
@@ -753,16 +795,26 @@
       "note": "发现编号含跨页规范问题；并非每项均已实机复现",
       "batches": [
         "UX1",
-        "UX3"
+        "UX3",
+        "UX6"
       ],
       "acceptance": [
         "只读词表技术标识放专家/诊断信息层",
         "无role页权限时不暴露不可达的分配按钮",
-        "大量节点搜索/展开/键盘/长permission可读"
+        "大量节点搜索/展开/键盘/长permission可读",
+        "双模式维持只读目录/迁移维护边界，不扩为在线菜单CRUD；独立模式保留有权角色菜单分配",
+        "展示资源目录语义及必要同步状态，进入角色分配前检查目标角色是否纳管及当前操作资格；不因页面资源存在就附送写按钮权限",
+        "纳管对象的分配入口只读或受控，非纳管按权限可写；最小接线归E01-UAA-P/R，U06后续统一视觉"
       ],
       "task_ids": [
-        "U06"
-      ]
+        "U06",
+        "E01"
+      ],
+      "required_delivery_milestones": [
+        "E01-UAA-P",
+        "E01-UAA-R"
+      ],
+      "dual_mode_scope": "2026-11-12追加候选合同，未实施/未真实联调；原本地旅程保留，企业来源接管另验"
     },
     {
       "id": "orgs",
@@ -1508,5 +1560,16 @@
       "route_policy": "reuse_existing_or_provider_view_first_no_route_count_claim"
     }
   ],
-  "future_scope_note": "8项是跨阶段旅程/责任说明，不是8个已建页面；4类planned仍特指AI。既有27路由和9共享组不因未来旅程增加而改计数。"
+  "future_scope_note": "8项是跨阶段旅程/责任说明，不是8个已建页面；4类planned仍特指AI。既有27路由和9共享组不因未来旅程增加而改计数。",
+  "dual_mode_identity_governance": {
+    "date": "2026-11-12",
+    "status": "contract_candidate_not_implemented",
+    "contract_ref": "../../../zhuzhao/docs/design/uaa-governance-integration.md",
+    "ui_contract_ref": "docs/design/frontend-implementation-contract.md",
+    "standalone": "正式支持完整本地IAM；不依赖企业配置、adapter、企业MQ或企业mock",
+    "enterprise": "通过后端授权入口和私有adapter，前端不持有企业secret或直调企业token/profile/权限API",
+    "source_rule": "纳管对象/字段只读或受控操作，非纳管仍依当前本地权限可写；后端复验，不能由浏览器任意切换模式",
+    "delivery": "E01-UAA-P/R承担最小接线与验收，U06承担后续视觉统一；企业真实激活门不限制独立发布",
+    "route_count_rule": "现有四页增加候选合同，不增加27路由/9共享组或四类AI planned入口计数"
+  }
 }
