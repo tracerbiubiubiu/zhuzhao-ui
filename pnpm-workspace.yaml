@@ -19,3 +19,6 @@ overrides:
   # follow-redirects high 漏洞（GHSA-mrwp-f3q8-3g9p，<1.16.2）。原 package.json pnpm 段的同名钉
   # 在 pnpm 12 下已不生效（且写死 1.16.1，若被重新启用会降级）——2026-11-09 迁入此处并上提下限
   follow-redirects: ^1.16.2
+
+  # CVE-2026-118764：仅替换受影响的开发链范围；11.0.7 保留调用API，glob矩阵与门禁验证。
+  'minimatch@>=7.0.0 <11.0.1': 11.0.7

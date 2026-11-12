@@ -4,7 +4,7 @@
 
 ## 发布物与配置
 
-镜像来自 [deployments/Dockerfile](../../deployments/Dockerfile)：Node 构建后由 nginx:1.27-alpine 提供静态页面。主仓 [compose](../../../zhuzhao/deployments/docker-compose.yaml) 的 UI build context 是同级 `../zhuzhao-ui`。
+镜像来自 [deployments/Dockerfile](../../deployments/Dockerfile)：Node 26.13.1 LTS 构建后由 nginx 1.30.6 stable 提供静态页面；两阶段均使用 Alpine 3.24 系列并钉定多架构 OCI index digest，准确 tag/digest 以 Dockerfile 为准。主仓 [compose](../../../zhuzhao/deployments/docker-compose.yaml) 的 UI build context 是同级 `../zhuzhao-ui`。
 
 `VITE_APP_ENV` 是**构建时**登录环境徽标；`UPSTREAM_APP` 是 nginx 启动 envsubst 的**运行时**后端主机名，模板固定端口 `33333`。并非运行时零配置，细节和冒烟步骤见[部署](deployment.md)。
 

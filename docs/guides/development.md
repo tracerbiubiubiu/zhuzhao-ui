@@ -7,11 +7,13 @@
 在 UI 仓根目录，按 [.nvmrc](../../.nvmrc) 选择 Node.js，使用 [package.json](../../package.json) 的 pnpm 固定版本：
 
 ```bash
-corepack enable
+npm install --global "$(node -p 'require("./package.json").packageManager')"
 pnpm install --frozen-lockfile
 pnpm hooks
 pnpm dev
 ```
+
+Node 26 不再附带 Corepack，以上命令直接安装仓库钉定的 pnpm；不依赖宿主旧版 Corepack。升级基线、保留版本与验证边界见[本次升级报告](../review/reports/version-modernization-2026-11-12.md)。
 
 Vite 使用 base 模式，监听 `http://127.0.0.1:4000`，`/api`、`/al` 代理到宿主 app `33333`。预期浏览器可加载登录页；真正登录/菜单/业务还需要下面的服务。客户端态由 Pinia 管、服务端态由 vue-query 管，页面不另造认证或请求栈。依赖准确版本以 package.json/lockfile 为准；底座种子出处保存在 [.seed-commit](../../.seed-commit)。
 

@@ -1,5 +1,13 @@
-
-
+# Build dependencies inside the pinned Linux stage, never copy host artifacts.
+/node_modules/
+/dist/
+/dist-pro/
+/dist-dev/
+/dist-test/
+/.git/
+/test-results/
+/playwright-report/
+/e2e/.state.json
 # Local reference documents and audit artifacts (maintained docs live in docs/)
 /doc/
 /deliverables/

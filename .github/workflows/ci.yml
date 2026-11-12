@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
       - run: python3 scripts/test-commit-policy.py
@@ -20,9 +20,9 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4 # 版本取 package.json packageManager
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1；pnpm 版本取 packageManager
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .nvmrc
           cache: pnpm
@@ -35,7 +35,7 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # viewNames.test 期望名单从主仓迁移种子派生（P1-1/P3-8）——CI 须同级拉主仓
       # （ZHUZHAO_REPO 口径同 codegen.sh；两仓 public，默认 GITHUB_TOKEN 可读）
       # 2026-10-25：主仓取**同名分支**（不存在才回落 main）——两仓按同名分支（phase5/phase5）并行演进，
@@ -51,13 +51,13 @@ jobs:
             echo "ref=main" >> "$GITHUB_OUTPUT"
           fi
           echo "sibling zhuzhao ref → $(tail -n1 "$GITHUB_OUTPUT")"
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: tracerbiubiubiu/zhuzhao
           ref: ${{ steps.sibling.outputs.ref }}
           path: zhuzhao
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .nvmrc
           cache: pnpm

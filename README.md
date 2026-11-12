@@ -6,10 +6,10 @@ zhuzhao（Go 模块化单体 IAM + 工单系统）的 Vue 控制台。单仓单 
 
 ## 开始使用
 
-需要 Node.js ≥20.19 和仓库 `package.json` 钉定的 pnpm；在本仓根目录执行：
+需要 [.nvmrc](.nvmrc) 钉定的 Node.js 26.13.1 LTS 和仓库 `package.json` 钉定的 pnpm；在本仓根目录执行：
 
 ```bash
-corepack enable
+npm install --global "$(node -p 'require("./package.json").packageManager')"
 pnpm install --frozen-lockfile
 pnpm hooks
 pnpm dev
