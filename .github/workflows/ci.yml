@@ -43,8 +43,10 @@ jobs:
       # 反向守卫（页面须可达）也会把它们误报为孤岛页
       - name: Resolve sibling zhuzhao ref (same-named branch, else main)
         id: sibling
+        env:
+          SIBLING_BRANCH: ${{ github.head_ref || github.ref_name }}
         run: |
-          BR="${{ github.head_ref || github.ref_name }}"
+          BR="$SIBLING_BRANCH"
           if git ls-remote --exit-code --heads https://github.com/tracerbiubiubiu/zhuzhao.git "$BR" >/dev/null 2>&1; then
             echo "ref=$BR" >> "$GITHUB_OUTPUT"
           else

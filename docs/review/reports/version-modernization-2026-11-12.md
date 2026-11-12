@@ -37,6 +37,10 @@ Vue 3.5.43 → **3.5.45**，Element Plus 2.14.4 → **2.14.8**，Vite 8.3.4 → 
 
 checkout 升至 7.0.1、setup-node 升至 7.1.0、pnpm/action-setup 升至 6.1.1，全部使用官方 tag 解析出的完整 commit SHA。三个 Action 使用 Node 24 运行时，与被构建应用的 Node 26 是独立概念。GitHub hosted `ubuntu-latest` 满足至少 2.327.1 runner 要求；若以后迁至内网自托管 runner，需同步验证 runner 版本，Docker action 内使用 checkout 凭据还需至少 2.329.0。
 
+最终全仓 Actionlint 复核发现，本仓兄弟分支解析沿用的 `BR="${{ github.head_ref || github.ref_name }}"` 会把 PR 分支名直接拼入 shell，存在命令注入。独立安全修正将表达式经 step env `SIBLING_BRANCH` 传入，再使用 `BR="$SIBLING_BRANCH"`，不使用 eval；同名分支优先、无同名回落 main 的行为保留。
+
+从实际 workflow 解析该步骤脚本，以 fake git 执行 **8 个合法 Git 分支名回归**，覆盖普通分支、缺失回落、命令替换、反引号、引号突破和中文载荷；均未创建命令执行标记，传给 git 的参数与 UTF-8 字节逐字一致，输出 ref 符合预期。旧提交脚本的正向对照确实可创建其专属标记，证明载荷有效。Actionlint 1.7.12 与 Bash 语法检查均通过，未向远端发起 git 请求；收据为 `ci-sibling-injection-result.json` 和 `ci-sibling-actionlint.json`。此补丁仅改 CI 与本报告，不改 package/lock/src/e2e/Docker，未重新编译或重跑业务套件；下述 244/42 及镜像绑定仍是此前同一运行时输入的实际证据，不冒称本补丁的新运行。
+
 既有 push/PR 触发、同名主仓分支回落策略、lint/typecheck/build/audit/test 工作不变；本轮未实现计划 G02/G03 的 PR 治理与分档门禁，也未增加 E2E stub。CI 只能在获授权推送后以对应 SHA 的真实 run 验证，本地不冒充远端运行。
 
 ## 验证证据
