@@ -1,12 +1,12 @@
 {
-  "schema_version": 1,
-  "audit_date": "2026-11-11",
+  "schema_version": 2,
+  "audit_date": "2026-11-13",
   "repository": "zhuzhao-ui",
   "baseline": "73a18d39f695f093992d3447027a57c442e50686",
   "companion_zhuzhao_baseline": "5c0e248deb03c1f8477b0cac052597113f599f03",
-  "review_mode": "static_design_review_with_existing_private_regression",
+  "review_mode": "source_review_and_full_route_real_vue_synthetic_fixture_audit",
   "runtime_started": true,
-  "accounts_changed": true,
+  "accounts_changed": false,
   "controlled_files_modified": true,
   "coverage": {
     "route_view_files": 27,
@@ -93,14 +93,14 @@
           "symbol": "onMounted / goTickets / goDetail"
         }
       ],
-      "finding_status": "static_reviewed_runtime_pending",
+      "finding_status": "production_vue_fixture_audited_findings_open",
       "finding_ids": [
         "FE-PRE-01",
         "FE-PRE-02",
         "FE-PRE-07",
         "FE-PRE-08"
       ],
-      "note": "发现编号含跨页规范问题；并非每项均已实机复现",
+      "note": "2026-11-13已做真实Vue合成数据全路由走查；不是产品重设计已实现、后端授权通过或原用户账号根因闭环",
       "batches": [
         "UX0",
         "UX1",
@@ -109,13 +109,39 @@
       "acceptance": [
         "不绑home的自定义角色与空业务菜单点击Logo、刷新、关完页签均无404循环",
         "无业务权限不发相应请求；失败显示不可用而不是0",
-        "首页数字、口径、深链、列表真实结果一致"
+        "首页数字、口径、深链、列表真实结果一致",
+        "空菜单/无home/有home无ticket权限不404、不请求无权域",
+        "503持续显示不可用与重试，不显示0；计数深链与列表同源"
       ],
       "task_ids": [
         "U01",
         "U02",
         "U06"
-      ]
+      ],
+      "full_audit": {
+        "report": "docs/review/reports/frontend-full-audit-2026-11-13.json",
+        "page_id": "home",
+        "finding_ids": [
+          "FE-FULL-01",
+          "FE-FULL-02",
+          "FE-FULL-08",
+          "FE-FULL-09",
+          "FE-FULL-12"
+        ],
+        "scenarios": [
+          "light-wide",
+          "dark-wide",
+          "light-narrow",
+          "long-dark-narrow",
+          "empty",
+          "error",
+          "forbidden-data",
+          "loading",
+          "reader",
+          "native-zoom-200"
+        ],
+        "status": "AUDITED_WITH_FINDINGS_NOT_IMPLEMENTED"
+      }
     },
     {
       "id": "login",
@@ -136,13 +162,13 @@
           "symbol": "doLogin / submit / template"
         }
       ],
-      "finding_status": "static_reviewed_runtime_pending",
+      "finding_status": "production_vue_fixture_audited_findings_open",
       "finding_ids": [
         "FE-PRE-01",
         "FE-PRE-07",
         "FE-PRE-09"
       ],
-      "note": "发现编号含跨页规范问题；并非每项均已实机复现",
+      "note": "2026-11-13已做真实Vue合成数据全路由走查；不是产品重设计已实现、后端授权通过或原用户账号根因闭环",
       "batches": [
         "UX0",
         "UX1",
@@ -155,7 +181,9 @@
         "与控制台字体、品牌、亮暗及缩放相协调",
         "独立模式无企业配置/adapter/MQ仍可本地登录；模式和本地入口政策由后端控制，不允许浏览器参数或故障自动切换",
         "企业登录进入后端授权入口；SPA不保存secret/直调企业token或profile，回调结果经规范会话链加载权限并使用safeLanding",
-        "合成企业成功/取消/过期/失败及无授权/空菜单有安全落点；真实企业激活前另验实际提供方，不能以静态页证明SSO通过"
+        "合成企业成功/取消/过期/失败及无授权/空菜单有安全落点；真实企业激活前另验实际提供方，不能以静态页证明SSO通过",
+        "键盘完成独立登录与验证码分支，loading防重复提交，错误保留用户名",
+        "390px和200%可达提交；UAA最小入口验证另归E01-UAA-P/R"
       ],
       "task_ids": [
         "U01",
@@ -168,7 +196,25 @@
         "E01-UAA-P",
         "E01-UAA-R"
       ],
-      "dual_mode_scope": "2026-11-12追加候选合同，未实施/未真实联调；原本地旅程保留，企业来源接管另验"
+      "dual_mode_scope": "2026-11-12追加候选合同，未实施/未真实联调；原本地旅程保留，企业来源接管另验",
+      "full_audit": {
+        "report": "docs/review/reports/frontend-full-audit-2026-11-13.json",
+        "page_id": "login",
+        "finding_ids": [],
+        "scenarios": [
+          "light-wide",
+          "dark-wide",
+          "light-narrow",
+          "long-dark-narrow",
+          "empty",
+          "error",
+          "forbidden-data",
+          "loading",
+          "reader",
+          "native-zoom-200"
+        ],
+        "status": "AUDITED_WITH_FINDINGS_NOT_IMPLEMENTED"
+      }
     },
     {
       "id": "change-password",
@@ -184,13 +230,13 @@
           "symbol": "handleSubmit"
         }
       ],
-      "finding_status": "static_reviewed_runtime_pending",
+      "finding_status": "production_vue_fixture_audited_findings_open",
       "finding_ids": [
         "FE-PRE-01",
         "FE-PRE-07",
         "FE-PRE-09"
       ],
-      "note": "发现编号含跨页规范问题；并非每项均已实机复现",
+      "note": "2026-11-13已做真实Vue合成数据全路由走查；不是产品重设计已实现、后端授权通过或原用户账号根因闭环",
       "batches": [
         "UX0",
         "UX3"
@@ -198,13 +244,33 @@
       "acceptance": [
         "旧/新/确认密码错误定位清楚，键盘完成",
         "窄屏/200%下420px目标宽度不裁切内容",
-        "改密后无权目标可安全回工作台"
+        "改密后无权目标可安全回工作台",
+        "暗色整页背景一致；200%与窄屏读完错误并到达提交",
+        "改密失败保留会话；成功后按既有策略再认证"
       ],
       "task_ids": [
         "U01",
         "U06",
         "U07"
-      ]
+      ],
+      "full_audit": {
+        "report": "docs/review/reports/frontend-full-audit-2026-11-13.json",
+        "page_id": "change-password",
+        "finding_ids": [],
+        "scenarios": [
+          "light-wide",
+          "dark-wide",
+          "light-narrow",
+          "long-dark-narrow",
+          "empty",
+          "error",
+          "forbidden-data",
+          "loading",
+          "reader",
+          "native-zoom-200"
+        ],
+        "status": "AUDITED_WITH_FINDINGS_NOT_IMPLEMENTED"
+      }
     },
     {
       "id": "profile",
@@ -220,7 +286,7 @@
           "symbol": "handleSubmit / submitPat"
         }
       ],
-      "finding_status": "static_reviewed_runtime_pending",
+      "finding_status": "production_vue_fixture_audited_findings_open",
       "finding_ids": [
         "FE-PRE-03",
         "FE-PRE-07",
@@ -228,7 +294,7 @@
         "FE-PRE-10",
         "FE-PRE-11"
       ],
-      "note": "发现编号含跨页规范问题；并非每项均已实机复现",
+      "note": "2026-11-13已做真实Vue合成数据全路由走查；不是产品重设计已实现、后端授权通过或原用户账号根因闭环",
       "batches": [
         "UX1",
         "UX3"
@@ -236,11 +302,33 @@
       "acceptance": [
         "资料空值清空与未改字段合同一致",
         "凭据一次明文有明确保存确认、复制失败反馈",
-        "分组/表单宽度/列表状态/离开保护一致"
+        "分组/表单宽度/列表状态/离开保护一致",
+        "窄屏弹窗标题、输入、取消/创建均完整可达，关闭焦点回入口",
+        "Profile清空语义与当前API契约一致；不因UAA视觉统一关闭本地未纳管管理"
       ],
       "task_ids": [
         "U06"
-      ]
+      ],
+      "full_audit": {
+        "report": "docs/review/reports/frontend-full-audit-2026-11-13.json",
+        "page_id": "profile",
+        "finding_ids": [
+          "FE-FULL-09"
+        ],
+        "scenarios": [
+          "light-wide",
+          "dark-wide",
+          "light-narrow",
+          "long-dark-narrow",
+          "empty",
+          "error",
+          "forbidden-data",
+          "loading",
+          "reader",
+          "native-zoom-200"
+        ],
+        "status": "AUDITED_WITH_FINDINGS_NOT_IMPLEMENTED"
+      }
     },
     {
       "id": "my-org",
@@ -256,14 +344,14 @@
           "symbol": "loadOrgs / loadRoster / onSelectOrg"
         }
       ],
-      "finding_status": "static_reviewed_runtime_pending",
+      "finding_status": "production_vue_fixture_audited_findings_open",
       "finding_ids": [
         "FE-PRE-07",
         "FE-PRE-08",
         "FE-PRE-09",
         "FE-PRE-11"
       ],
-      "note": "发现编号含跨页规范问题；并非每项均已实机复现",
+      "note": "2026-11-13已做真实Vue合成数据全路由走查；不是产品重设计已实现、后端授权通过或原用户账号根因闭环",
       "batches": [
         "UX1",
         "UX3"
@@ -271,11 +359,35 @@
       "acceptance": [
         "组织卡键盘可选、选中态可读、长组织名不截断必要信息",
         "普通成员403是只读态而非系统失败；其他错误有重试",
-        "快速切组织不显示旧组织成员；委托写操作按真实权限验证"
+        "快速切组织不显示旧组织成员；委托写操作按真实权限验证",
+        "无组织是合法空态，失败不提示去加入组织；可重试",
+        "委托成员控件依据后端can_manage，真实scope/跨组织验证保留"
       ],
       "task_ids": [
         "U06"
-      ]
+      ],
+      "full_audit": {
+        "report": "docs/review/reports/frontend-full-audit-2026-11-13.json",
+        "page_id": "my-org",
+        "finding_ids": [
+          "FE-FULL-05",
+          "FE-FULL-10",
+          "FE-FULL-11"
+        ],
+        "scenarios": [
+          "light-wide",
+          "dark-wide",
+          "light-narrow",
+          "long-dark-narrow",
+          "empty",
+          "error",
+          "forbidden-data",
+          "loading",
+          "reader",
+          "native-zoom-200"
+        ],
+        "status": "AUDITED_WITH_FINDINGS_NOT_IMPLEMENTED"
+      }
     },
     {
       "id": "messages",
@@ -291,14 +403,14 @@
           "symbol": "fetchTop / openItem / readAll"
         }
       ],
-      "finding_status": "static_reviewed_runtime_pending",
+      "finding_status": "production_vue_fixture_audited_findings_open",
       "finding_ids": [
         "FE-PRE-02",
         "FE-PRE-07",
         "FE-PRE-08",
         "FE-PRE-09"
       ],
-      "note": "发现编号含跨页规范问题；并非每项均已实机复现",
+      "note": "2026-11-13已做真实Vue合成数据全路由走查；不是产品重设计已实现、后端授权通过或原用户账号根因闭环",
       "batches": [
         "UX1",
         "UX3"
@@ -306,11 +418,34 @@
       "acceptance": [
         "通知和派生待办语义分清，错误不显示暂无",
         "消息/待办行键盘可用；深链无权或对象已删有可恢复反馈",
-        "通知已读动作和当前待办集合各自与数据源一致"
+        "通知已读动作和当前待办集合各自与数据源一致",
+        "长标题不呈逐字竖排；键盘打开消息并返回保留位置",
+        "空收件箱与加载失败不同；逐项标读失败可重试"
       ],
       "task_ids": [
         "U06"
-      ]
+      ],
+      "full_audit": {
+        "report": "docs/review/reports/frontend-full-audit-2026-11-13.json",
+        "page_id": "messages",
+        "finding_ids": [
+          "FE-FULL-10",
+          "FE-FULL-11"
+        ],
+        "scenarios": [
+          "light-wide",
+          "dark-wide",
+          "light-narrow",
+          "long-dark-narrow",
+          "empty",
+          "error",
+          "forbidden-data",
+          "loading",
+          "reader",
+          "native-zoom-200"
+        ],
+        "status": "AUDITED_WITH_FINDINGS_NOT_IMPLEMENTED"
+      }
     },
     {
       "id": "tickets",
@@ -326,7 +461,7 @@
           "symbol": "applyRouteFilters / fetcher / onExport"
         }
       ],
-      "finding_status": "static_reviewed_runtime_pending",
+      "finding_status": "production_vue_fixture_audited_findings_open",
       "finding_ids": [
         "FE-PRE-03",
         "FE-PRE-04",
@@ -335,7 +470,7 @@
         "FE-PRE-08",
         "FE-PRE-09"
       ],
-      "note": "发现编号含跨页规范问题；并非每项均已实机复现",
+      "note": "2026-11-13已做真实Vue合成数据全路由走查；不是产品重设计已实现、后端授权通过或原用户账号根因闭环",
       "batches": [
         "UX1",
         "UX2"
@@ -343,12 +478,37 @@
       "acceptance": [
         "收起筛选仍显示所有生效条件；URL/列表/导出同口径",
         "本页全选/半选/清空可解释，切筛选清选择",
-        "逐项资源授权、部分成功、重复幂等、失败重试和不可见404同形"
+        "逐项资源授权、部分成功、重复幂等、失败重试和不可见404同形",
+        "切条件/换组织清选择，部分失败不整批成功，int64保持string",
+        "从首页深链后收起筛选仍可见生效条件；键盘展开/应用/清除"
       ],
       "task_ids": [
         "U03",
         "U06"
-      ]
+      ],
+      "full_audit": {
+        "report": "docs/review/reports/frontend-full-audit-2026-11-13.json",
+        "page_id": "tickets",
+        "finding_ids": [
+          "FE-FULL-05",
+          "FE-FULL-06",
+          "FE-FULL-08",
+          "FE-FULL-10"
+        ],
+        "scenarios": [
+          "light-wide",
+          "dark-wide",
+          "light-narrow",
+          "long-dark-narrow",
+          "empty",
+          "error",
+          "forbidden-data",
+          "loading",
+          "reader",
+          "native-zoom-200"
+        ],
+        "status": "AUDITED_WITH_FINDINGS_NOT_IMPLEMENTED"
+      }
     },
     {
       "id": "ticket-create",
@@ -364,14 +524,14 @@
           "symbol": "loadTypeFields / handleSubmit"
         }
       ],
-      "finding_status": "static_reviewed_runtime_pending",
+      "finding_status": "production_vue_fixture_audited_findings_open",
       "finding_ids": [
         "FE-PRE-03",
         "FE-PRE-07",
         "FE-PRE-08",
         "FE-PRE-10"
       ],
-      "note": "发现编号含跨页规范问题；并非每项均已实机复现",
+      "note": "2026-11-13已做真实Vue合成数据全路由走查；不是产品重设计已实现、后端授权通过或原用户账号根因闭环",
       "batches": [
         "UX1",
         "UX2"
@@ -379,12 +539,36 @@
       "acceptance": [
         "类型字段加载失败可重试且不允许空合同提交",
         "多步长表单、必填错误、富文本草稿和离开提醒清楚",
-        "提交成功但后续刷新失败不误导重复建单；字段/权限与后端一致"
+        "提交成功但后续刷新失败不误导重复建单；字段/权限与后端一致",
+        "上传B保留A，逐项失败可重试，明确删除与引用保护",
+        "依赖未就绪/无类型权限不生成假可提交字段；多账号切换不串草稿",
+        "无ticket:create直达页面不展示可提交创建动作，服务端仍独立拒绝越权"
       ],
       "task_ids": [
         "U04",
         "U06"
-      ]
+      ],
+      "full_audit": {
+        "report": "docs/review/reports/frontend-full-audit-2026-11-13.json",
+        "page_id": "ticket-create",
+        "finding_ids": [
+          "FE-FULL-10",
+          "FE-FULL-13"
+        ],
+        "scenarios": [
+          "light-wide",
+          "dark-wide",
+          "light-narrow",
+          "long-dark-narrow",
+          "empty",
+          "error",
+          "forbidden-data",
+          "loading",
+          "reader",
+          "native-zoom-200"
+        ],
+        "status": "AUDITED_WITH_FINDINGS_NOT_IMPLEMENTED"
+      }
     },
     {
       "id": "ticket-detail",
@@ -400,7 +584,7 @@
           "symbol": "doTransition / addTag / removeTag / submitAssign"
         }
       ],
-      "finding_status": "static_reviewed_runtime_pending",
+      "finding_status": "production_vue_fixture_audited_findings_open",
       "finding_ids": [
         "FE-PRE-03",
         "FE-PRE-05",
@@ -409,7 +593,7 @@
         "FE-PRE-10",
         "FE-PRE-11"
       ],
-      "note": "发现编号含跨页规范问题；并非每项均已实机复现",
+      "note": "2026-11-13已做真实Vue合成数据全路由走查；不是产品重设计已实现、后端授权通过或原用户账号根因闭环",
       "batches": [
         "UX1",
         "UX2"
@@ -417,12 +601,37 @@
       "acceptance": [
         "列表/首页/详情优先级和状态词表一致",
         "读可见的协作动作与update/assign/close权限区分",
-        "主内容/上下文侧栏/讨论可扫读，附件单独失败可恢复，切单不串数据"
+        "主内容/上下文侧栏/讨论可扫读，附件单独失败可恢复，切单不串数据",
+        "主详情403不展示可操作空壳；部分子区失败有局部重试",
+        "正文/长字段/长标题可展开全文，返回列表保留位置；任务结果语义另归CE"
       ],
       "task_ids": [
         "U04",
         "U06"
-      ]
+      ],
+      "full_audit": {
+        "report": "docs/review/reports/frontend-full-audit-2026-11-13.json",
+        "page_id": "ticket-detail",
+        "finding_ids": [
+          "FE-FULL-05",
+          "FE-FULL-09",
+          "FE-FULL-10",
+          "FE-FULL-11"
+        ],
+        "scenarios": [
+          "light-wide",
+          "dark-wide",
+          "light-narrow",
+          "long-dark-narrow",
+          "empty",
+          "error",
+          "forbidden-data",
+          "loading",
+          "reader",
+          "native-zoom-200"
+        ],
+        "status": "AUDITED_WITH_FINDINGS_NOT_IMPLEMENTED"
+      }
     },
     {
       "id": "ticket-types",
@@ -438,7 +647,7 @@
           "symbol": "submitType / openFields / saveFields"
         }
       ],
-      "finding_status": "static_reviewed_runtime_pending",
+      "finding_status": "production_vue_fixture_audited_findings_open",
       "finding_ids": [
         "FE-PRE-03",
         "FE-PRE-07",
@@ -446,7 +655,7 @@
         "FE-PRE-10",
         "FE-PRE-12"
       ],
-      "note": "发现编号含跨页规范问题；并非每项均已实机复现",
+      "note": "2026-11-13已做真实Vue合成数据全路由走查；不是产品重设计已实现、后端授权通过或原用户账号根因闭环",
       "batches": [
         "UX1",
         "UX2"
@@ -454,11 +663,35 @@
       "acceptance": [
         "复杂配置改为可审的独立编辑区，简单动作保持轻量",
         "画布/JSON/专家表格同源但业务模式清楚；校验定位且键盘可替代拖拽",
-        "草稿/版本/发布与存量工单版本合同一致，无未保存数据静默丢失"
+        "草稿/版本/发布与存量工单版本合同一致，无未保存数据静默丢失",
+        "类型/模板tab切换不串筛选/分页；编辑取消不丢已保存值",
+        "复杂画布键盘替代操作、校验定位和布局缩放随U04验收"
       ],
       "task_ids": [
         "U04"
-      ]
+      ],
+      "full_audit": {
+        "report": "docs/review/reports/frontend-full-audit-2026-11-13.json",
+        "page_id": "ticket-types",
+        "finding_ids": [
+          "FE-FULL-05",
+          "FE-FULL-10",
+          "FE-FULL-11"
+        ],
+        "scenarios": [
+          "light-wide",
+          "dark-wide",
+          "light-narrow",
+          "long-dark-narrow",
+          "empty",
+          "error",
+          "forbidden-data",
+          "loading",
+          "reader",
+          "native-zoom-200"
+        ],
+        "status": "AUDITED_WITH_FINDINGS_NOT_IMPLEMENTED"
+      }
     },
     {
       "id": "ticket-rules",
@@ -474,13 +707,13 @@
           "symbol": "openCreate / submit / onToggle"
         }
       ],
-      "finding_status": "static_reviewed_runtime_pending",
+      "finding_status": "production_vue_fixture_audited_findings_open",
       "finding_ids": [
         "FE-PRE-03",
         "FE-PRE-07",
         "FE-PRE-11"
       ],
-      "note": "发现编号含跨页规范问题；并非每项均已实机复现",
+      "note": "2026-11-13已做真实Vue合成数据全路由走查；不是产品重设计已实现、后端授权通过或原用户账号根因闭环",
       "batches": [
         "UX1",
         "UX2"
@@ -488,11 +721,37 @@
       "acceptance": [
         "priority/keyword/target_user等实现说明改业务语言，详细帮助可访问",
         "创建入口/优先级/目标人展示一致",
-        "目标人属于目标组织仍由服务端验证，人员搜索信息可靠"
+        "目标人属于目标组织仍由服务端验证，人员搜索信息可靠",
+        "冷加载/刷新/切tab零ReferenceError；空/失败不展示误导的新建引导",
+        "每行开关有规则上下文名称，错误回滚并提示；匹配业务仍原合同"
       ],
       "task_ids": [
-        "U04"
-      ]
+        "U04",
+        "U02"
+      ],
+      "full_audit": {
+        "report": "docs/review/reports/frontend-full-audit-2026-11-13.json",
+        "page_id": "ticket-rules",
+        "finding_ids": [
+          "FE-FULL-03",
+          "FE-FULL-04",
+          "FE-FULL-05",
+          "FE-FULL-10"
+        ],
+        "scenarios": [
+          "light-wide",
+          "dark-wide",
+          "light-narrow",
+          "long-dark-narrow",
+          "empty",
+          "error",
+          "forbidden-data",
+          "loading",
+          "reader",
+          "native-zoom-200"
+        ],
+        "status": "AUDITED_WITH_FINDINGS_NOT_IMPLEMENTED"
+      }
     },
     {
       "id": "tasks",
@@ -508,7 +767,7 @@
           "symbol": "fetchRuns / fetchJobs / onSubmitTask"
         }
       ],
-      "finding_status": "static_reviewed_runtime_pending",
+      "finding_status": "production_vue_fixture_audited_findings_open",
       "finding_ids": [
         "FE-PRE-03",
         "FE-PRE-04",
@@ -517,7 +776,7 @@
         "FE-PRE-10",
         "FE-PRE-12"
       ],
-      "note": "发现编号含跨页规范问题；并非每项均已实机复现；现有任务页面迁移归U06/P6.3，新增三策略恢复表单与控制台归I03/P7，自然语言计划入口归A04/P7；一次性/双源总览归I05，新手动Action入口归U08，均为P7增量",
+      "note": "2026-11-13已做真实Vue合成数据全路由走查；不是产品重设计已实现、后端授权通过或原用户账号根因闭环",
       "batches": [
         "UX1",
         "UX3",
@@ -526,7 +785,9 @@
       "acceptance": [
         "运行/定义/死信的可见和请求权限一致",
         "来源深链可还原mine/status筛选，水位与运行列表不混淆统计范围",
-        "复杂参数有结构化主模式与高级JSON，失败/取消/重试状态清楚"
+        "复杂参数有结构化主模式与高级JSON，失败/取消/重试状态清楚",
+        "三tab亮暗/窄屏/空失败分别可辨；重试/取消权限实际验证",
+        "窄屏不靠缩字号，表/详情可横滚或重排；无manage不出现定义写入口"
       ],
       "task_ids": [
         "U06",
@@ -534,7 +795,30 @@
         "A04",
         "I05",
         "U08"
-      ]
+      ],
+      "full_audit": {
+        "report": "docs/review/reports/frontend-full-audit-2026-11-13.json",
+        "page_id": "tasks",
+        "finding_ids": [
+          "FE-FULL-05",
+          "FE-FULL-08",
+          "FE-FULL-09",
+          "FE-FULL-10"
+        ],
+        "scenarios": [
+          "light-wide",
+          "dark-wide",
+          "light-narrow",
+          "long-dark-narrow",
+          "empty",
+          "error",
+          "forbidden-data",
+          "loading",
+          "reader",
+          "native-zoom-200"
+        ],
+        "status": "AUDITED_WITH_FINDINGS_NOT_IMPLEMENTED"
+      }
     },
     {
       "id": "al-data",
@@ -550,7 +834,7 @@
           "symbol": "fetchPage / submitForm / submitImport"
         }
       ],
-      "finding_status": "static_reviewed_runtime_pending",
+      "finding_status": "production_vue_fixture_audited_findings_open",
       "finding_ids": [
         "FE-PRE-03",
         "FE-PRE-07",
@@ -558,7 +842,7 @@
         "FE-PRE-09",
         "FE-PRE-11"
       ],
-      "note": "发现编号含跨页规范问题；并非每项均已实机复现",
+      "note": "2026-11-13已做真实Vue合成数据全路由走查；不是产品重设计已实现、后端授权通过或原用户账号根因闭环",
       "batches": [
         "UX1",
         "UX3"
@@ -566,11 +850,35 @@
       "acceptance": [
         "侧栏/结果区可用宽度与窄屏退化正确",
         "游标无total语义保留，筛选改动重置游标",
-        "导入显示目标/范围/条数/不可逆替换确认和结果，空数组清空显式警示"
+        "导入显示目标/范围/条数/不可逆替换确认和结果，空数组清空显式警示",
+        "390px选择类型后表与操作可读；200%不挤成竖列",
+        "无类型、无数据、查询失败、无权不同；切类型不复用旧游标/选择"
       ],
       "task_ids": [
         "U06"
-      ]
+      ],
+      "full_audit": {
+        "report": "docs/review/reports/frontend-full-audit-2026-11-13.json",
+        "page_id": "al-data",
+        "finding_ids": [
+          "FE-FULL-05",
+          "FE-FULL-09",
+          "FE-FULL-10"
+        ],
+        "scenarios": [
+          "light-wide",
+          "dark-wide",
+          "light-narrow",
+          "long-dark-narrow",
+          "empty",
+          "error",
+          "forbidden-data",
+          "loading",
+          "reader",
+          "native-zoom-200"
+        ],
+        "status": "AUDITED_WITH_FINDINGS_NOT_IMPLEMENTED"
+      }
     },
     {
       "id": "al-types",
@@ -586,14 +894,14 @@
           "symbol": "submitEditor / openHistory"
         }
       ],
-      "finding_status": "static_reviewed_runtime_pending",
+      "finding_status": "production_vue_fixture_audited_findings_open",
       "finding_ids": [
         "FE-PRE-03",
         "FE-PRE-07",
         "FE-PRE-08",
         "FE-PRE-10"
       ],
-      "note": "发现编号含跨页规范问题；并非每项均已实机复现",
+      "note": "2026-11-13已做真实Vue合成数据全路由走查；不是产品重设计已实现、后端授权通过或原用户账号根因闭环",
       "batches": [
         "UX1",
         "UX3"
@@ -601,11 +909,35 @@
       "acceptance": [
         "类型状态/字段限制/唯一键用业务可理解说明",
         "废弃只读与禁止动作有明确解释",
-        "复杂字段编辑/历史/空态符合统一配置模式"
+        "复杂字段编辑/历史/空态符合统一配置模式",
+        "历史/演进/废弃入口键盘可达；草稿/失败/冲突不丢原值",
+        "类型长名和100字段摘要有折叠/全文，不靠极窄行高展示"
       ],
       "task_ids": [
         "U06"
-      ]
+      ],
+      "full_audit": {
+        "report": "docs/review/reports/frontend-full-audit-2026-11-13.json",
+        "page_id": "al-types",
+        "finding_ids": [
+          "FE-FULL-04",
+          "FE-FULL-05",
+          "FE-FULL-10"
+        ],
+        "scenarios": [
+          "light-wide",
+          "dark-wide",
+          "light-narrow",
+          "long-dark-narrow",
+          "empty",
+          "error",
+          "forbidden-data",
+          "loading",
+          "reader",
+          "native-zoom-200"
+        ],
+        "status": "AUDITED_WITH_FINDINGS_NOT_IMPLEMENTED"
+      }
     },
     {
       "id": "intel",
@@ -621,14 +953,14 @@
           "symbol": "loadHistory / recordHistory / rerun / query"
         }
       ],
-      "finding_status": "static_reviewed_runtime_pending",
+      "finding_status": "production_vue_fixture_audited_findings_open",
       "finding_ids": [
         "FE-PRE-06",
         "FE-PRE-07",
         "FE-PRE-08",
         "FE-PRE-09"
       ],
-      "note": "发现编号含跨页规范问题；并非每项均已实机复现",
+      "note": "2026-11-13已做真实Vue合成数据全路由走查；不是产品重设计已实现、后端授权通过或原用户账号根因闭环",
       "batches": [
         "UX1",
         "UX3"
@@ -637,11 +969,34 @@
         "验证2026-11-12已确认的桌面左右栏及窄屏历史收纳，方向确认不等于页面已实施",
         "首期本机成功查询记录按用户隔离；500条仅为现态技术上限，不是额外所有者承诺",
         "历史仅回填值/类型，明确重查后才请求；结果显示本次查询/获取时间，来源/缓存/陈旧状态分清，复制有键盘入口",
-        "不新增跨端持久历史或历史结果快照；跨端历史在情报服务对接窗口评审"
+        "不新增跨端持久历史或历史结果快照；跨端历史在情报服务对接窗口评审",
+        "点击历史不发请求，不让新输入标题配旧结果；清楚标识本次获取时间",
+        "键盘复制单值/整段；空对象/缓存陈旧/来源错误分型，不自造威胁评分"
       ],
       "task_ids": [
         "U05"
-      ]
+      ],
+      "full_audit": {
+        "report": "docs/review/reports/frontend-full-audit-2026-11-13.json",
+        "page_id": "intel",
+        "finding_ids": [
+          "FE-FULL-05",
+          "FE-FULL-07"
+        ],
+        "scenarios": [
+          "light-wide",
+          "dark-wide",
+          "light-narrow",
+          "long-dark-narrow",
+          "empty",
+          "error",
+          "forbidden-data",
+          "loading",
+          "reader",
+          "native-zoom-200"
+        ],
+        "status": "AUDITED_WITH_FINDINGS_NOT_IMPLEMENTED"
+      }
     },
     {
       "id": "audit",
@@ -657,14 +1012,14 @@
           "symbol": "fetcher / openPayload / runReconcile"
         }
       ],
-      "finding_status": "static_reviewed_runtime_pending",
+      "finding_status": "production_vue_fixture_audited_findings_open",
       "finding_ids": [
         "FE-PRE-04",
         "FE-PRE-07",
         "FE-PRE-08",
         "FE-PRE-09"
       ],
-      "note": "发现编号含跨页规范问题；并非每项均已实机复现",
+      "note": "2026-11-13已做真实Vue合成数据全路由走查；不是产品重设计已实现、后端授权通过或原用户账号根因闭环",
       "batches": [
         "UX1",
         "UX3"
@@ -672,11 +1027,35 @@
       "acceptance": [
         "诊断技术词保留但摘要/高级细节分层",
         "隐藏筛选显示生效范围；长报文复制/键盘/原位失败可恢复",
-        "审计/Panic/对账三个数据面的权限、时点和空态区分"
+        "审计/Panic/对账三个数据面的权限、时点和空态区分",
+        "三tab各有loading/empty/error和重试；对账操作不当作普通零缺口",
+        "窄屏查看完整请求/恢复栈，关闭回原行；真实审计脱敏另验"
       ],
       "task_ids": [
         "U06"
-      ]
+      ],
+      "full_audit": {
+        "report": "docs/review/reports/frontend-full-audit-2026-11-13.json",
+        "page_id": "audit",
+        "finding_ids": [
+          "FE-FULL-05",
+          "FE-FULL-09",
+          "FE-FULL-10"
+        ],
+        "scenarios": [
+          "light-wide",
+          "dark-wide",
+          "light-narrow",
+          "long-dark-narrow",
+          "empty",
+          "error",
+          "forbidden-data",
+          "loading",
+          "reader",
+          "native-zoom-200"
+        ],
+        "status": "AUDITED_WITH_FINDINGS_NOT_IMPLEMENTED"
+      }
     },
     {
       "id": "users",
@@ -692,14 +1071,14 @@
           "symbol": "submitEdit / submitRoles / submitOrgs"
         }
       ],
-      "finding_status": "static_reviewed_runtime_pending",
+      "finding_status": "production_vue_fixture_audited_findings_open",
       "finding_ids": [
         "FE-PRE-03",
         "FE-PRE-07",
         "FE-PRE-08",
         "FE-PRE-10"
       ],
-      "note": "发现编号含跨页规范问题；并非每项均已实机复现",
+      "note": "2026-11-13已做真实Vue合成数据全路由走查；不是产品重设计已实现、后端授权通过或原用户账号根因闭环",
       "batches": [
         "UX1",
         "UX3",
@@ -711,7 +1090,10 @@
         "失败不显示空列表；长姓名、多组织、窄屏可用",
         "独立模式保留创建/编辑/禁用和角色/组织分配；企业模式显示对象/字段管理来源、同步时点及待生效/失败状态",
         "仅纳管对象/字段只读或受控操作，非纳管按本地权限可写；整体替换不能覆盖中央绑定，后端来源拒写有可操作反馈且不报保存成功",
-        "账号切换/停用和撤权后清理旧会话数据/路由；最小双模式接线随E01-UAA-P/R，不等待U06全站视觉"
+        "账号切换/停用和撤权后清理旧会话数据/路由；最小双模式接线随E01-UAA-P/R，不等待U06全站视觉",
+        "只移除写button权限后入口消失；真实越权/撤权仍后端门禁",
+        "当前页、筛选、弹窗并发返回不串用户；换页后不保存旧选择",
+        "业务写资格全无、仅重置密码、全有三档逐项入口正确，撤权不留旧动作；后端仍独立验证每个命令"
       ],
       "task_ids": [
         "U06",
@@ -721,7 +1103,29 @@
         "E01-UAA-P",
         "E01-UAA-R"
       ],
-      "dual_mode_scope": "2026-11-12追加候选合同，未实施/未真实联调；原本地旅程保留，企业来源接管另验"
+      "dual_mode_scope": "2026-11-12追加候选合同，未实施/未真实联调；原本地旅程保留，企业来源接管另验",
+      "full_audit": {
+        "report": "docs/review/reports/frontend-full-audit-2026-11-13.json",
+        "page_id": "users",
+        "finding_ids": [
+          "FE-FULL-05",
+          "FE-FULL-10",
+          "FE-FULL-14"
+        ],
+        "scenarios": [
+          "light-wide",
+          "dark-wide",
+          "light-narrow",
+          "long-dark-narrow",
+          "empty",
+          "error",
+          "forbidden-data",
+          "loading",
+          "reader",
+          "native-zoom-200"
+        ],
+        "status": "AUDITED_WITH_FINDINGS_NOT_IMPLEMENTED"
+      }
     },
     {
       "id": "roles",
@@ -737,7 +1141,7 @@
           "symbol": "openAssignMenus / submitAssignMenus"
         }
       ],
-      "finding_status": "static_reviewed_runtime_pending",
+      "finding_status": "production_vue_fixture_audited_findings_open",
       "finding_ids": [
         "FE-PRE-01",
         "FE-PRE-03",
@@ -745,7 +1149,7 @@
         "FE-PRE-10",
         "FE-PRE-11"
       ],
-      "note": "发现编号含跨页规范问题；并非每项均已实机复现",
+      "note": "2026-11-13已做真实Vue合成数据全路由走查；不是产品重设计已实现、后端授权通过或原用户账号根因闭环",
       "batches": [
         "UX0",
         "UX1",
@@ -758,7 +1162,9 @@
         "树搜索/全选/半选/保存/冲突反馈可靠",
         "独立模式保留角色管理、用户/组织赋角与角色菜单分配；企业纳管角色和绑定展示来源/同步时点并限制写入，非纳管角色继续按本地权限管理",
         "混合来源整体替换、继承和组织赋角不得恢复已失效且无其他合法来源的受管授权；后端拒写不显示成功",
-        "最小功能/只读反馈随E01-UAA-P/R，U06后续统一视觉；角色同名不自动取得本地内置管理员语义"
+        "最小功能/只读反馈随E01-UAA-P/R，U06后续统一视觉；角色同名不自动取得本地内置管理员语义",
+        "键盘浏览/选择权限树、保存冲突明确；不把隐藏节点当取消授权",
+        "长名称可读；只读/纳管/无管理权时不发写入"
       ],
       "task_ids": [
         "U01",
@@ -769,7 +1175,29 @@
         "E01-UAA-P",
         "E01-UAA-R"
       ],
-      "dual_mode_scope": "2026-11-12追加候选合同，未实施/未真实联调；原本地旅程保留，企业来源接管另验"
+      "dual_mode_scope": "2026-11-12追加候选合同，未实施/未真实联调；原本地旅程保留，企业来源接管另验",
+      "full_audit": {
+        "report": "docs/review/reports/frontend-full-audit-2026-11-13.json",
+        "page_id": "roles",
+        "finding_ids": [
+          "FE-FULL-05",
+          "FE-FULL-10",
+          "FE-FULL-11"
+        ],
+        "scenarios": [
+          "light-wide",
+          "dark-wide",
+          "light-narrow",
+          "long-dark-narrow",
+          "empty",
+          "error",
+          "forbidden-data",
+          "loading",
+          "reader",
+          "native-zoom-200"
+        ],
+        "status": "AUDITED_WITH_FINDINGS_NOT_IMPLEMENTED"
+      }
     },
     {
       "id": "menus",
@@ -785,14 +1213,14 @@
           "symbol": "toAssign"
         }
       ],
-      "finding_status": "static_reviewed_runtime_pending",
+      "finding_status": "production_vue_fixture_audited_findings_open",
       "finding_ids": [
         "FE-PRE-03",
         "FE-PRE-07",
         "FE-PRE-08",
         "FE-PRE-11"
       ],
-      "note": "发现编号含跨页规范问题；并非每项均已实机复现",
+      "note": "2026-11-13已做真实Vue合成数据全路由走查；不是产品重设计已实现、后端授权通过或原用户账号根因闭环",
       "batches": [
         "UX1",
         "UX3",
@@ -804,7 +1232,9 @@
         "大量节点搜索/展开/键盘/长permission可读",
         "双模式维持只读目录/迁移维护边界，不扩为在线菜单CRUD；独立模式保留有权角色菜单分配",
         "展示资源目录语义及必要同步状态，进入角色分配前检查目标角色是否纳管及当前操作资格；不因页面资源存在就附送写按钮权限",
-        "纳管对象的分配入口只读或受控，非纳管按权限可写；最小接线归E01-UAA-P/R，U06后续统一视觉"
+        "纳管对象的分配入口只读或受控，非纳管按权限可写；最小接线归E01-UAA-P/R，U06后续统一视觉",
+        "不新增菜单编辑假入口；键盘展开父子节点并可读完整code",
+        "空词表与加载失败不同；链接仅到有权角色分配页"
       ],
       "task_ids": [
         "U06",
@@ -814,7 +1244,29 @@
         "E01-UAA-P",
         "E01-UAA-R"
       ],
-      "dual_mode_scope": "2026-11-12追加候选合同，未实施/未真实联调；原本地旅程保留，企业来源接管另验"
+      "dual_mode_scope": "2026-11-12追加候选合同，未实施/未真实联调；原本地旅程保留，企业来源接管另验",
+      "full_audit": {
+        "report": "docs/review/reports/frontend-full-audit-2026-11-13.json",
+        "page_id": "menus",
+        "finding_ids": [
+          "FE-FULL-08",
+          "FE-FULL-10",
+          "FE-FULL-11"
+        ],
+        "scenarios": [
+          "light-wide",
+          "dark-wide",
+          "light-narrow",
+          "long-dark-narrow",
+          "empty",
+          "error",
+          "forbidden-data",
+          "loading",
+          "reader",
+          "native-zoom-200"
+        ],
+        "status": "AUDITED_WITH_FINDINGS_NOT_IMPLEMENTED"
+      }
     },
     {
       "id": "orgs",
@@ -830,7 +1282,7 @@
           "symbol": "expandToLevel / openCreate / submitEdit"
         }
       ],
-      "finding_status": "static_reviewed_runtime_pending",
+      "finding_status": "production_vue_fixture_audited_findings_open",
       "finding_ids": [
         "FE-PRE-03",
         "FE-PRE-07",
@@ -838,7 +1290,7 @@
         "FE-PRE-09",
         "FE-PRE-11"
       ],
-      "note": "发现编号含跨页规范问题；并非每项均已实机复现",
+      "note": "2026-11-13已做真实Vue合成数据全路由走查；不是产品重设计已实现、后端授权通过或原用户账号根因闭环",
       "batches": [
         "UX1",
         "UX3"
@@ -846,11 +1298,34 @@
       "acceptance": [
         "层级面包屑/树/选中同步且键盘可达",
         "深树/长名称/大量同级不遮挡主动作",
-        "移动/虚拟组/权限/错误反馈用业务语言并保留服务端守卫"
+        "移动/虚拟组/权限/错误反馈用业务语言并保留服务端守卫",
+        "长/深层级可展开定位完整路径；搜索不误隐藏当前节点",
+        "操作前显示影响范围，失败保留选中；撤部/离职策略另按合同验收"
       ],
       "task_ids": [
         "U06"
-      ]
+      ],
+      "full_audit": {
+        "report": "docs/review/reports/frontend-full-audit-2026-11-13.json",
+        "page_id": "orgs",
+        "finding_ids": [
+          "FE-FULL-10",
+          "FE-FULL-11"
+        ],
+        "scenarios": [
+          "light-wide",
+          "dark-wide",
+          "light-narrow",
+          "long-dark-narrow",
+          "empty",
+          "error",
+          "forbidden-data",
+          "loading",
+          "reader",
+          "native-zoom-200"
+        ],
+        "status": "AUDITED_WITH_FINDINGS_NOT_IMPLEMENTED"
+      }
     },
     {
       "id": "dicts",
@@ -866,14 +1341,14 @@
           "symbol": "fetchTypes / fetchItems / submitItem"
         }
       ],
-      "finding_status": "static_reviewed_runtime_pending",
+      "finding_status": "production_vue_fixture_audited_findings_open",
       "finding_ids": [
         "FE-PRE-03",
         "FE-PRE-07",
         "FE-PRE-08",
         "FE-PRE-11"
       ],
-      "note": "发现编号含跨页规范问题；并非每项均已实机复现",
+      "note": "2026-11-13已做真实Vue合成数据全路由走查；不是产品重设计已实现、后端授权通过或原用户账号根因闭环",
       "batches": [
         "UX1",
         "UX3"
@@ -881,11 +1356,36 @@
       "acceptance": [
         "类型/项超过100时无静默截断，真实分页或显式穷尽",
         "左栏宽度按任务确定，右项编辑空间充足",
-        "code/label错误译为业务字段；启停/级联删除风险清楚"
+        "code/label错误译为业务字段；启停/级联删除风险清楚",
+        "101+项数据可达且总量解释正确；切类型不串项/编辑草稿",
+        "每行开关含所属类型与code名称；错误回滚，键盘可操作"
       ],
       "task_ids": [
         "U06"
-      ]
+      ],
+      "full_audit": {
+        "report": "docs/review/reports/frontend-full-audit-2026-11-13.json",
+        "page_id": "dicts",
+        "finding_ids": [
+          "FE-FULL-04",
+          "FE-FULL-05",
+          "FE-FULL-09",
+          "FE-FULL-10"
+        ],
+        "scenarios": [
+          "light-wide",
+          "dark-wide",
+          "light-narrow",
+          "long-dark-narrow",
+          "empty",
+          "error",
+          "forbidden-data",
+          "loading",
+          "reader",
+          "native-zoom-200"
+        ],
+        "status": "AUDITED_WITH_FINDINGS_NOT_IMPLEMENTED"
+      }
     },
     {
       "id": "notification-config",
@@ -901,14 +1401,14 @@
           "symbol": "fetchTemplates / fetchRules / fetchLogs / submitTpl"
         }
       ],
-      "finding_status": "static_reviewed_runtime_pending",
+      "finding_status": "production_vue_fixture_audited_findings_open",
       "finding_ids": [
         "FE-PRE-03",
         "FE-PRE-07",
         "FE-PRE-08",
         "FE-PRE-10"
       ],
-      "note": "发现编号含跨页规范问题；并非每项均已实机复现",
+      "note": "2026-11-13已做真实Vue合成数据全路由走查；不是产品重设计已实现、后端授权通过或原用户账号根因闭环",
       "batches": [
         "UX1",
         "UX3"
@@ -916,11 +1416,35 @@
       "acceptance": [
         "创建在统一区块主操作位置，长实现说明移帮助/高级区",
         "变量选择与预览、系统只读模板明确",
-        "模板/规则/日志失败与空态分别反馈，日志筛选可解释"
+        "模板/规则/日志失败与空态分别反馈，日志筛选可解释",
+        "3tab空/失败均区分，重试不重复发送；日志能看逐项错误",
+        "窄屏模板正文/长变量可读；Esc/取消/保存焦点与输入保护一致"
       ],
       "task_ids": [
         "U06"
-      ]
+      ],
+      "full_audit": {
+        "report": "docs/review/reports/frontend-full-audit-2026-11-13.json",
+        "page_id": "notification-config",
+        "finding_ids": [
+          "FE-FULL-04",
+          "FE-FULL-10",
+          "FE-FULL-11"
+        ],
+        "scenarios": [
+          "light-wide",
+          "dark-wide",
+          "light-narrow",
+          "long-dark-narrow",
+          "empty",
+          "error",
+          "forbidden-data",
+          "loading",
+          "reader",
+          "native-zoom-200"
+        ],
+        "status": "AUDITED_WITH_FINDINGS_NOT_IMPLEMENTED"
+      }
     },
     {
       "id": "settings",
@@ -936,7 +1460,7 @@
           "symbol": "saveDirty / resetRow / dirtyKeys"
         }
       ],
-      "finding_status": "static_reviewed_runtime_pending",
+      "finding_status": "production_vue_fixture_audited_findings_open",
       "finding_ids": [
         "FE-PRE-03",
         "FE-PRE-07",
@@ -944,7 +1468,7 @@
         "FE-PRE-09",
         "FE-PRE-10"
       ],
-      "note": "发现编号含跨页规范问题；并非每项均已实机复现",
+      "note": "2026-11-13已做真实Vue合成数据全路由走查；不是产品重设计已实现、后端授权通过或原用户账号根因闭环",
       "batches": [
         "UX1",
         "UX3"
@@ -952,11 +1476,37 @@
       "acceptance": [
         "设置按用户任务分组，内部key仅诊断高级区",
         "帮助可聚焦/键盘打开，当前/默认/覆盖语义可理解",
-        "未保存离开保护、批量保存部分失败、保存后刷新失败各有反馈"
+        "未保存离开保护、批量保存部分失败、保存后刷新失败各有反馈",
+        "多值MIME与长key在窄屏/200%不截断；有无管理权一致",
+        "pending不是未配置；恢复默认显式预览并验证并发版本冲突",
+        "默认/自定义行的tooltip无空子节点告警，帮助可键盘操作"
       ],
       "task_ids": [
         "U06"
-      ]
+      ],
+      "full_audit": {
+        "report": "docs/review/reports/frontend-full-audit-2026-11-13.json",
+        "page_id": "settings",
+        "finding_ids": [
+          "FE-FULL-04",
+          "FE-FULL-08",
+          "FE-FULL-10",
+          "FE-FULL-14"
+        ],
+        "scenarios": [
+          "light-wide",
+          "dark-wide",
+          "light-narrow",
+          "long-dark-narrow",
+          "empty",
+          "error",
+          "forbidden-data",
+          "loading",
+          "reader",
+          "native-zoom-200"
+        ],
+        "status": "AUDITED_WITH_FINDINGS_NOT_IMPLEMENTED"
+      }
     },
     {
       "id": "forbidden",
@@ -972,25 +1522,47 @@
           "symbol": "backHome"
         }
       ],
-      "finding_status": "static_reviewed_runtime_pending",
+      "finding_status": "production_vue_fixture_audited_findings_open",
       "finding_ids": [
         "FE-PRE-01",
         "FE-PRE-07",
         "FE-PRE-09"
       ],
-      "note": "发现编号含跨页规范问题；并非每项均已实机复现",
+      "note": "2026-11-13已做真实Vue合成数据全路由走查；不是产品重设计已实现、后端授权通过或原用户账号根因闭环",
       "batches": [
         "UX0",
         "UX3"
       ],
       "acceptance": [
         "没有业务菜单也可安全返回，不循环",
-        "错误标题、恢复动作、键盘焦点可读"
+        "错误标题、恢复动作、键盘焦点可读",
+        "无home/空菜单点击返回不回404循环；Tab到按钮并可激活",
+        "文案不把权限不足说成数据不存在；不通过前端重试授权"
       ],
       "task_ids": [
         "U01",
         "U06"
-      ]
+      ],
+      "full_audit": {
+        "report": "docs/review/reports/frontend-full-audit-2026-11-13.json",
+        "page_id": "forbidden",
+        "finding_ids": [
+          "FE-FULL-01"
+        ],
+        "scenarios": [
+          "light-wide",
+          "dark-wide",
+          "light-narrow",
+          "long-dark-narrow",
+          "empty",
+          "error",
+          "forbidden-data",
+          "loading",
+          "reader",
+          "native-zoom-200"
+        ],
+        "status": "AUDITED_WITH_FINDINGS_NOT_IMPLEMENTED"
+      }
     },
     {
       "id": "not-found",
@@ -1006,25 +1578,47 @@
           "symbol": "errorClick"
         }
       ],
-      "finding_status": "static_reviewed_runtime_pending",
+      "finding_status": "production_vue_fixture_audited_findings_open",
       "finding_ids": [
         "FE-PRE-01",
         "FE-PRE-07",
         "FE-PRE-09"
       ],
-      "note": "发现编号含跨页规范问题；并非每项均已实机复现",
+      "note": "2026-11-13已做真实Vue合成数据全路由走查；不是产品重设计已实现、后端授权通过或原用户账号根因闭环",
       "batches": [
         "UX0",
         "UX3"
       ],
       "acceptance": [
         "addRouters为空或首项不可用仍有稳定回退",
-        "失效链接无重复404循环且不误当会话失效"
+        "失效链接无重复404循环且不误当会话失效",
+        "未知路由可恢复；无业务菜单稳定返回个人入口，不循环",
+        "亮暗/200%下标题、说明和恢复动作均可达"
       ],
       "task_ids": [
         "U01",
         "U06"
-      ]
+      ],
+      "full_audit": {
+        "report": "docs/review/reports/frontend-full-audit-2026-11-13.json",
+        "page_id": "not-found",
+        "finding_ids": [
+          "FE-FULL-01"
+        ],
+        "scenarios": [
+          "light-wide",
+          "dark-wide",
+          "light-narrow",
+          "long-dark-narrow",
+          "empty",
+          "error",
+          "forbidden-data",
+          "loading",
+          "reader",
+          "native-zoom-200"
+        ],
+        "status": "AUDITED_WITH_FINDINGS_NOT_IMPLEMENTED"
+      }
     },
     {
       "id": "session-error",
@@ -1040,23 +1634,43 @@
           "symbol": "retry"
         }
       ],
-      "finding_status": "static_reviewed_runtime_pending",
+      "finding_status": "production_vue_fixture_audited_findings_open",
       "finding_ids": [
         "FE-PRE-07",
         "FE-PRE-09"
       ],
-      "note": "发现编号含跨页规范问题；并非每项均已实机复现",
+      "note": "2026-11-13已做真实Vue合成数据全路由走查；不是产品重设计已实现、后端授权通过或原用户账号根因闭环",
       "batches": [
         "UX1",
         "UX3"
       ],
       "acceptance": [
         "保留既有会话及安全redirect处理",
-        "重试/返回/错误解释可键盘操作；服务恢复后回合法目标"
+        "重试/返回/错误解释可键盘操作；服务恢复后回合法目标",
+        "503重试回原合法目标；重复点受控，不清仍有效token",
+        "重试失败持续反馈；站外redirect仍拒绝"
       ],
       "task_ids": [
         "U06"
-      ]
+      ],
+      "full_audit": {
+        "report": "docs/review/reports/frontend-full-audit-2026-11-13.json",
+        "page_id": "session-error",
+        "finding_ids": [],
+        "scenarios": [
+          "light-wide",
+          "dark-wide",
+          "light-narrow",
+          "long-dark-narrow",
+          "empty",
+          "error",
+          "forbidden-data",
+          "loading",
+          "reader",
+          "native-zoom-200"
+        ],
+        "status": "AUDITED_WITH_FINDINGS_NOT_IMPLEMENTED"
+      }
     },
     {
       "id": "redirect",
@@ -1072,20 +1686,42 @@
           "symbol": "script setup 的 replace 分支"
         }
       ],
-      "finding_status": "static_reviewed_runtime_pending",
+      "finding_status": "production_vue_fixture_audited_findings_open",
       "finding_ids": [],
-      "note": "未建立本页独有缺陷；复用全站设计/恢复合同，待运行验收",
+      "note": "2026-11-13已做真实Vue合成数据全路由走查；不是产品重设计已实现、后端授权通过或原用户账号根因闭环",
       "batches": [
         "UX0",
         "UX5"
       ],
       "acceptance": [
         "现有中转组件未建立独有缺陷，纳入壳层回归",
-        "刷新不丢必要query/不出现幽灵页签或404循环"
+        "刷新不丢必要query/不出现幽灵页签或404循环",
+        "刷新/重载回原合法页；撤权/无home有安全替代目的地",
+        "中转无循环，无空白停留，不把该文件的空态当数据空态"
       ],
       "task_ids": [
         "U01"
-      ]
+      ],
+      "full_audit": {
+        "report": "docs/review/reports/frontend-full-audit-2026-11-13.json",
+        "page_id": "redirect",
+        "finding_ids": [
+          "FE-FULL-01"
+        ],
+        "scenarios": [
+          "light-wide",
+          "dark-wide",
+          "light-narrow",
+          "long-dark-narrow",
+          "empty",
+          "error",
+          "forbidden-data",
+          "loading",
+          "reader",
+          "native-zoom-200"
+        ],
+        "status": "AUDITED_WITH_FINDINGS_NOT_IMPLEMENTED"
+      }
     }
   ],
   "shared": [
@@ -1112,12 +1748,14 @@
         "UX1",
         "UX5"
       ],
-      "status": "static_reviewed_runtime_pending",
+      "status": "source_reviewed_route_runtime_sampled_with_limits",
       "task_ids": [
         "U01",
         "U02",
         "U07"
-      ]
+      ],
+      "full_audit_ref": "docs/review/reports/frontend-full-audit-2026-11-13.md",
+      "runtime_limit": "见逐页记录与真实Vue代表组合；合成调用不证明后端授权"
     },
     {
       "id": "tables",
@@ -1138,12 +1776,14 @@
         "UX1",
         "UX2"
       ],
-      "status": "static_reviewed_runtime_pending",
+      "status": "source_reviewed_route_runtime_sampled_with_limits",
       "task_ids": [
         "U02",
         "U03",
         "U07"
-      ]
+      ],
+      "full_audit_ref": "docs/review/reports/frontend-full-audit-2026-11-13.md",
+      "runtime_limit": "见逐页记录与真实Vue代表组合；合成调用不证明后端授权"
     },
     {
       "id": "design-tokens",
@@ -1160,11 +1800,13 @@
         "UX1",
         "UX5"
       ],
-      "status": "static_reviewed_runtime_pending",
+      "status": "source_reviewed_route_runtime_sampled_with_limits",
       "task_ids": [
         "U02",
         "U07"
-      ]
+      ],
+      "full_audit_ref": "docs/review/reports/frontend-full-audit-2026-11-13.md",
+      "runtime_limit": "见逐页记录与真实Vue代表组合；合成调用不证明后端授权"
     },
     {
       "id": "badges",
@@ -1180,11 +1822,13 @@
         "UX0",
         "UX1"
       ],
-      "status": "static_reviewed_runtime_pending",
+      "status": "source_reviewed_route_runtime_sampled_with_limits",
       "task_ids": [
         "U01",
         "U02"
-      ]
+      ],
+      "full_audit_ref": "docs/review/reports/frontend-full-audit-2026-11-13.md",
+      "runtime_limit": "见逐页记录与真实Vue代表组合；合成调用不证明后端授权"
     },
     {
       "id": "picker",
@@ -1199,12 +1843,14 @@
         "UX2",
         "UX3"
       ],
-      "status": "static_reviewed_runtime_pending",
+      "status": "source_reviewed_route_runtime_sampled_with_limits",
       "task_ids": [
         "U03",
         "U04",
         "U06"
-      ]
+      ],
+      "full_audit_ref": "docs/review/reports/frontend-full-audit-2026-11-13.md",
+      "runtime_limit": "见逐页记录与真实Vue代表组合；合成调用不证明后端授权"
     },
     {
       "id": "form-designer",
@@ -1224,11 +1870,13 @@
         "UX2",
         "UX4"
       ],
-      "status": "static_reviewed_runtime_pending",
+      "status": "source_reviewed_route_runtime_sampled_with_limits",
       "task_ids": [
         "U04",
         "U07"
-      ]
+      ],
+      "full_audit_ref": "docs/review/reports/frontend-full-audit-2026-11-13.md",
+      "runtime_limit": "表单/流程画布内部全部键盘替代与写入排列未全覆盖；不将其记PASS"
     },
     {
       "id": "flow-designer",
@@ -1248,11 +1896,13 @@
         "UX2",
         "UX4"
       ],
-      "status": "static_reviewed_runtime_pending",
+      "status": "source_reviewed_route_runtime_sampled_with_limits",
       "task_ids": [
         "U04",
         "U07"
-      ]
+      ],
+      "full_audit_ref": "docs/review/reports/frontend-full-audit-2026-11-13.md",
+      "runtime_limit": "表单/流程画布内部全部键盘替代与写入排列未全覆盖；不将其记PASS"
     },
     {
       "id": "attachments-richtext",
@@ -1271,11 +1921,13 @@
         "UX1",
         "UX2"
       ],
-      "status": "static_reviewed_runtime_pending",
+      "status": "source_reviewed_route_runtime_sampled_with_limits",
       "task_ids": [
         "U03",
         "U04"
-      ]
+      ],
+      "full_audit_ref": "docs/review/reports/frontend-full-audit-2026-11-13.md",
+      "runtime_limit": "见逐页记录与真实Vue代表组合；合成调用不证明后端授权"
     },
     {
       "id": "login-and-intel-subviews",
@@ -1292,12 +1944,14 @@
         "UX1",
         "UX3"
       ],
-      "status": "static_reviewed_runtime_pending",
+      "status": "source_reviewed_route_runtime_sampled_with_limits",
       "task_ids": [
         "U05",
         "U06",
         "U07"
-      ]
+      ],
+      "full_audit_ref": "docs/review/reports/frontend-full-audit-2026-11-13.md",
+      "runtime_limit": "见逐页记录与真实Vue代表组合；合成调用不证明后端授权"
     }
   ],
   "planned": [
@@ -1375,17 +2029,17 @@
     }
   ],
   "limitations": [
-    "没有生产Vue全站视觉/原生缩放/真实角色的新设计验收；离线六视图已有截图/交互检查，不代表全站视觉或a11y通过",
-    "发现包含规范调整和新增能力，非全部已复现运行缺陷",
-    "大量合成mock保留并扩展；关键契约/授权仍需真栈",
-    "本轮受控变更为设计文档/清单/离线原型；既有实现回归仅使用已回收私有栈合成账号，共享账号不变"
+    "2026-11-13真实Vue全路由合成状态/亮暗/视口/原生200%/键盘与AX候选已经审查，详见full_site_audit；不是新设计全部实现或无障碍认证",
+    "真实后端授权/撤权/Provider与全部写动作不由本轮fixture证明；既有真实栈回归仍是历史独立收据",
+    "领域编辑器全部画布/弹层与异步排列未穷举；逐页记录明确NOT_RUN，实施时须完成对应真实旅程",
+    "大量合成mock持续保留；本轮不修改产品代码、不触真实账号、不对外上传公司资料"
   ],
   "product_principle": "数据聚合与安全全生命周期管控；专业平台能力接入/消费/跳转，保留平台特有领域Agent双轨，不复制SOC/SIEM/SOAR/CMDB/TI/知识运营平台",
   "existing_platforms": "用户确认已有SOC/SIEM、SOAR、CMDB、TI、企业Agent/知识平台；API能力、授权、数据合同待核",
   "schedule_source": "../../../zhuzhao/docs/review/planning-backlog.md",
   "implementation_status": "planned_not_implemented",
-  "change_scope": "documentation_and_offline_prototype_only",
-  "account_scope": "仅独立栈合成夹具账号；共享账号不变，私有库已回收",
+  "change_scope": "设计文档/清单/正式审计报告；review harness/截图仅ignored；无生产源码改动",
+  "account_scope": "2026-11-13仅隔离浏览器合成token/数据；未调用真实账号API，历史私有回归见historical_2026_11_11_context",
   "shared_accounts_changed": false,
   "static_review": {
     "runtime_started": false,
@@ -1403,7 +2057,8 @@
     "new_design_runtime_verified": false,
     "owner_specific_logo_reproduced": false,
     "full_site_visual_a11y_verified": false,
-    "evidence": "zhuzhao/docs/review/reports/pre-phase6-replanning-2026-11-11.md"
+    "evidence": "zhuzhao/docs/review/reports/pre-phase6-replanning-2026-11-11.md",
+    "date": "2026-11-11（历史独立收据，不是本轮重复门禁）"
   },
   "planned_scope": "四类原始计划入口为AI专项；风险/事件/设备未来工作区在planned_business_refs明确引用所属包，不把六视图原型当全站实施",
   "planned_business_refs": [
@@ -1571,5 +2226,24 @@
     "source_rule": "纳管对象/字段只读或受控操作，非纳管仍依当前本地权限可写；后端复验，不能由浏览器任意切换模式",
     "delivery": "E01-UAA-P/R承担最小接线与验收，U06承担后续视觉统一；企业真实激活门不限制独立发布",
     "route_count_rule": "现有四页增加候选合同，不增加27路由/9共享组或四类AI planned入口计数"
-  }
+  },
+  "full_site_audit": {
+    "report": "docs/review/reports/frontend-full-audit-2026-11-13.md",
+    "machine_report": "docs/review/reports/frontend-full-audit-2026-11-13.json",
+    "route_records": 243,
+    "native_zoom_records": 27,
+    "semantics_records": 54,
+    "backend_auth_verified": false,
+    "new_design_implemented": false,
+    "accounts_changed": false
+  },
+  "historical_2026_11_11_context": {
+    "baseline": "73a18d39f695f093992d3447027a57c442e50686",
+    "companion_zhuzhao_baseline": "5c0e248deb03c1f8477b0cac052597113f599f03",
+    "runtime_started": true,
+    "accounts_changed": true,
+    "account_scope": "仅独立栈合成夹具账号；共享账号不变，私有库已回收",
+    "note": "原始静态+后续私有栈回归时点；不是2026-11-13合成浏览器审查的账号变更"
+  },
+  "baseline_role": "2026-11-11初审快照；2026-11-13当前源码基线以full_site_audit报告为准"
 }

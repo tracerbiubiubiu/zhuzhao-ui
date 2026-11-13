@@ -6,7 +6,7 @@
 
 UI 页面和请求封装由本仓维护；共享 HTTP/IAM/迁移规则以主仓 [standards.md](../../zhuzhao/docs/standards.md) 为准。新增页面先对[UI 约束](design/frontend-ui.md)与主仓[场景矩阵](../../zhuzhao/docs/phase4/03-scenarios-and-tests.md)，不要从历史报告推导当前接口。
 
-Phase 4 收官后，小批可在 main 集成；大批量/风险改动使用经确认的建设分支。当前 Phase 5 在 `phase5` 工作，合 main 的时机由所有者收口拍板，不能因文档整理自行切分支、合并或推送。新建 Codex 工作分支使用 `codex/` 前缀。
+Phase5已完成五仓main承接。按所有者本会话确认，五仓全部改动使用短分支经PR合入main，完整适用检查通过后允许单维护者自行合入；取代Phase4小批直推和旧phase5当前分支口径。新建Codex工作分支使用`codex/`前缀。远端保护/required checks是否生效另核G02/G03，不能因文档更新自行push、合并、发版或切共享环境。
 
 ## 提交规范与机械检查
 

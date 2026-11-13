@@ -41,7 +41,7 @@ pnpm gate          # 六件门禁一键串行（lint → typecheck → test → 
 ## 提交规范
 
 - 中文提交信息，描述改动+原因+验证证据；**主题行 `type(scope): ` 后 ≤50 字**（对齐主仓 [standards.md §12-9](../zhuzhao/docs/standards.md)；硬规则①–⑤已由 `scripts/commit-policy.py` 同核守卫，2026-11-08 落地，复验登记 [RR-GIT-01](../zhuzhao/docs/review/reports/zhuzhao-report-followup-2026-11-08.md)）
-- 分支：Phase 4 收官后小批直提 main（门禁绿+推送后核实 CI；2026-10-08 口径更新——收官后 40+ 笔既成实践）；大批量/风险改动恢复建设期 Wave 短分支制（p4-w2-shell…，合入即删）——本仓 main 即集成分支（**对主仓 02 §5.1 phase4 拓扑的显式豁免**，2026-09-28 注记；主仓侧同日已注记）
+- 分支与合入（2026-11-13按所有者确认更新）：五仓统一短分支经PR合入main，完整适用检查通过后允许单维护者自行合入；取代旧Phase4小批直推豁免。远端保护/required checks是否已生效须另核G02/G03实际回执，不能由本条文字宣称已启用。默认只完成本批本地提交，不自动push、合main、发版或切共享环境。
 
 - 开工先 `pnpm hooks`：只为当前 worktree 安装 `.githooks`，保留 common hooksPath；`pre-commit` 在途显影、`commit-msg` 先校验消息再拦跨主题重题、`pre-push` 按实际推送 refs 检查新提交。需要 Python 3 + Git，无新增 npm 依赖。
 - `git fetch origin` 后 `pnpm commit-lint` 核对当前分支待推送窗口；`pnpm test:commit-lint` 跑 42 项隔离黑盒（2026-11-08；后续以测试源码/实际输出为准）。CI 独立 `commit-policy` job 以事件载荷的 before/after 或 PR base/head 复用同核，包含新 merge 提交；历史采用 `scripts/commit-policy-baseline` 固定接入点 `152258638abaa3bd3daa656255a794c5422a0e58` 的祖先豁免，禁止滚动基线隐藏新违规。历史不改写，严格追溯用 `range --strict`。
