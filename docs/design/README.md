@@ -17,3 +17,5 @@ Phase5 已验收并合入 main。全项目演进中的[全站重设计](frontend
 全项目后续旅程在[页面清单](frontend-pages.json)的future_business_journeys分P7/P8/P9列最薄首期与增强条件；不是额外已建页面。主线见[全项目路线](../../../zhuzhao/docs/roadmap.md)。
 
 2026-11-12双模式补充：[施工合同](frontend-implementation-contract.md#独立模式与企业统一认证的最小接线)与[逐页清单](frontend-pages.json)为现有登录、账号、角色和菜单页补充完整独立模式及企业adapter的最小接线。E01-UAA-P/R在相应企业激活前交付功能和来源只读/拒写反馈，U06后续统一视觉；当前只是候选合同，尚未实现或真实联调。身份/授权与排期权威仍回主仓，不在UI保存企业秘密或直调企业数据API。
+
+2026-11-13一致性与能力互通补充：主仓[生态一致性合同](../../../zhuzhao/docs/design/ecosystem-consistency-contract.md)明确统一内容、允许的领域/页面差异、权威源和机械/真实验证；[能力调用合同](../../../zhuzhao/docs/design/capability-invocation-contract.md)统一核心/插件能力的受权调用与结果语义。UI接线见[施工合同](frontend-implementation-contract.md#所有能力的前端消费与最小接线)：沿用现有tokens、Element Plus、ProTable/FilterBar，U02/U07先样板、U03–U06逐页推广；新增能力的按钮、权限反馈、运行状态与结果必须和业务同批。当前formatter/profile、推荐tokens全站推广与三类调用闭环仍未实现，lint与离线原型不能证明完成。
