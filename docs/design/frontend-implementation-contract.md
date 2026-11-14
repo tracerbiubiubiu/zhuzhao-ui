@@ -178,11 +178,11 @@
 
 现状是单工单`POST /api/v1/tickets/tags`，`src/api/ticket/index.ts`的`addTicketTagsApi`消费该端点；主仓`internal/service/ticket/tag_service.go`的`Service.AddTags`按read逐项授权，trim/去重/滤空并保留创建者。`Service.RemoveTag`要求read，自摘可做，摘他人还需update；批量添加不能为方便整体升级成ticket:update。主仓`internal/handler/ticket_handler.go`的`AddTags`约束最多20标签、单项50字符。
 
-推荐在U03固化受控批量端点，候选`POST /api/v1/tickets/tags/batch`（尚未实施/定版），标准响应信封沿主仓公约。请求为操作幂等标识、显式`ticket_ids: string[]`和`tags: string[]`，建议首档最多50工单、标签沿现有上限；最终上限由API Owner压测/权限预算确认。首档UI可每次一个标签，API不为此破坏已有标签数组语义。
+**2026-11-14模块详设后继**：首版按[主仓工单详设](../../../zhuzhao/docs/phase6/ticket-module-detail.md)与已价UI/U8复用现有单项`addTicketTagsApi`，不新增batch后端API。显式本页已选ID（候选最多50）与冻结标签集合，限并发逐票调用并汇总；现有AddTags逐票授权和同标签幂等作为效果底线，禁止`Promise.all`后统一成功toast。切查询/切账号清选择，取消只停未发送项，已发结果仍逐项保留；重试保留同一目标/标签，不改原创建者。是否以后需要服务端batch以真实吞吐需求另审，原候选`/tickets/tags/batch`不是首版前置或当前现成API。
 
-每项返回`ticket_id`、`outcome: added|unchanged|unavailable|retryable|unknown`和安全的结果信息；不可见/不存在/已删除同形unavailable，不回传未授权对象标题/组织。请求语法/认证失败走既有非2xx信封；合法批次的逐项结果可由2xx载荷表达，不等于全部成功。已提交项不跨工单伪装原子回滚；同标签重复提交不得转移原创建者归属，重试只针对可重试项，unknown先查操作结果，避免重复效果。
+客户端逐项结果模型为`ticket_id`、`outcome: added|unchanged|unavailable|retryable|unknown`和安全的结果信息；只有现有响应明确区分时才显示added/unchanged，否则显示“已保存”，不伪造新增数量。不可见/不存在/已删除同形unavailable，不回传未授权对象标题/组织。请求语法/认证失败走既有非2xx信封；逐项结果不等于全部成功。已提交项不跨工单伪装原子回滚；同标签重复提交不得转移原创建者归属，超时仅对这个已确认幂等的AddTags能力用同一目标/标签有限重投，不能将这种重试外推到普通未知写效果。
 
-服务端每个资源重新核验权限，关联请求/操作ID与逐项结果，客户端不能靠复选框证明授权。若先复用单项API，必须有上限和限并发、逐项汇总、取消/恢复策略及真实授权测试，不能`Promise.all`后统一成功toast。批量移除另列子能力，保留自摘/摘他人的差异。
+服务端每个资源重新核验权限，关联请求及适用操作ID与逐项结果，客户端不能靠复选框证明授权；首版上述有界单项接线须验部分失败/撤权/超时重试和取消。批量移除另列子能力，保留自摘/摘他人的差异。
 
 原型只演示两项本页选择、同标签不重复、逐项成功/无变化回执；部分失败/权限变化/未知效果由此合同和后续mock+真实验收覆盖，不声称已有API实现。
 
