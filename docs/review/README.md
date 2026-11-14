@@ -1,10 +1,16 @@
 # UI 审查 — 当前状态入口与历史报告索引
 
-本文从原 deliverables 索引迁入；正式报告统一在 [reports/](reports/README.md)，原 archive 的跟进报告与基线平铺，发现编号不变。当前操作以[任务导读](../README.md)为准。
+> **用途**：先定位当前状态和验收规则，再追溯历史证据。**范围/状态**：历史数字、失败与结论绑定原候选，不代表新HEAD或部署。**权威**：当前状态回主仓总账，报告仅证明固定时点；核对日期2026-11-13。
 
 ## 当前状态应怎样核查
 
-Phase 4 已收官，Phase 5 修复与门禁的最新状态由主仓[项目控制台](../../../zhuzhao/docs/review/11-project-control.md)和[2026-11-08 followup](../../../zhuzhao/docs/review/reports/zhuzhao-report-followup-2026-11-08.md)记录；后续合 main/部署/远端 CI 以实际授权与固定收据为准。
+- **已实现与待处理**：主仓[项目控制台](../../../zhuzhao/docs/review/11-project-control.md)给当前能力/债和已验快照入口；Phase5已合main，准确源码、运行产物、远端CI与部署仍须分别核固定收据。
+- **后续设计与owner审阅**：先看[规划收口与模块深度](../../../zhuzhao/docs/review/planning-closeout.md)，再按[三节短审阅卡](../../../zhuzhao/docs/phase6/implementation-handoff.md#单维护者短审阅卡)审本批行为与风险。UI方案从[设计入口](../design/README.md)进入，目标合同和离线原型不算实现。
+- **本批测试与验收**：按[测试指南](../guides/testing.md)保留测试先行、守卫验牙、真实六件门禁、mock/contract/real及首次失败/重试/NOT_RUN披露；分档未因导航整理启用。当前操作从[任务导读](../README.md)选择开发/运维路径。
+
+## 历史报告怎样使用
+
+本文从原deliverables索引迁入；正式报告统一在[reports/](reports/README.md)，原archive的跟进报告与基线平铺，发现编号不变。[2026-11-08 followup](../../../zhuzhao/docs/review/reports/zhuzhao-report-followup-2026-11-08.md)用于追修复/复验链，不再充当当前唯一状态入口。
 
 2026-11-08首次五仓文档整理已完成本地验证，结果与限制见[整理记录](../../../zhuzhao/docs/review/reports/documentation-reorganization-2026-11-08.md)：UI原样六件门禁通过，241单测、41 E2E、无跳过或实际重试。该结果绑定当轮源码快照，不证明后续候选、远端CI或生产部署已经验证；本页是证据导航，不能把下列历史报告的绿色结果外推到今天。
 

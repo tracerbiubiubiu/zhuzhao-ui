@@ -7,17 +7,19 @@
 在 UI 仓根目录，按 [.nvmrc](../../.nvmrc) 选择 Node.js，使用 [package.json](../../package.json) 的 pnpm 固定版本：
 
 ```bash
-corepack enable
+npm install --global "$(node -p 'require("./package.json").packageManager')"
 pnpm install --frozen-lockfile
 pnpm hooks
 pnpm dev
 ```
 
+Node 26 不再附带 Corepack，以上命令直接安装仓库钉定的 pnpm；不依赖宿主旧版 Corepack。升级基线、保留版本与验证边界见[本次升级报告](../review/reports/version-modernization-2026-11-12.md)。
+
 Vite 使用 base 模式，监听 `http://127.0.0.1:4000`，`/api`、`/al` 代理到宿主 app `33333`。预期浏览器可加载登录页；真正登录/菜单/业务还需要下面的服务。客户端态由 Pinia 管、服务端态由 vue-query 管，页面不另造认证或请求栈。依赖准确版本以 package.json/lockfile 为准；底座种子出处保存在 [.seed-commit](../../.seed-commit)。
 
 ## 真实栈前置条件
 
-E2E 不用 stub：基础服务为 PG/Redis/app，活动列表和任务场景另需 activelist/taskrunner。以下示例均为开发配置，每段在标明的仓库根目录、各自终端运行；密钥只在本地开发匹配，不用于生产。
+以下是现有关键真实栈E2E的准备步骤，该发现范围不换成stub；大量合成mock用于开发、页面状态与视觉，分层合同见[测试指南](testing.md)。基础服务为PG/Redis/app，活动列表和任务场景另需activelist/taskrunner。以下示例均为开发配置，每段在标明的仓库根目录、各自终端运行；密钥只在本地开发匹配，不用于生产。
 
 先在 **zhuzhao** 根目录启动 PG/Redis，并显式完成迁移与所需角色/菜单绑定种子，顺序以主仓 [runbook](../../../zhuzhao/docs/ops/runbook.md) 为准。然后启动 app：
 
