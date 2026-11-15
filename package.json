@@ -23,6 +23,8 @@
     "test:e2e": "playwright test",
     "audit:prod": "pnpm audit --prod --registry=https://registry.npmjs.org",
     "gate": "pnpm run lint && pnpm run typecheck && pnpm run test && pnpm run audit:prod && pnpm run build && pnpm run test:e2e",
+    "quality:plan": "python3 scripts/quality-gate.py local --kind ui --base origin/main --plan-only",
+    "quality:check": "python3 scripts/quality-gate.py local --kind ui --base origin/main",
     "codegen": "bash scripts/codegen.sh",
     "clean": "rimraf dist dist-pro dist-dev dist-test node_modules/.cache",
     "hooks": "sh scripts/install-git-hooks.sh",

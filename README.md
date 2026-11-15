@@ -48,7 +48,7 @@ pnpm dev
 
 ## 参与贡献
 
-欢迎通过 [Issues](https://github.com/tracerbiubiubiu/zhuzhao-ui/issues) 提交可复现的问题和使用场景，或发起小范围 PR。先读[贡献指南](docs/contributing.md)与 [AGENTS.md](AGENTS.md)，保持测试先行；提交前运行 `pnpm gate` 六件门禁，涉及真实栈的验证按指南准备独占环境。
+欢迎通过 [Issues](https://github.com/tracerbiubiubiu/zhuzhao-ui/issues) 提交可复现的问题和使用场景，或发起小范围 PR。先读[贡献指南](docs/contributing.md)与 [AGENTS.md](AGENTS.md)，保持代码测试先行；提交前以`pnpm quality:plan`核对分类、`pnpm quality:check`运行文档/参考检查，完整档须另在独占环境跑`pnpm gate`六件门禁，具体准备按指南执行。
 
 示例、mock 和截图仅使用合成数据，不提交公司内部信息、凭据或真实业务数据。如果这个项目对你有帮助，欢迎给[主项目](https://github.com/tracerbiubiubiu/zhuzhao)一个 Star。
 

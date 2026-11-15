@@ -12,6 +12,20 @@ python3 -m http.server 8088 --bind 127.0.0.1 --directory docs/design/prototypes
 
 然后打开`http://127.0.0.1:8088/lifecycle-workspace.html`。这只提供静态文件，不启动后端、不使用真实账号。端口被占用时自行选择空闲私有端口，勿复用共享开发服务。
 
+## 当前可复跑检查
+
+2026-11-16新增受控入口[scripts/test-reference-prototypes.mjs](../../../scripts/test-reference-prototypes.mjs)，使用本仓既有Playwright依赖和Chromium：
+
+```bash
+pnpm exec playwright install chromium
+node scripts/test-reference-prototypes.mjs --self-test
+node scripts/test-reference-prototypes.mjs
+```
+
+脚本只启动私有临时loopback静态服务器与独立浏览器上下文，不启动Vite或真实业务栈、不运行E2E globalSetup。正向任务覆盖1366×768与390×844下的导航、任务卡角色边界/本人在途过滤、筛选折叠保留、明确本页批量标签及逐项回执、详情、情报历史需显式重查、编辑离开保护、计划勾选确认、只读角色与空菜单，以及加载/错误/空状态；禁止脚本错误与非本地网络，检查文档外层无横向溢出并输出六视图截图。`--self-test`先用原样本证明同一断言通过，再对权限泄漏、自动查询、失去离开保护、无需勾选确认与外部请求五种独立变异断言拒绝。
+
+机器结果和截图默认写ignored `.codex/audits/tiered-gates-20261116/prototype-<时间戳>/`，可用`QUALITY_ARTIFACT_DIR`指定父目录。截图是审阅材料，尚无自动视觉差异基线；这套离线合成任务不能证明生产Vue、真实权限/接口、暗色、原生缩放、读屏或所有键盘任务通过。普通参考批由分类计划调用本入口，修改检查器本身仍须完整档；以下旧检查结果保留原时点，不因新增入口视为已重跑。
+
 ## 看什么、怎么操作
 
 - **工作台**：有任务读取资格的处置与配置样本显示工单、我发起的任务、消息三域；普通成员隐藏任务卡，工单/消息两卡自动等分宽度。工单近期截止信息并入工单卡和主列表；空业务菜单只保留安全工作台、个人消息与身份入口。点Logo可稳定返回。数字来自合成集合，不是项目真实指标。

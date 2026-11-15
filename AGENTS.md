@@ -12,9 +12,11 @@
 4. **示例纪律**：以公司文档举例产出的页面/设计，落档时脱敏为通用抽象；公共产品名作示例不受限。
 - 违反处置：视同敏感信息泄漏（发现即修）；review 与审计列为检查项。详细后端侧规则见主仓 `docs/standards.md` §1.1。
 
-## 前端门禁（每批交付前必跑）
+## 前端门禁（每批交付前跑完整适用组合）
 
 > 测试策略与纪律（大量合成mock/contract/real分层、变异验牙、FE4哨兵、豁免登记、真实栈独占跑）SSOT = [docs/guides/testing.md](./docs/guides/testing.md)。所有者已确认大量mock为持续前提；旧“不mock中间层”不再是禁令。mock用于开发、状态/交互/视觉，契约检查防样本漂移，关键真实栈门禁保留；新增mock工具与命令须按U02/U07实施，不能将当前`test:e2e`静默改成stub套件。
+
+**分档规则（2026-11-16）**：普通说明/导航/历史报告文档为`document`，做文档/链接与提交检查；登记的候选Schema、离线HTML原型与规划生成工具为`reference`，另做格式、候选语义及对应工具/原型针对验证；业务代码、运行时输入、正式接口/权限/迁移/运维协议、产品测试及夹具、CI、分类器和豁免规则为`ordinary`，保留完整六件门禁。按内容与实际消费者分类，不以扩展名或处于`docs/`降档；混合批取最高适用组合、未知从严。代码测试先行与守卫验牙不变。`pnpm quality:plan`查看本地直接`base..HEAD`差集及在途改动计划（默认`origin/main`，可追加`--base <ref>`覆盖），不推导merge-base。`pnpm quality:check`只执行文档/参考检查；完整档随后明确失败并要求另在独占环境跑原六件，不自动调用共享业务栈。提交规范继续由钩子及独立CI检查。`pnpm gate`保留完整六件入口；门禁规则自身的本批修改必须按完整六件验收。细则和离线验证边界见测试指南。
 
 ```bash
 pnpm lint          # ESLint（纯检查；自动修复用 pnpm lint:fix，修复后重跑 lint）
@@ -23,14 +25,16 @@ pnpm test          # Vitest（动态路由解析/请求层单飞刷新/keep-aliv
 pnpm audit --prod  # npm 供应链（对称 Go 侧 govulncheck；镜像源无 audit 端点时加 --registry=https://registry.npmjs.org）
 pnpm build         # 产物构建
 pnpm test:e2e      # 现有关键真实栈Playwright（S1–S8/S10/S12/S16–S17/FE3·FE4/W4·W5/P4/P5 穿插池——30 spec / 42 用例；本发现范围不改为stub——W5 需 activelist/taskrunner 上游，前提见下）
-pnpm gate          # 六件门禁一键串行（lint → typecheck → test → audit:prod → build → test:e2e）——交付前跑这一条；任一红即停，E2E 不得再被「本地人工验收」口径静默跳过（2026-10-25 E2E 补齐批教训）
+pnpm gate          # ordinary档六件一键串行（lint → typecheck → test → audit:prod → build → test:e2e）；任一红即停，适用的真实栈E2E不得静默跳过
+pnpm quality:plan  # 显示base..HEAD及在途改动的分档与完整适用组合，不执行门禁
+pnpm quality:check # 执行文档/参考检查；ordinary档要求另在独占环境跑原六件并退出失败
 ```
 
 **E2E 运行前提**：主仓 `bash scripts/dev-stack.sh up`（dev PG/Redis）+ `INTERNAL_JOBS_SK=xxx make dev`（app @33333）；W5 场景另需两上游：activelist（compose.dev PG@15432 + `ACTIVELIST_CALLER_ZHUZHAO_SK=dev-gateway-sk go run ./cmd/apiserver`——监听地址随其自身 config 默认 :18081（11-02 迁移后），无需 addr env + 主仓 `make dev` 自动注入 `GATEWAY_AL_TARGET=http://127.0.0.1:18081` 免改 config（2026-11-02 env 注入治理））+ taskrunner（@18080：TASKRUNNER_HTTP_ADDR=:18080 + TASKRUNNER_REDIS_PASSWORD=zhuzhao_dev + CALLER_ZHUZHAO_SK=dev-taskrunner-sk/SELF_SK + CALLBACK_TARGET_URL=http://127.0.0.1:33333/internal/jobs/callback，app 侧带 TASKRUNNER_BASE_URL=http://127.0.0.1:18080/TASKRUNNER_SK=dev-taskrunner-sk）；vite dev server 由 Playwright webServer 自动拉起。globalSetup 幂等建号（admin 凭据闭环/operator·viewer 预设/S1 重置），可无限重放。浏览器下载被墙时：`PLAYWRIGHT_DOWNLOAD_HOST=https://cdn.npmmirror.com/binaries/playwright pnpm exec playwright install chromium`。
 
 **测试账号纪律**：E000001（superadmin种子号）密码终态恒为`admin12345`；人工/agent多账号测试一律用专属E000002+，禁止修改E000001。仅acceptance/globalSetup既定幂等例外流或主仓break-glass复原可收敛其值，权威见主仓runbook §4。
 
-**纪律**：门禁不全绿不得标记完成；关键真实栈E2E仍打真后端（菜单/资源权限、迁移、服务调用与写动作必须有真实证据），mock/contract通过不能替代；CI（`.github/workflows/ci.yml`）跑 lint/typecheck/build/audit/test——现有真实栈E2E与Go仓acceptance同口径走本地执行，不能静默省略；**推送后核实 CI run 转绿才算交付闭环**（`gh run list`/`gh run watch`——本地绿≠CI绿）。每批分别披露mock、contract、real及视觉/键盘结果；未实现的测试工具不写作已运行。
+**纪律**：完整适用门禁不全绿不得标记完成；关键真实栈E2E仍打真后端（菜单/资源权限、迁移、服务调用与写动作必须有真实证据），mock/contract通过不能替代；CI（`.github/workflows/ci.yml`）的`changes`按事件真实差集生成计划，提交与文档检查必跑，`reference-check`按计划执行，原`lint`/`test`仅在`runtime=true`时执行且保留原完整行为；`quality-gate`聚合检查，拒绝应跑未跑、失败、取消或应跑却跳过。现有真实栈E2E与Go仓acceptance同口径走本地执行，不能静默省略；**推送后核实 CI run 转绿才算交付闭环**（`gh run list`/`gh run watch`——本地绿≠CI绿）。远端required checks是否切到聚合身份须另获授权配置与回执，不能因本条自行修改保护。每批分别披露mock、contract、real及视觉/键盘结果；未实现的测试工具不写作已运行。
 
 **i18n 口径**：当前英文面显式暂不启用，`src/locales/`骨架与en词包保留（含`login.*Placeholder`闲置键）；新页面中文，勿新增半成品键。P6.1的U02固定复核本轮语言范围、资产责任与后续复评窗口，不再仅挂“英文用户出现”。切换器仍由`appConfig.ui.locale=false`隐藏，本次文档不启用它；后续改变时同步词包、页面、`e2e/ui.ts`及调用者，历史方案见主仓Phase4的02号§5.4。
 

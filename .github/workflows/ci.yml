@@ -1,12 +1,29 @@
-# 最小质量网（对齐 Go 四仓 ci.yml 风格；01 号 §7「CI 分仓：zhuzhao-ui 自己的流水线跑前端门禁」）：
-# lint + typecheck + build / vitest 单测。E2E 打标准三栈 compose（03 号拍板不用 stub），
-# 与 Go 仓 acceptance 同纪律——本地人工执行（AGENTS.md 前端门禁）。
+# 分档质量网：普通文档轻检查、参考产物针对验证，其余完整运行原有 lint/test。
+# commit-policy 与文档检查始终保留；quality-gate 拒绝应跑未跑、失败和取消。
+# 关键真实栈 E2E 仍按 AGENTS.md 在本地独占环境执行。
 name: ci
 on:
   push:
     branches: [main, "phase5", "feature/**", "codex/**"]
   pull_request:
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      mode: ${{ steps.classify.outputs.mode }}
+      runtime: ${{ steps.classify.outputs.runtime }}
+      references: ${{ steps.classify.outputs.references }}
+      plan: ${{ steps.classify.outputs.plan }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - run: python3 scripts/test-quality-gate.py
+      - run: python3 scripts/test-check-docs.py
+      - run: python3 scripts/test-check-references.py
+      - id: classify
+        run: python3 scripts/quality-gate.py classify --kind ui --event-path "$GITHUB_EVENT_PATH" --head "$GITHUB_SHA" --github-output "$GITHUB_OUTPUT"
   commit-policy:
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -17,10 +34,48 @@ jobs:
       - run: python3 scripts/test-commit-policy.py
       # 使用push before/after或PR base/head载荷；不能改成checkout HEAD或HEAD~N。
       - run: python3 scripts/commit-policy.py ci --fetch-missing
+  document-check:
+    needs: changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - run: python3 scripts/check-docs.py --plan-env QUALITY_PLAN
+        env:
+          QUALITY_PLAN: ${{ needs.changes.outputs.plan }}
+  reference-check:
+    needs: changes
+    if: needs.changes.outputs.references == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+        if: contains(fromJSON(needs.changes.outputs.plan).references, 'prototype')
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        if: contains(fromJSON(needs.changes.outputs.plan).references, 'prototype')
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+        if: contains(fromJSON(needs.changes.outputs.plan).references, 'prototype')
+      - run: pnpm exec playwright install --with-deps chromium
+        if: contains(fromJSON(needs.changes.outputs.plan).references, 'prototype')
+      - run: python3 scripts/check-references.py --plan-env QUALITY_PLAN
+        env:
+          QUALITY_PLAN: ${{ needs.changes.outputs.plan }}
   lint:
+    needs: changes
+    if: needs.changes.outputs.runtime == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
       - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1；pnpm 版本取 packageManager
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
@@ -33,9 +88,13 @@ jobs:
       # 供应链审计（AGENTS 六件门禁之一；官方源——镜像源无 audit 端点）
       - run: pnpm audit --prod --registry=https://registry.npmjs.org
   test:
+    needs: changes
+    if: needs.changes.outputs.runtime == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
       # viewNames.test 期望名单从主仓迁移种子派生（P1-1/P3-8）——CI 须同级拉主仓
       # （ZHUZHAO_REPO 口径同 codegen.sh；两仓 public，默认 GITHUB_TOKEN 可读）
       # 2026-10-25：主仓取**同名分支**（不存在才回落 main）——两仓按同名分支（phase5/phase5）并行演进，
@@ -56,6 +115,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: tracerbiubiubiu/zhuzhao
+          fetch-depth: 0
           ref: ${{ steps.sibling.outputs.ref }}
           path: zhuzhao
       - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
@@ -67,3 +127,16 @@ jobs:
       - run: pnpm test
         env:
           ZHUZHAO_REPO: ${{ github.workspace }}/zhuzhao
+  quality-gate:
+    needs: [changes, commit-policy, document-check, reference-check, lint, test]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - run: python3 scripts/quality-gate.py summarize --plan-env QUALITY_PLAN --needs-env NEEDS_JSON --runtime-jobs lint,test
+        env:
+          QUALITY_PLAN: ${{ needs.changes.outputs.plan }}
+          NEEDS_JSON: ${{ toJSON(needs) }}
