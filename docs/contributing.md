@@ -35,9 +35,9 @@ python3 scripts/commit-policy.py range --strict --before <完整旧SHA> --after 
 ## 提交与交付顺序
 
 1. `git status` 核对本批归属；并行工作树索引不代表文件归属。
-2. 运行 [测试指南](guides/testing.md)要求的相关验证与 `pnpm gate`；后端契约变化按[codegen流程](guides/development.md#类型生成与契约接线)同步。
+2. 先用`pnpm quality:plan`核对`base..HEAD`及在途改动分类，再运行`pnpm quality:check`的文档/参考检查和[测试指南](guides/testing.md)要求的针对验证；完整档会明确要求另在独占环境跑`pnpm gate`六件并退出失败，本地分类入口不自动操作共享业务栈。后端契约变化按[codegen流程](guides/development.md#类型生成与契约接线)同步。混合批取最高适用组合，未知从严；不能以路径/扩展名把正式协议、运行输入、产品测试、CI或门禁规则降为普通文档。
 3. 只用显式路径提交；禁止 `git add -A`、`git commit -a`、无路径裸 `git commit`。提交后核对 `git show --stat`。
 4. 获授权推送前按主仓公约做 fetch、端点与新增差集核对；多人并发由单一会话推送。改史操作须独占，不能卷走其他会话 staged 内容。
 5. 推送后核实本次 CI run success。本地门禁与远端 CI 各有证据，badge 只是入口；未推送时不要声称 CI 已通过。
 
-交付固定附**改动摘要 / 影响面 / 验证证据**三节，未跑与未覆盖范围明确写出；未通过全门禁不得标记完成。当前指南和设计进入本仓 `docs/`，正式时点报告进入 [review/reports](review/reports/README.md)，原日志留本地忽略目录。
+交付固定附**改动摘要 / 影响面 / 验证证据**三节，写明分类计划及完整适用组合，未跑与未覆盖范围明确写出；未通过完整适用门禁不得标记完成。`quality-gate`聚合CI结果，远端保护配置另行授权，不因本批指南生效而自动变更。当前指南和设计进入本仓 `docs/`，正式时点报告进入 [review/reports](review/reports/README.md)，原日志留本地忽略目录。
