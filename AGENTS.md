@@ -2,6 +2,13 @@
 
 > 本文件对每次在本仓库工作的 AI/协作方生效。当前UI设计见本仓 [docs/design/frontend-ui.md](docs/design/frontend-ui.md)，阶段来源回链主仓 `zhuzhao/docs/phase4/01-frontend-design.md`。后续全站改造按[重设计合同](docs/design/frontend-redesign.md)与主仓[规划总账](../zhuzhao/docs/planning/planning-backlog.md)实施，文档落档不代表页面已改造。
 
+## 文档与工作资料归属
+
+- 新增或移动文档前，先按[文档维护约定](../zhuzhao/docs/documentation.md)确定唯一归属、Git保留范围及入口；详细规则只维护该页。
+- 可复用方法、空白模板和开发提示词从[工作资料库](../zhuzhao/docs/toolkit/README.md)查找并复用；填写后的执行实例按正式结论或本地过程材料归档，不能回填到模板原件。
+- 当前计划归主仓planning，合同/指南归实现仓docs，正式结论归review/reports；原始调研、日志、截图、备份和操作收据按[材料目录](../zhuzhao/docs/materials.md)留仓库外档案。ignored `.codex/`仅作执行工作区，收尾提炼结论并登记材料ID。
+- 不在src下新建散落报告目录或第二套长期知识库；模板/提示词不扩大操作授权，也不改变本仓门禁。迁移须检查链接、脚本和真实消费者，收尾核Git状态及材料去向。
+
 ## 开源定位与公司信息隔离基线（2026-10-09 定，全仓强制；SSOT=主仓 standards.md §1.1）
 
 > 本项目定位为**开源项目**；所有公司内部对接能力一律不在前端实现（对接走后端网关 API，前端零直连）。以下对**文档、代码、mock 数据同等强制**：
@@ -66,7 +73,7 @@ pnpm quality:check # 执行文档/参考检查；ordinary档要求另在独占�
 - **日期**：一律 `YYYY-MM-DD`
 - **标题**：H1 = `# <文档名> — <一句话定位>`，章节用 H2、不编号
 - **计数口径**（随实际增长同步，禁止两处不同值）：E2E「30 spec / 42 用例」（P5 六件=CC 标签/S2 画布/S6 消息中心/S3a 转换+规则/通知配置管理面，2026-10-25/26 补齐——phase5 曾全程未落浏览器，见主仓 11 号同日批次行）、单测「31 文件 / 244 用例」、E2E 范围串「S1–S8/S10/S12/S16–S17/FE3·FE4/W4·W5/P4/P5 穿插池」、门禁统称「六件门禁」（lint/typecheck/test/audit/build/test:e2e，一键=`pnpm gate`）
-- **存放**：五仓各自维护 `docs/`、统一分类；UI自身设计/规范/指南归本仓，跨服务工程/API/IAM/迁移与阶段决策仍回链主仓唯一权威。根README为入口、AGENTS保留机器协议；正式时点报告住 `docs/review/reports/`，命名 `<topic-kebab>-<YYYY-MM-DD>.md`，原日志/执行卡等留 `.codex/`。`doc/`为本地参考，旧deliverables/outputs/audit-reports不再受控入口，Git与Docker均忽略。
+- **存放**：五仓各自维护 `docs/`、统一分类；UI自身设计/规范/指南归本仓，跨服务工程/API/IAM/迁移与阶段决策仍回链主仓唯一权威。根README为入口、AGENTS保留机器协议；正式时点报告住 `docs/review/reports/`，命名 `<topic-kebab>-<YYYY-MM-DD>.md`，原日志/执行卡等在ignored `.codex/`执行，收尾按主仓材料目录归仓库外档案。`doc/`为本地参考，旧deliverables/outputs/audit-reports不再受控入口，Git与Docker均忽略。
 - **计数/状态声明须与实测一致**：改 E2E/单测数量或修复状态时，以实际输出和本节快照核对，README只保留入口不复制数字；「全部修复」类表述须有逐项证据（docs/review/reports/或主仓当轮收据为凭）
 
 ## 前端 UI 规范（2026-10-08 制定）
