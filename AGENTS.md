@@ -1,6 +1,6 @@
 # AGENTS.md — zhuzhao-ui 前端协作协议
 
-> 本文件对每次在本仓库工作的 AI/协作方生效。当前UI设计见本仓 [docs/design/frontend-ui.md](docs/design/frontend-ui.md)，阶段来源回链主仓 `zhuzhao/docs/phase4/01-frontend-design.md`。后续全站改造按[重设计合同](docs/design/frontend-redesign.md)与主仓[规划总账](../zhuzhao/docs/review/planning-backlog.md)实施，文档落档不代表页面已改造。
+> 本文件对每次在本仓库工作的 AI/协作方生效。当前UI设计见本仓 [docs/design/frontend-ui.md](docs/design/frontend-ui.md)，阶段来源回链主仓 `zhuzhao/docs/phase4/01-frontend-design.md`。后续全站改造按[重设计合同](docs/design/frontend-redesign.md)与主仓[规划总账](../zhuzhao/docs/planning/planning-backlog.md)实施，文档落档不代表页面已改造。
 
 ## 开源定位与公司信息隔离基线（2026-10-09 定，全仓强制；SSOT=主仓 standards.md §1.1）
 

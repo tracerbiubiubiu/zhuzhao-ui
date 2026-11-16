@@ -5,7 +5,7 @@
 ## 当前状态应怎样核查
 
 - **已实现与待处理**：主仓[项目控制台](../../../zhuzhao/docs/review/11-project-control.md)给当前能力/债和已验快照入口；Phase5已合main，准确源码、运行产物、远端CI与部署仍须分别核固定收据。
-- **后续设计与owner审阅**：先看[规划收口与模块深度](../../../zhuzhao/docs/review/planning-closeout.md)，再按[三节短审阅卡](../../../zhuzhao/docs/phase6/implementation-handoff.md#单维护者短审阅卡)审本批行为与风险。UI方案从[设计入口](../design/README.md)进入，目标合同和离线原型不算实现。
+- **后续设计与owner审阅**：先看[规划收口与模块深度](../../../zhuzhao/docs/planning/planning-closeout.md)，再按[三节短审阅卡](../../../zhuzhao/docs/phase6/implementation-handoff.md#单维护者短审阅卡)审本批行为与风险。UI方案从[设计入口](../design/README.md)进入，目标合同和离线原型不算实现。
 - **本批测试与验收**：按[测试指南](../guides/testing.md)保留代码测试先行、守卫验牙、完整适用门禁、mock/contract/real及首次失败/重试/NOT_RUN披露；普通文档与参考产物按分类计划验收，正式协议/业务/运行输入/产品测试/CI及规则自身保留完整档。当前操作从[任务导读](../README.md)选择开发/运维路径。
 
 ## 历史报告怎样使用

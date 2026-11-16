@@ -2036,7 +2036,7 @@
   ],
   "product_principle": "数据聚合与安全全生命周期管控；专业平台能力接入/消费/跳转，保留平台特有领域Agent双轨，不复制SOC/SIEM/SOAR/CMDB/TI/知识运营平台",
   "existing_platforms": "用户确认已有SOC/SIEM、SOAR、CMDB、TI、企业Agent/知识平台；API能力、授权、数据合同待核",
-  "schedule_source": "../../../zhuzhao/docs/review/planning-backlog.md",
+  "schedule_source": "../../../zhuzhao/docs/planning/planning-backlog.md",
   "implementation_status": "planned_not_implemented",
   "change_scope": "设计文档/清单/正式审计报告；review harness/截图仅ignored；无生产源码改动",
   "account_scope": "2026-11-13仅隔离浏览器合成token/数据；未调用真实账号API，历史私有回归见historical_2026_11_11_context",
