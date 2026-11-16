@@ -15,7 +15,7 @@
 
 ## 生效、实施与验收边界
 
-Phase5已验收并合入main，后续主线见[全项目路线](../../../zhuzhao/docs/roadmap.md)，唯一排期/依赖见[规划总账](../../../zhuzhao/docs/review/planning-backlog.md)；本仓不复制工期。设计中已拍未做的能力继续标目标，报告只追溯其时点。
+Phase5已验收并合入main，后续主线见[全项目路线](../../../zhuzhao/docs/roadmap.md)，唯一排期/依赖见[规划总账](../../../zhuzhao/docs/planning/planning-backlog.md)；本仓不复制工期。设计中已拍未做的能力继续标目标，报告只追溯其时点。
 
 现行规范解释当前代码；重设计的替代规则只在对应实施任务中同批更新规范、源码与验证后生效。当前formatter/profile、推荐tokens全站推广、页面改造及三类调用闭环均未实现，不用lint或离线原型证明完成。
 

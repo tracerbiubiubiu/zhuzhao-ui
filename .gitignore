@@ -45,9 +45,18 @@ e2e/.state.json
 
 .VSCodeCounter
 
-# Local reference documents and audit artifacts (maintained docs live in docs/)
+# Local-only references and execution artifacts: archive outside this repository.
+# Keep legacy paths excluded to prevent accidental copying back; maintained docs stay in docs/.
 /doc/
 /deliverables/
 /outputs/
 /audit-reports/
 /.codex/
+/archives/
+/private/
+/references/
+/evidence/
+/maintenance/
+
+# Local secrets; the versioned .env.base/.dev/.pro/.test remain tracked.
+/.env

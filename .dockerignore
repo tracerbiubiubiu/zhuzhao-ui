@@ -8,9 +8,30 @@
 /test-results/
 /playwright-report/
 /e2e/.state.json
-# Local reference documents and audit artifacts (maintained docs live in docs/)
+
+# Local-only references and execution artifacts: archive outside this repository.
+# Keep legacy paths excluded to prevent accidental copying back; maintained docs stay in docs/.
 /doc/
 /deliverables/
 /outputs/
 /audit-reports/
 /.codex/
+/archives/
+/private/
+/references/
+/evidence/
+/maintenance/
+
+# Host state and local secrets are not Docker build inputs.
+/.hg/
+/.svn/
+/.zcode/
+/.codebuddy/
+/.workbuddy/
+/.opencode/
+/.env
+/.env.local
+/.env.*.local
+/bin/
+/logs/
+/data/

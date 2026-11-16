@@ -6,7 +6,7 @@
 
 ## 按角色选择阅读路径
 
-- **所有者评审**：先看主仓[规划收口](../../zhuzhao/docs/review/planning-closeout.md)，确认已讨论、已实现与待细化的区别；每批按[三节短审阅卡](../../zhuzhao/docs/phase6/implementation-handoff.md#单维护者短审阅卡)看行为、权限/数据影响及证据。评审页面方案时再看[施工合同](design/frontend-implementation-contract.md)和[六视图原型](design/prototypes/lifecycle-workspace.html)，原型范围与限制见[原型说明](design/prototypes/README.md)。
+- **所有者评审**：先看主仓[规划收口](../../zhuzhao/docs/planning/planning-closeout.md)，确认已讨论、已实现与待细化的区别；每批按[三节短审阅卡](../../zhuzhao/docs/phase6/implementation-handoff.md#单维护者短审阅卡)看行为、权限/数据影响及证据。评审页面方案时再看[施工合同](design/frontend-implementation-contract.md)和[六视图原型](design/prototypes/lifecycle-workspace.html)，原型范围与限制见[原型说明](design/prototypes/README.md)。
 - **开发与测试**：按下节找到当前指南/规范，再进入对应目标合同；当前获准代码批继续测试先行、因目标行为跑红、实现到绿。普通文档/参考产物/完整档的适用组合、真实门禁及mock/contract/real职责以[测试指南](guides/testing.md)为准；混合批取最高组合、未知从严。
 - **运维与联调**：先确认[开发与联调](guides/development.md)中的服务/配置归属，再读[部署](ops/deployment.md)和[发布](ops/releasing.md)，核准确构建、上游及运行时反代；恢复或回退按对应操作手册留证。
 
@@ -22,7 +22,7 @@
 ## 按文档效力选择入口
 
 - **当前实现与操作**：[设计](design/README.md)区分现行规范和目标合同，[指南](guides/README.md)给执行步骤，[运维](ops/README.md)给部署验证和回退。只有实际代码、配置和对应收据能证明运行行为。
-- **目标设计与实施计划**：全站范围/旅程、施工合同和离线原型由本仓维护；当前任务、依赖、估算统一回主仓[规划总账](../../zhuzhao/docs/review/planning-backlog.md)，全项目路线见[roadmap](../../zhuzhao/docs/roadmap.md)。本仓不另建日历或工期，新增能力与既有页面改造分别验收。
+- **目标设计与实施计划**：全站范围/旅程、施工合同和离线原型由本仓维护；当前任务、依赖、估算统一回主仓[规划总账](../../zhuzhao/docs/planning/planning-backlog.md)，全项目路线见[roadmap](../../zhuzhao/docs/roadmap.md)。本仓不另建日历或工期，新增能力与既有页面改造分别验收。
 - **验收历史与追溯**：[审查](review/README.md)按基线→修复→复验查正式时点报告。旧数字、失败、重试与NOT_RUN保留当时含义，不外推到新候选、远端CI或生产部署。
 
 ## 跨仓权威与材料归属
@@ -31,4 +31,10 @@
 
 平台定位是数据聚合与安全全生命周期管控。模型、专业安全与知识能力以已有服务接入消费为主，平台特有领域Agent可做受控配置；前端不建设模型部署或通用Agent开发平台，也不直连企业数据API。仅建立有内容的文档分类，不另造API/迁移权威副本或空阶段目录。
 
-`doc/`是本地参考；执行卡、原日志、截图和临时验证产物留在`.codex/`等忽略目录。正式报告统一在`review/reports/`，旧`deliverables/`、`outputs/`、`audit-reports/`不再是受控入口。文档、代码、mock及示例继续遵守公司信息隔离规则。
+旧`doc/`只保留历史来源标识；原件和过程材料按主仓[材料目录](../../zhuzhao/docs/materials.md)归入仓库外档案，`.codex/`等忽略目录只作为执行中的工作区，收尾按规则提炼和归档。正式报告统一在`review/reports/`，旧`deliverables/`、`outputs/`、`audit-reports/`不再是受控入口。文档、代码、mock及示例继续遵守公司信息隔离规则。
+
+## 统一入口与Git保留范围
+
+全项目阅读从主仓[文档总入口](../../zhuzhao/docs/README.md)开始，当前计划统一在[planning](../../zhuzhao/docs/planning/README.md)；本仓继续维护随源码版本变化的合同、指南和正式结论。原始调研、执行卡、原日志、截图、备份与纯操作收据归仓库外项目档案，短期执行产物可留ignored `.codex/`；材料ID与保留决定见[材料目录](../../zhuzhao/docs/materials.md)。机器台账、冻结来源、Schema样例和必要验证依据继续Git跟踪，不按扩展名批量忽略。
+
+复用审计方法、空白模板及开发提示词见主仓[工作资料库](../../zhuzhao/docs/toolkit/README.md)；创建和收尾按[文档维护约定](../../zhuzhao/docs/documentation.md)执行，原件与执行实例分开保存。
