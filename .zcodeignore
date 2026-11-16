@@ -6,6 +6,7 @@ dist/
 dist-*/
 
 # Local tool artifacts
+.codebuddy/
 .workbuddy/
 
 # IDE
@@ -37,6 +38,29 @@ test-results/
 # E2E 运行态（globalSetup 产物，含本地测试口令——不入库）
 e2e/.state.json
 
+# Go 后端错位实例运行产物（2026-11-02 taskrunner 孤儿库事故——从本仓 cwd 启动的
+# 后端会把 data/*.db、logs/ 撒在这里；*.log 挡不住 .db 二进制，故根锚定整目录）
+/data/
+/logs/
+
+.VSCodeCounter
+
+# Local-only references and execution artifacts: archive outside this repository.
+# Keep legacy paths excluded to prevent accidental copying back; maintained docs stay in docs/.
+/doc/
+/deliverables/
+/outputs/
+/audit-reports/
+/.codex/
+/archives/
+/private/
+/references/
+/evidence/
+/maintenance/
+
+# Local secrets; the versioned .env.base/.dev/.pro/.test remain tracked.
+/.env
+
 # ===== ↑ 以上同步自 .gitignore（「从 .gitignore 同步」只重写以上部分）=====
 .git/
 .hg/
@@ -64,3 +88,15 @@ pip-wheel-metadata/
 wheels/
 # ----- ↑ 以上为 ZCode 默认排除规则（自定义规则请写在本行下方，不会被同步/恢复改动）-----
 # 自定义规则写在下方（本行提示可删除）
+
+# Persistent local-only exclusions; retain when regenerating the mirrored section.
+/doc/
+/deliverables/
+/outputs/
+/audit-reports/
+/.codex/
+/archives/
+/private/
+/references/
+/evidence/
+/maintenance/
