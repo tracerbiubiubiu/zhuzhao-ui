@@ -21,6 +21,8 @@ Vite 使用 base 模式，监听 `http://127.0.0.1:4000`，`/api`、`/al` 代理
 
 以下是现有关键真实栈E2E的准备步骤，该发现范围不换成stub；大量合成mock用于开发、页面状态与视觉，分层合同见[测试指南](testing.md)。基础服务为PG/Redis/app，活动列表和任务场景另需activelist/taskrunner。以下示例均为开发配置，每段在标明的仓库根目录、各自终端运行；密钥只在本地开发匹配，不用于生产。
 
+以下默认端口用于日常联调。完整真实栈门禁包含独立维护者的归档正向旅程，须另用带owner标签的独占候选栈、专属维护者和显式端点/数据库环境变量；准确前置见[维护任务测试](testing.md#维护任务的真实正向旅程)。该场景会在自有库造并归档合成旧记录，不能直接对共享开发栈执行，也不能靠省略配置使其跳过。
+
 先在 **zhuzhao** 根目录启动 PG/Redis，并显式完成迁移与所需角色/菜单绑定种子，顺序以主仓 [runbook](../../../zhuzhao/docs/ops/runbook.md) 为准。然后启动 app：
 
 ```bash
@@ -47,7 +49,7 @@ TASKRUNNER_HTTP_ADDR=:18080 TASKRUNNER_REDIS_PASSWORD=zhuzhao_dev   TASKRUNNER_C
 
 该例复用开发 Redis，taskrunner 宿主默认 SQLite；它不代表 compose 的 PostgreSQL 部署形态。服务配置与运行模式以各自仓库指南为准，不从 UI 目录启动 Go 服务，以免把 SQLite/data/logs 撒进 UI 仓。
 
-回到 **UI** 根目录执行 `pnpm test:e2e`，Playwright 的 `webServer` 会启动或复用 `4000` 的 Vite，配置启用固定端口，不应静默换端口。预期看到场景通过/失败及本轮用例统计；重试、跳过、网络失败都须按实际报告，不用旧计数代替本次结果。
+完成独占候选及维护任务测试前置后，回到 **UI** 根目录执行 `pnpm test:e2e`，通过`E2E_BASE_URL`绑定该候选的UI。默认Playwright `webServer`会启动或复用`4000`的Vite，独占验收须按候选端口配置webServer，不能误用已在运行的共享UI或静默换端口。预期看到场景通过/失败及本轮用例统计；重试、跳过、网络失败都须按实际报告，不用旧计数代替本次结果。
 
 ## 账号与独占纪律
 

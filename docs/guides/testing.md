@@ -33,6 +33,19 @@ pnpm gate
 
 ESLint是纯检查，修复用lint:fix后重跑。E2E使用[playwright.config.ts](../../playwright.config.ts)，workers=1、当前默认retries=1；默认门禁有重试时必须披露实际首轮失败/重试/跳过，不能写成零重试。CI范围见[ci.yml](../../.github/workflows/ci.yml)，E2E当前由本地真栈承接；未推送/未执行的远端CI不写通过。
 
+### 维护任务的真实正向旅程
+
+任务管理页面及`task:submit/manage`不授予审计维护资格。`w5-task-center.spec.ts`继续用未获独立维护资格的管理账号验证403与定义/运行数不变；`w5-task-maintenance.spec.ts`另用专属已批准维护者，从真实浏览器提交任务，核对任务查询结果、核心PG与TR SQLite双端持久`succeeded`、200天合成旧审计记录从在线表移除及近期记录保留。该浏览器用例不单独检查JSONL文件；导出内容须由准确候选的真实JSONL专项验证并另记收据，不能仅凭在线旧行消失记为文件归档已验证。两者不能互相替代，不能因默认拒绝而自动给管理员或种子号维护权。
+
+完整真实栈门禁须在自有独占栈准备以下输入；新增正向spec缺项即明确失败，不跳过：
+
+- 先通过独占栈的受权用户管理API预置`E000002+`专属维护者，授予原有任务读取/提交/管理权限，记录服务端稳定用户ID。按主仓[审计维护合同](../../../zhuzhao/docs/modules/audit.md)在该栈启动配置的维护者列表或`TASK_MAINTAINER_USER_IDS`中绑定该ID，再重启该独占app使配置生效；不得给`E000001`授予此测试资格。临时保留期覆盖仍需另有批准，本例只按默认180天运行。
+- 显式设置`E2E_MAINTAINER_EMPLOYEE_NO`与`E2E_MAINTAINER_PASSWORD`，凭据只存本机私有环境文件，不写报告/命令日志；原globalSetup的非维护管理账号继续用于拒绝反例，不改其维护资格。
+- 显式设置`E2E_API_BASE`、`E2E_PG_CONTAINER`、`E2E_PG_USER`、`E2E_PG_DB`和`E2E_TASKRUNNER_DB`，全部指向同一候选组合。SQLite只读查询，不能用默认兄弟仓运行库代替独占实例。
+- 设置`E2E_MAINTENANCE_STACK_OWNER`为该独占Compose project和`audit.owner`标签的共同值；spec在造审计marker前实际核对PG容器两项标签，防止误用共享库。`E2E_BASE_URL`仍指向该组合的UI，启动与标签由本轮资源清单负责，不改变共享服务。
+
+正向spec不模拟worker或callback；只在已核自有PG中造数/精确清理自己的marker，结束时经正式API停用本例手动定义。定义/运行/准入事实随独占栈保留至候选收据封存和精确回收，不直接改TR SQLite删除历史。Playwright附件只记录task ID、终态和效果布尔值，不记录登录口令或token。浏览器旅程、单元指导逻辑和既有组合恢复收据分别计数，未执行的新spec不能记为通过。
+
 本次新增守卫先证明目标缺陷能使它变红，再还原并跑正向；局部绿不等价完整适用组合。完整适用门禁未绿不得标记完成，网络/环境失败保留原结果并说明影响。人工与agent验证用专属E000002+，禁止改E000001；仅既定acceptance/globalSetup幂等例外流及break-glass复原按主仓runbook执行。
 
 ## 测试先行与单维护者审阅
