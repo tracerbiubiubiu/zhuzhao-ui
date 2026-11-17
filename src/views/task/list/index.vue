@@ -43,6 +43,7 @@ import {
   retryTaskApi, submitTaskApi, triggerJobApi, updateJobApi,
   RUN_STATUS, type DeadLetterRow, type JobActionRow, type TaskDetail, type TaskJobRow, type TaskRunRow,
 } from '@/api/task'
+import { maintenanceGuidance, taskMutationError } from './maintenanceGuidance'
 
 // keep-alive 契约：name=动态路由名（菜单 code task_center，组件路径 task/list/index）
 defineOptions({ name: 'task_center' })
@@ -183,8 +184,7 @@ async function onRetryRun(row: TaskRunRow) {
     ElMessage.success('已重新入队')
     runsTableRef.value?.refresh()
   } catch (err: unknown) {
-    const resp = (err as { response?: { data?: { message?: string } } })?.response?.data
-    ElMessage.error(resp?.message ?? '重试失败')
+    ElMessage.error(taskMutationError(err, row.action, '重试失败'))
   }
 }
 
@@ -275,8 +275,7 @@ async function onToggleJob(row: TaskJobRow, enabled: boolean) {
     ElMessage.success(enabled ? '已启用' : '已停用')
     jobsTableRef.value?.refresh()
   } catch (err: unknown) {
-    const resp = (err as { response?: { data?: { message?: string } } })?.response?.data
-    ElMessage.error(resp?.message ?? '操作失败')
+    ElMessage.error(taskMutationError(err, row.action_id, '操作失败'))
   }
 }
 
@@ -285,8 +284,7 @@ async function onTriggerJob(row: TaskJobRow) {
     await triggerJobApi(row.job_id)
     ElMessage.success('已手动触发')
   } catch (err: unknown) {
-    const resp = (err as { response?: { data?: { message?: string } } })?.response?.data
-    ElMessage.error(resp?.message ?? '触发失败')
+    ElMessage.error(taskMutationError(err, row.action_id, '触发失败'))
   }
 }
 
@@ -339,8 +337,7 @@ async function submitJob() {
     jobVisible.value = false
     jobsTableRef.value?.refresh()
   } catch (err: unknown) {
-    const resp = (err as { response?: { data?: { message?: string } } })?.response?.data
-    jobError.value = resp?.message ?? '创建失败，请稍后重试'
+    jobError.value = taskMutationError(err, jobForm.action_id.trim(), '创建失败，请稍后重试')
   } finally {
     jobSaving.value = false
   }
@@ -431,8 +428,7 @@ async function submitJobEdit() {
     jobEditVisible.value = false
     jobsTableRef.value?.refresh()
   } catch (err: unknown) {
-    const resp = (err as { response?: { data?: { message?: string } } })?.response?.data
-    jobEditError.value = resp?.message ?? '更新失败，请稍后重试'
+    jobEditError.value = taskMutationError(err, jobEditForm.action_id, '更新失败，请稍后重试')
   } finally {
     jobEditSaving.value = false
   }
@@ -464,6 +460,9 @@ const jobOptions = ref<TaskJobRow[]>([])
 const jobOptionsLoading = ref(false)
 const selectedJobId = ref('')
 const selectedJob = computed(() => jobOptions.value.find((j) => j.job_id === selectedJobId.value) ?? null)
+const submitMaintenanceGuidance = computed(() => maintenanceGuidance(
+  (canManageJobs.value ? selectedJob.value?.action_id : submitForm.action)?.trim(),
+))
 /** 定义级 params 归一化为编辑框文本（线上为 JSON 值——空对象/空=无参数） */
 function jobParamsText(p: unknown): string {
   if (p == null) return ''
@@ -546,8 +545,7 @@ async function onSubmitTask() {
     activeTab.value = 'runs'
     runsTableRef.value?.refresh()
   } catch (err: unknown) {
-    const resp = (err as { response?: { data?: { code?: number; message?: string } } })?.response?.data
-    submitError.value = resp?.message ?? '提交失败，请稍后重试'
+    submitError.value = taskMutationError(err, action.trim(), '提交失败，请稍后重试')
   } finally {
     submitBusy.value = false
   }
@@ -813,6 +811,11 @@ useTableFit(deadTable, () => deadList.value)
         title="提交≠执行成功：受理后由队列异步执行，结果在「运行记录」查询"
         type="info" show-icon :closable="false" class="mb-4"
       />
+      <el-alert
+        v-if="submitMaintenanceGuidance" :description="submitMaintenanceGuidance"
+        title="审计维护须独立授权" data-testid="maintenance-guidance"
+        type="info" show-icon :closable="false" class="mb-4"
+      />
       <el-alert v-if="submitError" :title="submitError" type="error" show-icon class="mb-4" :closable="false" />
       <el-form label-width="110px">
         <el-form-item v-if="canManageJobs" label="任务定义" required>
@@ -857,6 +860,11 @@ useTableFit(deadTable, () => deadList.value)
 
     <!-- 新建任务定义 -->
     <el-dialog :close-on-click-modal="false" v-model="jobVisible" title="新建任务定义" width="560px">
+      <el-alert
+        v-if="maintenanceGuidance(jobForm.action_id.trim())" :description="maintenanceGuidance(jobForm.action_id.trim())"
+        title="审计维护须独立授权" data-testid="maintenance-guidance"
+        type="info" show-icon :closable="false" class="mb-4"
+      />
       <el-alert v-if="jobError" :title="jobError" type="error" show-icon class="mb-4" :closable="false" />
       <el-form label-width="100px">
         <el-form-item label="动作" required>
@@ -905,6 +913,11 @@ useTableFit(deadTable, () => deadList.value)
     <!-- 编辑任务定义（2026-11-03 定义管理批——updateJob patch：cron/params/description/
          dept/timeout_secs 可改；action_id/trigger_type 上游无改口、enabled 走行内开关） -->
     <el-dialog :close-on-click-modal="false" v-model="jobEditVisible" title="编辑任务定义" width="560px">
+      <el-alert
+        v-if="maintenanceGuidance(jobEditForm.action_id)" :description="maintenanceGuidance(jobEditForm.action_id)"
+        title="审计维护须独立授权" data-testid="maintenance-guidance"
+        type="info" show-icon :closable="false" class="mb-4"
+      />
       <el-alert title="动作与触发类型创建后不可修改；启停用行内开关" type="info" show-icon :closable="false" class="mb-4" />
       <el-alert v-if="jobEditError" :title="jobEditError" type="error" show-icon class="mb-4" :closable="false" />
       <el-form label-width="100px">
