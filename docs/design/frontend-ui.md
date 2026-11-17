@@ -2,7 +2,9 @@
 
 新增/改动页面先读本篇的规则，再按[页面与组件开发](../guides/components.md)选择骨架和共用资产；测试守卫的覆盖与局限见[测试指南](../guides/testing.md#防漂移哨兵矩阵)。本篇解释已实现合同，章节日期保留规则来源，不证明某个新HEAD已经跑过验证。
 
-2026-11-17本地修复候选已完成六件门禁：36个文件的322项单测通过，45项真实栈E2E全部一次通过，skip/flaky/retry均为0。组合证据采用r2产品与r3-ui测试；r3-ui仅修正两个E2E夹具，产品字节和实际服务的267项UI资产与r2相同。原r2的43/45首次失败保留，不覆盖为成功；两项坏读取/存储故障旅程含明确故障注入，其余请求仍走真实服务，先前9项mock浏览器专项不计入这45项。候选尚未合入main或部署，范围与收据见[本轮正式报告](../../../zhuzhao/docs/review/reports/audit-baseline-repair-2026-11-17.md)，原材料ID为`maintenance/audit-baseline-repair-20261117/`。
+2026-11-17本地修复候选已完成六件门禁：36个文件的322项单测通过，45项真实栈E2E全部一次通过，skip/flaky/retry均为0。组合证据采用r2产品与r3-ui测试；r3-ui仅修正两个E2E夹具，产品字节和实际服务的267项UI资产与r2相同。原r2的43/45首次失败保留，不覆盖为成功；两项坏读取/存储故障旅程含明确故障注入，其余请求仍走真实服务，先前9项mock浏览器专项不计入这45项。以上为合入前的本地验收记录，范围与收据见[本轮正式报告](../../../zhuzhao/docs/review/reports/audit-baseline-repair-2026-11-17.md)，原材料ID为`maintenance/audit-baseline-repair-20261117/`。
+
+主线承接状态：已由[UI #7](https://github.com/tracerbiubiubiu/zhuzhao-ui/pull/7)合入main，分支/PR及功能main适用CI通过；准确head、merge和CI统一见[主线合入报告](../../../zhuzhao/docs/review/reports/audit-baseline-main-merge-2026-11-17.md)。合入前本地记录与首次失败保留，未部署；材料ID`maintenance/audit-baseline-main-merge-20261117/`。
 
 当前控制台采用视口锁定、表格/内容内部滚动、详情抽屉与动作对话框；ID全程string、图标离线注册、请求按会话代次隔离。Phase6指标聚合、任务库二期、审批等未来设计仍按主仓阶段文档登记，不能把样式约定当作其已实施证据。
 

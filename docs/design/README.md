@@ -6,7 +6,9 @@
 
 先读[UI设计规范](frontend-ui.md)，了解当前视口、滚动、表格、交互、会话与内容安全合同；实现页面查[组件指南](../guides/components.md)。修改认证/响应/错误处理前读[请求链路](request.md)，避免在页面重造刷新与会话副作用。部署步骤和时点审计分别回[总入口](../README.md)选择运维或审查路径。
 
-2026-11-17本地修复候选已验证，尚未合入main或部署。组合使用r2产品与仅修正两个测试夹具的r3-ui，产品字节相同；门禁计数及首次失败回[UI规范](frontend-ui.md)，完整证据回[本轮正式报告](../../../zhuzhao/docs/review/reports/audit-baseline-repair-2026-11-17.md)，原材料ID为`maintenance/audit-baseline-repair-20261117/`。
+2026-11-17合入前本地修复候选已验证。组合使用r2产品与仅修正两个测试夹具的r3-ui，产品字节相同；门禁计数及首次失败回[UI规范](frontend-ui.md)，完整证据回[本轮正式报告](../../../zhuzhao/docs/review/reports/audit-baseline-repair-2026-11-17.md)，原材料ID为`maintenance/audit-baseline-repair-20261117/`。
+
+主线承接状态：已由[UI #7](https://github.com/tracerbiubiubiu/zhuzhao-ui/pull/7)合入main，分支/PR及功能main适用CI通过；准确head、merge和CI统一见[主线合入报告](../../../zhuzhao/docs/review/reports/audit-baseline-main-merge-2026-11-17.md)。合入前本地记录与首次失败保留，未部署；材料ID`maintenance/audit-baseline-main-merge-20261117/`。
 
 业务选人的当前合同见[业务选人](people-picker.md)：工单用途复用原动作和具体对象资格，管理用途仍走用户管理读；普通账号无用户管理读权仍能选另一人分派和抄送，已获真实栈证据。
 

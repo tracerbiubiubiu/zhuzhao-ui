@@ -1,6 +1,8 @@
 # 业务选人合同（F3/CF15）
 
-状态：2026-11-17本地候选已通过组合验证，尚未合入main或部署。验证范围、首次失败及收据映射见[本轮正式报告](../../../zhuzhao/docs/review/reports/audit-baseline-repair-2026-11-17.md)，原材料ID为`maintenance/audit-baseline-repair-20261117/`。
+本地验收记录（2026-11-17）：合入前候选已通过组合验证。验证范围、首次失败及收据映射见[本轮正式报告](../../../zhuzhao/docs/review/reports/audit-baseline-repair-2026-11-17.md)，原材料ID为`maintenance/audit-baseline-repair-20261117/`。
+
+主线承接状态：已由[UI #7](https://github.com/tracerbiubiubiu/zhuzhao-ui/pull/7)合入main，分支/PR及功能main适用CI通过；准确head、merge和CI统一见[主线合入报告](../../../zhuzhao/docs/review/reports/audit-baseline-main-merge-2026-11-17.md)。合入前本地记录与首次失败保留，未部署；材料ID`maintenance/audit-baseline-main-merge-20261117/`。
 
 `src/components/UserPicker/index.vue` 按调用方显式上下文选数据源。工单详情的处理人和催办上级用 `assign + ticketId`，抄他人用 `cc + ticketId`；建票催办用 `create-supervisor + orgId + typeCode`，规则目标用 `rule-target + orgId`。真实消费者只有这5处；目前模板无该组件用途。不带业务上下文的管理用途继续调用原 `/users` 管理读，业务403不得回退此接口。
 
