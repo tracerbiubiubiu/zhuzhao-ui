@@ -1,6 +1,10 @@
 # 工单类型图写入合同（CF12）
 
-状态：2026-11-17本地候选已通过组合验证，尚未合入main或部署；证据见[本轮正式报告](../../../zhuzhao/docs/review/reports/audit-baseline-repair-2026-11-17.md)，原材料ID为`maintenance/audit-baseline-repair-20261117/`。后端唯一权威为主仓 `internal/service/ticket/type_admin.go` 的 `validateTypeGraph`；UI预检不能代替后端判断。
+本地验收记录（2026-11-17）：合入前候选已通过组合验证；证据见[本轮正式报告](../../../zhuzhao/docs/review/reports/audit-baseline-repair-2026-11-17.md)，原材料ID为`maintenance/audit-baseline-repair-20261117/`。
+
+主线承接状态：已由[UI #7](https://github.com/tracerbiubiubiu/zhuzhao-ui/pull/7)合入main，分支/PR及功能main适用CI通过；准确head、merge和CI统一见[主线合入报告](../../../zhuzhao/docs/review/reports/audit-baseline-main-merge-2026-11-17.md)。合入前本地记录与首次失败保留，未部署；材料ID`maintenance/audit-baseline-main-merge-20261117/`。
+
+后端唯一权威为主仓 `internal/service/ticket/type_admin.go` 的 `validateTypeGraph`；UI预检不能代替后端判断。
 
 保存及重新启用类型时，状态必须保留 `open`、`assigned`、`closed`，分别供建票、分派与关闭原动作使用；状态不得为空、带首尾空白或重复。自定义态和合法转换边继续保留，不另加可达性强约束。新建UI仍使用服务器默认六态图。
 
