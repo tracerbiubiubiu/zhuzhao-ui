@@ -3452,6 +3452,53 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/tickets/people": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Context-bound ticket people search (2–50 characters, maximum 20 results) */
+        get: {
+            parameters: {
+                query: {
+                    /** @description assign|cc|create-supervisor|rule-target */
+                    purpose: string;
+                    /** @description 2–50 characters */
+                    q: string;
+                    /** @description Required for assign/cc */
+                    ticket_id?: string;
+                    /** @description Required for create-supervisor/rule-target */
+                    org_id?: string;
+                    /** @description Required for create-supervisor */
+                    type_code?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["response.Response"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/tickets/relations": {
         parameters: {
             query?: never;
@@ -4588,7 +4635,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** 查询用户已绑角色 ID 集 */
+        /** 查询用户直接绑定的角色 ID（含停用绑定，不含组织或继承来源） */
         get: {
             parameters: {
                 query?: never;
@@ -4679,7 +4726,7 @@ export interface paths {
         put?: never;
         /**
          * 预置动作回调（taskrunner → zhuzhao，AK/SK 验签内网端点）
-         * @description 结果映射（P6/P7）：2xx=执行完全成功/幂等受理；404=未知动作；409=不可重试；500=可重试
+         * @description 结果映射：200=已证明成功；400=非法输入；403=无当前动作资格；404=未知动作；409=不可重试；503=仍在途/终态未确认（Retry-After）；500=可重试
          */
         post: {
             parameters: {
@@ -5086,7 +5133,7 @@ export interface components {
             field_meta?: number[];
             field_options?: number[];
             /** @enum {string} */
-            field_type: "input" | "textarea" | "number" | "date" | "select" | "multi_select" | "tips" | "richtext";
+            field_type: "input" | "textarea" | "number" | "date" | "select" | "multi_select" | "tips" | "richtext" | "radio" | "rating" | "file";
             required?: boolean;
             sort_order?: number;
             validate_regex?: string;

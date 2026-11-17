@@ -1,0 +1,17 @@
+import { describe, expect, it, vi } from 'vitest'
+import { createPeopleSearch } from './searchSession'
+
+function deferred<T>() { let resolve!: (value: T) => void; let reject!: (error: unknown) => void; const promise = new Promise<T>((r, j) => { resolve = r; reject = j }); return { promise, resolve, reject } }
+const alice = [{ id: '12', label: 'Alice(E000012)' }]
+const bob = [{ id: '13', label: 'Bob(E000013)' }]
+
+describe('UserPicker actual request controller', () => {
+  it('short input gives guidance and never requests', async () => { const load = vi.fn().mockResolvedValue([]); const s = createPeopleSearch(load); await s.search(' '); await s.search('中'); expect(load).not.toHaveBeenCalled(); expect(s.state.status).toBe('input') })
+  it('context reset invalidates old successful search', async () => { const d = deferred<typeof alice>(); const s = createPeopleSearch(() => d.promise); const old = s.search('alice'); s.reset(false); d.resolve(alice); await old; expect(s.state.options).toEqual([]); expect(s.state.status).toBe('context') })
+  it('new query wins over earlier late result', async () => { const a = deferred<typeof alice>(); const b = deferred<typeof bob>(); const load = vi.fn().mockReturnValueOnce(a.promise).mockReturnValueOnce(b.promise); const s = createPeopleSearch(load); const old = s.search('alice'); const fresh = s.search('bob'); b.resolve(bob); await fresh; a.resolve(alice); await old; expect(s.state.options).toEqual(bob) })
+  it('old finally cannot stop the new query spinner', async () => { const a = deferred<typeof alice>(); const b = deferred<typeof bob>(); const load = vi.fn().mockReturnValueOnce(a.promise).mockReturnValueOnce(b.promise); const s = createPeopleSearch(load); const old = s.search('alice'); const fresh = s.search('bob'); a.resolve(alice); await old; expect(s.state.loading).toBe(true); b.resolve(bob); await fresh; expect(s.state.loading).toBe(false) })
+  it('new query immediately removes old candidates', async () => { const d = deferred<typeof bob>(); const load = vi.fn().mockResolvedValueOnce(alice).mockReturnValueOnce(d.promise); const s = createPeopleSearch(load); await s.search('alice'); const pending = s.search('bob'); expect(s.state.options).toEqual([]); d.resolve(bob); await pending })
+  it('empty success, forbidden, missing and network failure stay distinct', async () => { const load = vi.fn().mockResolvedValueOnce([]).mockRejectedValueOnce({ response: { status: 403 } }).mockRejectedValueOnce({ response: { status: 404 } }).mockRejectedValueOnce(new Error('offline')); const s = createPeopleSearch(load); for (const status of ['empty', 'forbidden', 'missing', 'error']) { await s.search('alice'); expect(s.state.status).toBe(status); expect(s.state.options).toEqual([]) } })
+  it('late rejection cannot overwrite a fresh success', async () => { const a = deferred<typeof alice>(); const s = createPeopleSearch(vi.fn().mockReturnValueOnce(a.promise).mockResolvedValueOnce(bob)); const old = s.search('alice'); await s.search('bob'); a.reject({ response: { status: 403 } }); await old; expect(s.state.status).toBe('ready'); expect(s.state.options).toEqual(bob) })
+  it('closed and reopened picker cannot revive an old request', async () => { const a = deferred<typeof alice>(); const s = createPeopleSearch(() => a.promise); const old = s.search('alice'); s.reset(); s.reset(); a.resolve(alice); await old; expect(s.state.status).toBe('input'); expect(s.state.options).toEqual([]) })
+})

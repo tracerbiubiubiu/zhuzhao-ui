@@ -13,7 +13,9 @@
  */
 import { apiErrorBody } from '@/utils/apiError'
 import { formatDateTime } from '@/utils/datetime'
-import { computed, reactive, ref } from 'vue'
+import { computed, nextTick, onDeactivated, onScopeDispose, reactive, ref } from 'vue'
+import { assignmentIds } from '@/api/system/assignmentPayload'
+import { createOrgsEditor, createRolesEditor } from './assignmentEditors'
 import {
   ElAlert, ElButton, ElCard, ElDialog, ElDropdown, ElDropdownItem, ElDropdownMenu,
   ElForm, ElFormItem, ElInput, ElMessage, ElMessageBox, ElOption, ElSelect, ElTag, ElTree,
@@ -82,7 +84,7 @@ const columns: ProTableColumn[] = [
 
 // ─── 操作列「更多」下拉（业界主操作+收尾模式）：低频动作收进菜单，列宽 320→250 单行放下；
 // 删除入菜单顺带多一层防误触。四项全无权限则整个下拉不渲染（防空菜单）。
-const { hasAny } = usePermission()
+const { hasAny, hasPerm } = usePermission()
 const hasUserMore = computed(() =>
   hasAny('user:reset_password', 'user:assign_role', 'user:assign_org', 'user:delete'),
 )
@@ -229,127 +231,85 @@ async function submitReset() {
   }
 }
 
-// ─── 分配角色（整体替换语义）───
-const rolesVisible = ref(false)
-const rolesLoading = ref(false)
-const rolesChecking = ref(false)
-/** 回显竞态守卫序号（P2-5）：连开多行对话框时仅最后一次打开的响应生效 */
-let rolesCheckSeq = 0
-const rolesForm = reactive({ userId: '', username: '', employeeNo: '', selected: [] as string[] })
-
-function openRoles(row: UserRow) {
-  Object.assign(rolesForm, { userId: row.id, username: row.username, employeeNo: row.employee_no, selected: [] })
-  rolesVisible.value = true
-  // 初始勾选回显：GET /users/:id/roles 单发反查（P2-5 新端点——替代「工号精确+
-  // 角色过滤」N+1 反查；无工号用户自此也可回显）。竞态守卫：快速连开多行对话框时
-  // 仅最后一次打开的响应生效（audit 指出的对话框竞态面）
-  rolesChecking.value = true
-  const seq = ++rolesCheckSeq
-  getUserRoleIdsApi(row.id)
-    .then((ids) => { if (seq === rolesCheckSeq) rolesForm.selected = ids })
-    .catch(() => { /* 403/404 静默——留空勾选集，保存仍为显式整体替换 */ })
-    .finally(() => { if (seq === rolesCheckSeq) rolesChecking.value = false })
-}
-
-async function submitRoles() {
-  rolesLoading.value = true
-  try {
-    await setUserRolesApi(rolesForm.userId, rolesForm.selected) // string[] 直传（P3-6：ID 数组发送侧勿 Number 化）
-    ElMessage.success(`已更新「${rolesForm.username}」的角色（整体替换）`)
-    rolesVisible.value = false
+// ─── 全量替换编辑：只用绑定本次目标/世代的成功快照，读取失败禁止提交 ───
+const rolesEditor = createRolesEditor({
+  loadIds: getUserRoleIdsApi,
+  loadOptions: listRolesApi, // 每次打开重新取字典，失败不借用搜索区的旧cache。
+  hasPermission: () => hasPerm('user:assign_role'),
+  save: setUserRolesApi,
+  success: (target) => {
+    ElMessage.success(`已更新「${target.username}」的直接角色（整体替换）`)
     tableRef.value?.refresh()
-  } finally {
-    rolesLoading.value = false
-  }
-}
-
-// ─── 分配组织（P2-12：树勾选全量替换 + 主组织可选）───
-const orgsVisible = ref(false)
-const orgsLoading = ref(false)
-const orgsChecking = ref(false)
-const orgsError = ref('')
-const orgTreeRef = ref<OrgTreeInstance>()
-const orgTreeData = ref<OrgTreeNode[]>([])
-const orgsForm = reactive({ userId: '', username: '' })
-const primaryOrgId = ref('')
-/** 树勾选态（el-tree 勾选非响应式——经 @check 事件镜像，供主组织下拉与校验用） */
-const checkedOrgIds = ref<string[]>([])
-
-/** id → 组织名（树扁平化；含虚拟组标注） */
-const orgNameMap = computed(() => {
-  const map = new Map<string, OrgTreeNode>()
-  const walk = (nodes: OrgTreeNode[] | undefined) => {
-    for (const n of nodes ?? []) {
-      map.set(String(n.id), n)
-      walk(n.children)
-    }
-  }
-  walk(orgTreeData.value)
-  return map
+  },
 })
-const orgLabelOf = (id: string): string => {
-  const n = orgNameMap.value.get(id)
-  return n ? (n.is_virtual ? `${n.name}（虚拟组）` : n.name) : id
-}
+const rolesState = rolesEditor.state
+const rolesDraft = computed(() => rolesState.draft)
+const openRoles = (row: UserRow) => rolesEditor.open(row)
+const submitRoles = () => rolesEditor.submit()
 
-function onOrgCheck() {
-  checkedOrgIds.value = (orgTreeRef.value?.getCheckedKeys(false) ?? []).map(String)
-  // 主组织被取消勾选 → 同步清空，防提交悬空引用
-  if (primaryOrgId.value && !checkedOrgIds.value.includes(primaryOrgId.value)) primaryOrgId.value = ''
-}
-
-/** el-tree 最小接口（role 页同款，避开组件类型体操） */
 interface OrgTreeInstance {
   setCheckedKeys: (keys: Array<string | number>, leafOnly?: boolean) => void
   getCheckedKeys: (leafOnly?: boolean) => Array<string | number>
 }
-
-async function openOrgs(row: UserRow) {
-  Object.assign(orgsForm, { userId: row.id, username: row.username })
-  orgsVisible.value = true
-  orgsError.value = ''
-  orgsChecking.value = true
-  try {
-    const [tree, userOrgs] = await Promise.all([getOrgTreeApi(), getUserOrgsApi(row.id)])
-    orgTreeData.value = tree
-    primaryOrgId.value = userOrgs.find((o) => o.is_primary)?.org_id ?? ''
-    // 等树渲染后回填勾选（树数据同帧到，直接 set）
-    orgTreeRef.value?.setCheckedKeys(userOrgs.map((o) => o.org_id), false)
-    checkedOrgIds.value = userOrgs.map((o) => o.org_id)
-  } catch (err: unknown) {
-    orgsError.value = (err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '加载组织信息失败'
-  } finally {
-    orgsChecking.value = false
-  }
-}
-
-async function submitOrgs() {
-  const keys = checkedOrgIds.value
-  if (primaryOrgId.value && !keys.includes(primaryOrgId.value)) {
-    orgsError.value = '主组织须在已勾选组织内'
-    return
-  }
-  try {
-    await ElMessageBox.confirm(`保存将整体替换「${orgsForm.username}」的组织归属（勾选 ${keys.length} 个）。确认？`, '整体替换', {
-      type: 'warning', confirmButtonText: '保存',
-    })
-  } catch {
-    return
-  }
-  orgsLoading.value = true
-  orgsError.value = ''
-  try {
-    await setUserOrgsApi(orgsForm.userId, keys, primaryOrgId.value || null)
+const orgTreeRef = ref<OrgTreeInstance>()
+const orgsEditor = createOrgsEditor({
+  loadTree: () => getOrgTreeApi({ _silentError: true }),
+  loadMemberships: getUserOrgsApi,
+  hasPermission: () => hasPerm('user:assign_org'),
+  async prepareTree(draft, current) {
+    await nextTick() // 数据交给树并渲染后再回填；旧世代不得触碰新树。
+    if (!current()) return
+    const tree = orgTreeRef.value
+    if (!tree) throw new Error('组织树尚未就绪，请重试')
+    tree.setCheckedKeys([...draft.selected], false)
+    const checked = assignmentIds(tree.getCheckedKeys(false))
+    if (checked.length !== draft.selected.length || draft.selected.some((id) => !checked.includes(id))) throw new Error('已有组织未完整回填，请重试或由受权管理员核查')
+  },
+  async confirm(target, payload) {
+    try {
+      await ElMessageBox.confirm(`保存将整体替换「${target.username}」的组织归属（勾选 ${payload.ids.length} 个）。确认？`, '整体替换', { type: 'warning', confirmButtonText: '保存' })
+      return true
+    } catch {
+      return false
+    }
+  },
+  save: setUserOrgsApi,
+  success: () => {
     ElMessage.success('组织归属已更新（整体替换）')
-    orgsVisible.value = false
     tableRef.value?.refresh()
-  } catch (err: unknown) {
-    const resp = apiErrorBody(err)
-    orgsError.value = resp?.message ?? '保存失败，请稍后重试'
-  } finally {
-    orgsLoading.value = false
+  },
+})
+const orgsState = orgsEditor.state
+const orgsDraft = computed(() => orgsState.draft)
+const openOrgs = (row: UserRow) => orgsEditor.open(row)
+const submitOrgs = () => orgsEditor.submit()
+const orgNameMap = computed(() => {
+  const map = new Map<string, OrgTreeNode>()
+  const walk = (nodes: OrgTreeNode[]) => nodes.forEach((node) => { map.set(node.id, node); walk(node.children ?? []) })
+  walk(orgsDraft.value?.tree ?? [])
+  return map
+})
+const orgLabelOf = (id: string) => {
+  const node = orgNameMap.value.get(id)
+  return node ? `${node.name}${node.is_virtual ? '（虚拟组）' : ''}` : id
+}
+function onOrgCheck() {
+  if (!orgsEditor.editable() || !orgsDraft.value || !orgTreeRef.value) return
+  try {
+    const checked = assignmentIds(orgTreeRef.value.getCheckedKeys(false))
+    orgsDraft.value.selected = checked
+    if (orgsDraft.value.primary && !checked.includes(orgsDraft.value.primary)) orgsDraft.value.primary = ''
+  } catch {
+    orgsState.ready = false
+    orgsState.error = '组织勾选数据异常，请重试或由受权管理员核查'
   }
 }
+function closeAssignments() {
+  rolesEditor.close()
+  orgsEditor.close()
+}
+onDeactivated(closeAssignments)
+onScopeDispose(closeAssignments)
 
 // ─── 删除 ───
 async function onDelete(row: UserRow) {
@@ -478,38 +438,40 @@ async function onDelete(row: UserRow) {
       </template>
     </el-dialog>
 
-    <!-- 分配角色 -->
-    <el-dialog :model-value="rolesVisible" :close-on-click-modal="false" title="分配角色" width="480px" @update:model-value="rolesVisible = $event">
-      <el-form :model="rolesForm" label-width="80px">
+    <!-- 分配角色：直接绑定；组织/继承只在有效鉴权中贡献，不在此固化 -->
+    <el-dialog :model-value="rolesState.visible" :close-on-click-modal="false" title="分配角色" width="480px" @update:model-value="!$event && rolesEditor.close()">
+      <el-form label-width="80px" @submit.prevent>
         <el-form-item label="用户">
-          <el-input :model-value="rolesForm.username" disabled />
+          <el-input :model-value="rolesState.target?.username" disabled />
         </el-form-item>
-        <el-form-item label="角色">
-          <el-select v-model="rolesForm.selected" multiple :loading="rolesChecking" class="!w-full" placeholder="选择角色">
-            <el-option v-for="r in roleOptions" :key="r.id" :label="r.name" :value="r.id" />
+        <el-form-item v-if="rolesDraft" label="角色">
+          <el-select v-model="rolesDraft.selected" multiple :disabled="!rolesEditor.editable()" class="!w-full" placeholder="选择直接授予角色">
+            <el-option v-for="r in rolesDraft.options" :key="r.id" :label="r.status === 0 ? `${r.name}（已停用）` : r.name" :value="r.id" :disabled="r.status === 0 && !rolesDraft.original.includes(r.id)" />
           </el-select>
         </el-form-item>
       </el-form>
-      <p class="text-xs text-gray-400 px-4">保存将整体替换该用户的全部角色。</p>
+      <p v-if="rolesState.loading" class="text-sm text-gray-400 px-4">正在读取直接角色与角色字典…</p>
+      <p class="text-xs text-gray-400 px-4">仅编辑直接授予的角色，组织及继承权限另算。保存整体替换直接绑定；停用旧绑定可保留或按权限解除。</p>
+      <el-alert v-if="rolesState.error" :title="rolesState.error" type="error" show-icon class="mt-2" :closable="false" />
+      <el-button v-if="!rolesState.ready && !rolesState.loading" class="mt-2" @click="rolesEditor.retry()">重新读取</el-button>
       <template #footer>
-        <el-button @click="rolesVisible = false">取消</el-button>
-        <el-button type="primary" :loading="rolesLoading" @click="submitRoles">保存</el-button>
+        <el-button @click="rolesEditor.close()">取消</el-button>
+        <el-button type="primary" :loading="rolesState.saving" :disabled="!rolesEditor.editable()" @click="submitRoles">保存</el-button>
       </template>
     </el-dialog>
 
-    <!-- 分配组织（P2-12：全量替换 + 主组织） -->
-    <el-dialog :model-value="orgsVisible" :close-on-click-modal="false" title="分配组织" width="520px" @update:model-value="orgsVisible = $event">
+    <!-- 分配组织：本次世代的树与成员快照均成功后才可整体替换 -->
+    <el-dialog :model-value="orgsState.visible" :close-on-click-modal="false" title="分配组织" width="520px" @update:model-value="!$event && orgsEditor.close()">
       <el-form label-width="80px" @submit.prevent>
         <el-form-item label="用户">
-          <el-input :model-value="orgsForm.username" disabled />
+          <el-input :model-value="orgsState.target?.username" disabled />
         </el-form-item>
-        <el-form-item label="组织">
+        <el-form-item v-if="orgsDraft" label="组织">
           <el-tree
             ref="orgTreeRef"
-            v-loading="orgsChecking"
-            :data="orgTreeData"
+            :data="orgsDraft.tree"
             node-key="id"
-            :props="{ label: 'name', children: 'children' }"
+            :props="{ label: 'name', children: 'children', disabled: () => !orgsEditor.editable() }"
             show-checkbox
             check-strictly
             default-expand-all
@@ -524,17 +486,19 @@ async function onDelete(row: UserRow) {
             </template>
           </el-tree>
         </el-form-item>
-        <el-form-item label="主组织">
-          <el-select v-model="primaryOrgId" clearable placeholder="（不指定）" class="!w-full">
-            <el-option v-for="id in checkedOrgIds" :key="id" :label="orgLabelOf(id)" :value="id" />
+        <el-form-item v-if="orgsDraft" label="主组织">
+          <el-select v-model="orgsDraft.primary" clearable :disabled="!orgsEditor.editable()" placeholder="（不指定）" class="!w-full">
+            <el-option v-for="id in orgsDraft.selected" :key="id" :label="orgLabelOf(id)" :value="id" />
           </el-select>
         </el-form-item>
       </el-form>
+      <p v-if="orgsState.loading" class="text-sm text-gray-400 px-4">正在读取组织树与当前归属…</p>
       <p class="text-xs text-gray-400 px-4">保存将整体替换该用户的全部组织归属；主组织须在勾选内。</p>
-      <el-alert v-if="orgsError" :title="orgsError" type="error" show-icon class="mt-2" :closable="false" />
+      <el-alert v-if="orgsState.error" :title="orgsState.error" type="error" show-icon class="mt-2" :closable="false" />
+      <el-button v-if="!orgsState.ready && !orgsState.loading" class="mt-2" @click="orgsEditor.retry()">重新读取</el-button>
       <template #footer>
-        <el-button @click="orgsVisible = false">取消</el-button>
-        <el-button type="primary" :loading="orgsLoading" @click="submitOrgs">保存</el-button>
+        <el-button @click="orgsEditor.close()">取消</el-button>
+        <el-button type="primary" :loading="orgsState.saving" :disabled="!orgsEditor.editable()" @click="submitOrgs">保存</el-button>
       </template>
     </el-dialog>
   </div>

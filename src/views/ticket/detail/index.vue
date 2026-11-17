@@ -625,7 +625,7 @@ async function submitRelation() {
           <span class="font-semibold">抄送（{{ ccRows.length }}）</span>
           <div class="flex items-center gap-2">
             <el-button size="small" :loading="ccSaving" data-testid="cc-self" @click="addSelfCC">抄送我</el-button>
-            <UserPicker v-model="ccForm.userId" class="!w-[220px]" />
+            <UserPicker v-model="ccForm.userId" :context="{ purpose: 'cc', ticketId }" :active="active" class="!w-[220px]" />
             <el-button size="small" type="primary" plain :disabled="!ccForm.userId" :loading="ccSaving" data-testid="cc-add" @click="addCC">添加抄送</el-button>
           </div>
         </div>
@@ -775,11 +775,11 @@ async function submitRelation() {
     <el-dialog v-model="assignVisible" :close-on-click-modal="false" title="分派工单" width="420px">
       <el-form label-width="80px" @submit.prevent>
         <el-form-item label="处理人">
-          <UserPicker v-model="assignForm.userId" />
+          <UserPicker v-model="assignForm.userId" :context="{ purpose: 'assign', ticketId }" :active="active && assignVisible" />
         </el-form-item>
         <!-- S10 B10-4：催办上级人工指定（可选——随分派事务落库；不填保持不动） -->
         <el-form-item label="催办上级">
-          <UserPicker v-model="assignForm.escalationSupervisor" />
+          <UserPicker v-model="assignForm.escalationSupervisor" :context="{ purpose: 'assign', ticketId }" :active="active && assignVisible" />
         </el-form-item>
       </el-form>
       <div class="text-xs text-gray-400 mb-2">分派后工单进入「已分派」（B1-2 起选人补全替代手输 ID——姓名（工号）搜索）。</div>

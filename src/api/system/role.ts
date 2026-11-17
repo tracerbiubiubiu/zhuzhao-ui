@@ -4,6 +4,7 @@
  * 入参接 codegen 生成类型；出参手写行形状（裸信封，注明对齐 model.Role）。
  */
 import request from '@vea/request'
+import { assignmentId, assignmentRecord } from './assignmentPayload'
 import type { components } from '@/api/__generated__/schema'
 
 type Schemas = components['schemas']
@@ -30,7 +31,15 @@ export interface RoleRow {
 /** 全量角色（GET /roles 无分页——管理台角色数量级小） */
 export async function listRolesApi(): Promise<RoleRow[]> {
   const data = await request.get('/api/v1/roles')
-  return data as unknown as RoleRow[]
+  if (!Array.isArray(data)) throw new Error('读取角色字典格式异常，请重试或联系管理员核查')
+  const seen = new Set<string>()
+  return data.map((value) => {
+    const row = assignmentRecord(value)
+    const id = assignmentId(row.id)
+    if (seen.has(id) || typeof row.name !== 'string' || !row.name || typeof row.code !== 'string' || !row.code || (row.status !== 0 && row.status !== 1)) throw new Error('读取角色字典不完整，请重试或联系管理员核查')
+    seen.add(id)
+    return { ...row, id } as unknown as RoleRow
+  })
 }
 
 export async function createRoleApi(input: CreateRoleInput): Promise<RoleRow> {

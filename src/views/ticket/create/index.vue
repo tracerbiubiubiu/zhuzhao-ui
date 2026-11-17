@@ -441,7 +441,7 @@ async function handleSubmit() {
         </el-form-item>
         <!-- S10 B10-4：催办上级人工指定（可选——超时催办的上级收件档；可后续分派时改） -->
         <el-form-item label="催办上级">
-          <UserPicker v-model="form.escalationSupervisor" class="!w-[240px]" />
+          <UserPicker v-model="form.escalationSupervisor" :context="{ purpose: 'create-supervisor', orgId: form.org_id, typeCode: form.type_code }" class="!w-[240px]" />
           <span class="text-xs text-gray-400 ml-2">可选：工单超时催办时通知的上级（不填则只催处理人）</span>
         </el-form-item>
         <el-form-item>

@@ -36,7 +36,7 @@ import { isOptionType } from '@/components/FormDesigner/schemaAdapter'
 import { FIELD_CATALOG, type DesignerField } from '@/components/FormDesigner/types'
 import { createDesignerState } from '@/components/FormDesigner/useDesigner'
 import FlowGraphDesigner from '@/components/FlowGraphDesigner/index.vue'
-import { validateTypeGraph } from '@/components/FlowGraphDesigner/mapper'
+import { validateTicketTypeContract } from '@/components/FlowGraphDesigner/contract'
 import { stuckStates } from '@/components/FlowGraphDesigner/lint'
 import { DEFAULT_STATES, DEFAULT_TRANSITIONS, type Adjacency } from '@/components/FlowGraphDesigner/types'
 import { buildTransitionMeta, splitTransitionMeta, type MetaDraft } from './transitionMeta'
@@ -142,7 +142,7 @@ function graphFromText(): { states: string[]; transitions: Adjacency } | null {
   }
   const s = states.value === undefined ? [...DEFAULT_STATES] : states.value
   const t = transitions.value === undefined ? structuredClone(DEFAULT_TRANSITIONS) : transitions.value
-  const errs = validateTypeGraph(s, t)
+  const errs = validateTicketTypeContract(s, t)
   if (errs.length) {
     typeDialog.error = errs.join('；')
     return null
