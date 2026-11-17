@@ -44,6 +44,7 @@
       <span><i class="fg-dot fg-dot--start" />open 起始态</span>
       <span><i class="fg-dot fg-dot--terminal" />closed / rejected 终态</span>
       <span><i class="fg-dot fg-dot--normal" />其他状态</span>
+      <span>open / assigned / closed 为内置保留态，缺失时无法保存</span>
     </div>
   </div>
 </template>
@@ -58,7 +59,7 @@
  * 设计器可复用画布层只换适配器）。
  *
  * 命令式接口（对齐 FormDesigner 惯例）：调用方打开对话框后 `load(states, transitions)`，
- * 保存时 `serialize()` 取 {ok, states, transitions} 或 errors；lint 告警只在角标展示不阻断
+ * 保存时 `serialize()` 取 {ok, states, transitions} 或 errors；保留态合同显示 error 并阻断，其他 lint 告警只在角标展示不阻断
  * （拍板点 2——2026-10-24 所有者确认）。
  * 节点坐标不入库（A.2 设计决策）：localStorage 按 type_code 存本地视图偏好，缺省 autoLayout。
  *
@@ -73,6 +74,7 @@ import '@logicflow/core/lib/style/index.css'
 import stateNode from './nodes/stateNode'
 import { autoLayout } from './layout'
 import { lintGraph } from './lint'
+import { fromTicketGraph } from './contract'
 import { fromGraph, nextStateName, positionsOf, toGraph } from './mapper'
 import {
   STATE_EDGE_TYPE, STATE_NODE_TYPE,
@@ -167,7 +169,7 @@ function markInvalid(r: FromGraphResult) {
 }
 
 function recompute() {
-  const r = fromGraph(graphData())
+  const r = fromTicketGraph(graphData())
   errors.value = r.ok ? [] : r.errors
   issues.value = r.ok ? lintGraph(r.states, r.transitions) : []
   markInvalid(r)
@@ -189,7 +191,7 @@ async function load(states: string[], transitions: Adjacency) {
 function serialize(): FromGraphResult {
   const g = graphData()
   savePositions(g)
-  return fromGraph(g)
+  return fromTicketGraph(g)
 }
 
 function currentIssues(): LintIssue[] {

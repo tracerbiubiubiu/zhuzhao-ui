@@ -76,7 +76,7 @@ export interface RawGraphData {
   edges: RawGraphEdge[]
 }
 
-export type GraphErrorCode = 'empty_name' | 'invalid_name' | 'duplicate_name' | 'dangling_edge'
+export type GraphErrorCode = 'empty_name' | 'invalid_name' | 'duplicate_name' | 'dangling_edge' | 'invalid_contract'
 export interface GraphError {
   code: GraphErrorCode
   message: string

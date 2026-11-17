@@ -169,7 +169,7 @@ async function onToggle(row: AssignmentRuleRow) {
           </el-select>
         </el-form-item>
         <el-form-item label="目标处理人">
-          <UserPicker v-model="form.target_user" />
+          <UserPicker v-model="form.target_user" :context="{ purpose: 'rule-target', orgId: form.target_org }" :active="dialog.visible" />
           <span class="text-xs text-gray-400 ml-2">可选；须属目标组织（决议③）；空=仅分组织不指定人</span>
         </el-form-item>
         <el-form-item label="启用">

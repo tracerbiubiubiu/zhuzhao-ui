@@ -111,3 +111,65 @@ test('S3 权限槽：viewer 手输 /system/user 不可达（无菜单→路由�
   // viewer 菜单无 system_user → 动态路由未注册 → catch-all 404（FE3 的 URL 直达维度）
   await expect(page.getByText('抱歉，您访问的页面不存在')).toBeVisible()
 })
+
+test('S3 IAM-A：坏读取零提交、重试保留停用直接角色、成功空集合明确清空', async ({ page }) => {
+  // 真栈身份/角色/绑定与API回读；仅一笔GET注入缺字段200，验证防误覆盖分支。
+  const state = loadState()
+  const suffix = Date.now().toString(36)
+  const login = await apiLogin(state.admin.employeeNo, state.admin.password, 's3-iam-assignment')
+  const token = login.env!.data.access_token
+  const username = `s3_iam_${suffix}`
+  const roleName = `合成停用角色${suffix}`
+  let userId = '', roleId = ''
+  try {
+    const created = await api('/api/v1/users', { token, method: 'POST', body: { username, password: 'Synthetic#20261117', employee_no: `S3IAM${suffix}` } })
+    expect(created.env!.code).toBe(0)
+    userId = (created.env!.data as { id: string }).id
+    const createdRole = await api('/api/v1/roles', { token, method: 'POST', body: { code: `s3_iam_${suffix}`, name: roleName, priority: 1000 } })
+    expect(createdRole.env!.code).toBe(0)
+    const role = createdRole.env!.data as { id: string; version: number }
+    roleId = role.id
+    expect((await api('/api/v1/users/roles', { token, method: 'POST', body: { user_id: userId, role_ids: [roleId] } })).env!.code).toBe(0)
+    expect((await api('/api/v1/roles/update', { token, method: 'POST', body: { id: roleId, version: role.version, name: roleName, priority: 1000, status: 0 } })).env!.code).toBe(0)
+
+    await uiLogin(page, state.admin.employeeNo, state.admin.password)
+    await page.goto('/#/system/user')
+    await page.getByPlaceholder('用户名（模糊）').fill(username)
+    const row = page.locator('tr', { hasText: username })
+    await expect(row).toBeVisible()
+    let writes = 0
+    page.on('request', (request) => {
+      if (request.method() === 'POST' && new URL(request.url()).pathname === '/api/v1/users/roles') writes++
+    })
+    const readUrl = `**/api/v1/users/${userId}/roles`
+    await page.route(readUrl, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ code: 0, message: 'ok', data: {}, request_id: 'synthetic-bad-read' }) }))
+    await row.getByRole('button', { name: '更多' }).press('Enter')
+    await page.getByRole('menuitem', { name: '分配角色', exact: true }).filter({ visible: true }).click()
+    const dialog = page.getByRole('dialog', { name: '分配角色', exact: true })
+    await expect(dialog.getByRole('button', { name: '重新读取' })).toBeVisible()
+    await expect(dialog.getByRole('button', { name: '保存', exact: true })).toBeDisabled()
+    expect(writes).toBe(0)
+    const readRoles = async () => (await api(`/api/v1/users/${userId}/roles`, { token })).env!.data as { role_ids: string[] }
+    expect((await readRoles()).role_ids).toEqual([roleId])
+
+    await page.unroute(readUrl)
+    await dialog.getByRole('button', { name: '重新读取' }).click()
+    await expect(dialog.getByText(`${roleName}（已停用）`, { exact: true })).toBeVisible()
+    await expect(dialog.getByRole('button', { name: '保存', exact: true })).toBeEnabled()
+    await dialog.getByRole('button', { name: '保存', exact: true }).click()
+    await expect(dialog).not.toBeVisible()
+    expect((await readRoles()).role_ids).toEqual([roleId])
+
+    await row.getByRole('button', { name: '更多' }).press('Enter')
+    await page.getByRole('menuitem', { name: '分配角色', exact: true }).filter({ visible: true }).click()
+    await expect(dialog.getByText(`${roleName}（已停用）`, { exact: true })).toBeVisible()
+    await dialog.locator('.el-tag__close').click()
+    await dialog.getByRole('button', { name: '保存', exact: true }).click()
+    await expect(dialog).not.toBeVisible()
+    expect((await readRoles()).role_ids).toEqual([])
+    expect(writes).toBe(2)
+  } finally {
+    if (userId) await api('/api/v1/users/delete', { token, method: 'POST', body: { user_id: userId } }).catch(() => {})
+    if (roleId) await api('/api/v1/roles/delete', { token, method: 'POST', body: { role_id: roleId } }).catch(() => {})
+  }
+})

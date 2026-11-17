@@ -1,7 +1,7 @@
 /**
  * 状态图 lint（S2 B2-4——02 号附录 A.5 三规则 + 两条图级前提）。**告警不阻断**（拍板点 2，
  * 2026-10-24 所有者确认）：画布角标列出 + 点击定位节点，保存不受影响；后端 validateTypeGraph
- * 只查端点合法性，以下语义检查全为前端增量。
+ * 的保留态/空白/重复合同已另由 contract.ts 阻断，以下可达性等语义检查仍为前端告警。
  *
  * 终态/起始态按名约定（types.ts TERMINAL_STATES/START_STATE——后端 closed 唯一终态判定、
  * Create 恒置 open 的镜像），非"无出边=终态"：默认图 closed/rejected 有重开边。

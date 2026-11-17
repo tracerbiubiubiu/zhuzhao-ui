@@ -6,6 +6,7 @@
  * 后端补 @Success 泛型后同法切换。
  */
 import request from '@vea/request'
+import { assignmentId, assignmentIds, assignmentRecord } from './assignmentPayload'
 import type { components } from '@/api/__generated__/schema'
 
 type Schemas = components['schemas']
@@ -64,7 +65,7 @@ export async function resetUserPasswordApi(userId: string, password: string): Pr
 
 /** 角色分配（P3-6：ID 数组元素发送侧一律 string——standards §3-12②；Int64Slice 双兼容仅收方宽容） */
 export async function setUserRolesApi(userId: string, roleIds: string[]): Promise<void> {
-  await request.post('/api/v1/users/roles', { user_id: userId, role_ids: roleIds })
+  await request.post('/api/v1/users/roles', { user_id: userId, role_ids: roleIds }, { _silentError: true })
 }
 
 // ===== P2-12：分配组织（GET /users/:id/orgs + POST /users/orgs 全量替换） =====
@@ -79,17 +80,29 @@ export interface UserOrgRow {
 
 export async function getUserOrgsApi(userId: string): Promise<UserOrgRow[]> {
   const data = await request.get(`/api/v1/users/${userId}/orgs`, { _silentError: true })
-  return ((data as unknown as { orgs?: UserOrgRow[] })?.orgs ?? [])
+  const rows = assignmentRecord(data).orgs
+  if (!Array.isArray(rows)) throw new Error('读取组织集合格式异常，请重试或联系管理员核查')
+  const seen = new Set<string>()
+  let primaryCount = 0
+  return rows.map((value) => {
+    const row = assignmentRecord(value)
+    const orgId = assignmentId(row.org_id)
+    const memberUserId = assignmentId(row.user_id)
+    if (memberUserId !== userId || seen.has(orgId) || typeof row.is_primary !== 'boolean' || typeof row.joined_at !== 'string') throw new Error('读取组织归属不完整，请重试或联系管理员核查')
+    seen.add(orgId)
+    if (row.is_primary && ++primaryCount > 1) throw new Error('读取主组织不唯一，请联系管理员核查')
+    return { ...row, user_id: memberUserId, org_id: orgId } as unknown as UserOrgRow
+  })
 }
 
 /**
  * 用户已绑角色 ID 集（P2-5 新端点 GET /users/:id/roles → {role_ids:[...]}——
- * 裸 number 数组出参（同 menu_ids 形态），消费侧勾选按 string 处理）。
+ * 直接绑定ID包含停用旧绑定；精确字符串为主，安全整数仅作接收兼容）。
  * 替代「工号精确+角色过滤」N+1 反查（旧法每角色一次请求且无工号用户不可回显）。
  */
 export async function getUserRoleIdsApi(userId: string): Promise<string[]> {
   const data = await request.get(`/api/v1/users/${userId}/roles`, { _silentError: true })
-  return ((data as unknown as { role_ids?: number[] })?.role_ids ?? []).map(String)
+  return assignmentIds(assignmentRecord(data).role_ids)
 }
 
 /** 全量设置用户组织（org_ids 整体替换；primary_org_id 可选——须 ∈ org_ids） */
