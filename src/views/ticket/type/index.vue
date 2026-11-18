@@ -255,7 +255,10 @@ async function confirmInflightImpact(session: number, code: string, candidates: 
   if (!candidates.length) return true
   const counts = await Promise.all(candidates.map(async (s) => {
     try {
-      const { total } = await listTicketsApi({ page: 1, page_size: 1, type_code: code, status: s })
+      const { total } = await listTicketsApi(
+        { page: 1, page_size: 1, type_code: code, status: s },
+        { _silentError: true },
+      )
       return [s, total] as const
     } catch {
       return [s, -1] as const

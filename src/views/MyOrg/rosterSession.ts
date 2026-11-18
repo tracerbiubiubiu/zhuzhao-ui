@@ -64,8 +64,9 @@ export function createRosterSession(deps: RosterDeps) {
   }
 
   function selectOrg(orgId: string) {
-    if (!orgId || orgId === state.orgId) return
-    Object.assign(state, { orgId, page: 1, total: 0 })
+    if (!orgId) return
+    if (orgId !== state.orgId) state.total = 0
+    Object.assign(state, { orgId, page: 1 })
     return load()
   }
 

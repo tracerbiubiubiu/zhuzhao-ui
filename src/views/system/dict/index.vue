@@ -24,6 +24,7 @@ defineOptions({ name: 'system_dict_page' })
 const types = ref<DictTypeRow[]>([])
 const typesLoading = ref(false)
 const typesReadError = ref('')
+const typeListReady = computed(() => !typesLoading.value && !typesReadError.value)
 const selectedType = ref<DictTypeRow | null>(null)
 // 字典量级小。双表 page_size=100 的分页豁免见 docs/design/frontend-ui.md。
 const keyword = ref('')
@@ -47,7 +48,7 @@ let typeDialogGeneration = 0
 const pendingTypes = reactive(new Set<string>())
 const itemsWritable = computed(() => {
   const type = selectedType.value
-  return itemsReady.value && !!type && !pendingTypes.has(type.id)
+  return typeListReady.value && itemsReady.value && !!type && !pendingTypes.has(type.id)
 })
 
 type ItemTarget = { id: string; code: string; generation: number }
@@ -132,7 +133,7 @@ function setSelectedType(row: DictTypeRow | null) {
 }
 
 function selectType(row: DictTypeRow) {
-  if (!typesLoading.value && types.value.includes(row)) setSelectedType(row)
+  if (typeListReady.value && types.value.includes(row)) setSelectedType(row)
 }
 
 // 输入时即作废旧请求，防抖等待期间也不能用上一关键词的行发起写入。
@@ -147,6 +148,8 @@ function onKeywordInput() {
 }
 
 async function fetchTypes(preferredId?: string) {
+  clearTimeout(kwTimer)
+  kwTimer = undefined
   const selectedId = selectedType.value?.id
   const request = ++typesRequest
   typesLoading.value = true
@@ -157,14 +160,20 @@ async function fetchTypes(preferredId?: string) {
       { _silentError: true },
     )
     if (request !== typesRequest) return
-    types.value = res.list
+    if (!Array.isArray(res?.list)) throw new Error('字典类型列表不完整')
     const wantedId = selectedType.value?.id === selectedId ? (preferredId ?? selectedId) : selectedType.value?.id
-    setSelectedType(res.list.find(row => row.id === wantedId) ?? res.list[0] ?? null)
+    const next = res.list.find(row => row.id === wantedId) ?? res.list[0] ?? null
+    types.value = res.list
+    setSelectedType(next)
   } catch (err: unknown) {
     if (request !== typesRequest) return
-    types.value = []
-    setSelectedType(null)
-    typesReadError.value = responseMessage(err, '读取字典类型失败')
+    const selected = selectedType.value
+    // 同一筛选内只保留最后一次读取的上下文，旧草稿等重试成功再开放提交。
+    if (!selected || !types.value.some(row => row.id === selected.id && row.code === selected.code)) {
+      types.value = []
+      setSelectedType(null)
+    }
+    typesReadError.value = responseMessage(err, '读取字典类型失败') || '读取字典类型失败'
   } finally {
     if (request === typesRequest) typesLoading.value = false
   }
@@ -195,7 +204,7 @@ async function submitType() {
       ElMessage.success(`类型「${t.code}」已创建`)
       typeVisible.value = false
     }
-    if (generation === selectionGeneration) void fetchTypes(stillOpen ? t.id : undefined)
+    refreshTypesAfterWrite(stillOpen && generation === selectionGeneration ? t.id : undefined)
   } catch (err: unknown) {
     if (currentDialog()) typeError.value = responseMessage(err, '创建失败')
   } finally {
@@ -204,11 +213,11 @@ async function submitType() {
 }
 
 function canUseType(row: DictTypeRow) {
-  return !typesLoading.value && types.value.includes(row) && !pendingTypes.has(row.id)
+  return typeListReady.value && types.value.includes(row) && !pendingTypes.has(row.id)
 }
 
-function refreshTypesAfterWrite(id: string) {
-  if (active && types.value.some(row => row.id === id)) void fetchTypes()
+function refreshTypesAfterWrite(preferredId?: string) {
+  if (active) void fetchTypes(preferredId)
 }
 
 async function onToggleType(row: DictTypeRow, enabled: boolean) {
@@ -219,34 +228,41 @@ async function onToggleType(row: DictTypeRow, enabled: boolean) {
   try {
     await updateDictTypeApi({ id, name, enabled, version })
     if (generation === selectionGeneration) ElMessage.success(enabled ? '已启用' : '已停用（消费端点不再返回该项集）')
+    refreshTypesAfterWrite()
   } catch (err: unknown) {
     if (generation === selectionGeneration) ElMessage.error(responseMessage(err, '操作失败'))
+    if (types.value.some(current => current.id === id)) refreshTypesAfterWrite()
   } finally {
     pendingTypes.delete(id)
-    refreshTypesAfterWrite(id)
   }
 }
 
 async function onDeleteType(row: DictTypeRow) {
   if (!canUseType(row)) return
-  const { id, code } = row
+  const { id, code, version } = row
   const generation = selectionGeneration
   try {
     await ElMessageBox.confirm(`删除类型「${code}」将级联删除其全部字典项。确认？`, '删除类型', {
       type: 'warning', confirmButtonText: '删除', cancelButtonText: '取消',
     })
   } catch { return }
-  if (generation !== selectionGeneration || !canUseType(row)) return
+  if (generation !== selectionGeneration) return
+  const current = types.value.find((type) => type.id === id && type.code === code && type.version === version)
+  if (!current || !canUseType(current)) {
+    ElMessage.warning('字典类型正在刷新或已变化，请重新确认')
+    return
+  }
   pendingTypes.add(id)
   try {
     await deleteDictTypeApi(code)
     if (generation === selectionGeneration) ElMessage.success('已删除')
     if (active && selectedType.value?.id === id) setSelectedType(null)
+    refreshTypesAfterWrite()
   } catch (err: unknown) {
     if (generation === selectionGeneration) ElMessage.error(responseMessage(err, '删除失败'))
+    if (types.value.some(type => type.id === id)) refreshTypesAfterWrite()
   } finally {
     pendingTypes.delete(id)
-    refreshTypesAfterWrite(id)
   }
 }
 
@@ -313,11 +329,16 @@ async function onToggleItem(row: DictItemRow, enabled: boolean) {
 async function onDeleteItem(row: DictItemRow) {
   const target = currentItemTarget()
   if (!target || !canUseItem(row, target)) return
-  const { id, label } = row
+  const { id, label, version } = row
   try {
     await ElMessageBox.confirm(`确认删除字典项「${label}」？已选用该项的存量工单将只显示原始编码（建议改用「停用」——存量值不受影响）`, '删除', { type: 'warning' })
   } catch { return }
-  if (!canUseItem(row, target)) return
+  if (!isCurrentItemTarget(target)) return
+  const current = items.value.find((item) => item.id === id && item.version === version)
+  if (!current || !canUseItem(current, target)) {
+    ElMessage.warning('字典项正在刷新或已变化，请重新确认')
+    return
+  }
   pendingItems.add(id)
   try {
     await deleteDictItemApi(id)
@@ -461,9 +482,12 @@ useTableFit(itemsTable, () => items.value)
       <el-input-number v-model="itemForm.sort_order" :min="0" :controls="false" class="mb-3" />
       <el-input v-model="itemForm.remark" placeholder="备注（可选）" />
       <el-alert v-if="itemError" :title="itemError" type="error" show-icon class="mt-3" :closable="false" />
+      <el-alert v-if="typesReadError" :title="typesReadError" type="error" show-icon class="mt-3" :closable="false">
+        <el-button link type="primary" @click="fetchTypes()">重试</el-button>
+      </el-alert>
       <template #footer>
         <el-button @click="itemVisible = false">取消</el-button>
-        <el-button type="primary" :loading="itemSaving" :disabled="!canSubmitItem" @click="submitItem">创建</el-button>
+        <el-button type="primary" :loading="itemSaving || typesLoading" :disabled="!canSubmitItem" @click="submitItem">创建</el-button>
       </template>
     </el-dialog>
   </div>

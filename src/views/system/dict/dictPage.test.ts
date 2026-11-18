@@ -13,6 +13,7 @@ type Page = {
   keyword: vue.Ref<string>
   types: vue.Ref<DictTypeRow[]>
   typesLoading: vue.Ref<boolean>
+  typesReadError: vue.Ref<string>
   selectedType: vue.Ref<DictTypeRow | null>
   items: vue.Ref<DictItemRow[]>
   itemsLoading: vue.Ref<boolean>
@@ -26,6 +27,7 @@ type Page = {
   submitType(): Promise<void>
   onToggleType(row: DictTypeRow, enabled: boolean): Promise<void>
   itemForm: { code: string; label: string }
+  fetchTypes(preferredId?: string): Promise<void>
   fetchItems(): Promise<void>
   onKeywordInput(): void
   selectType(row: DictTypeRow): void
@@ -38,7 +40,7 @@ type Page = {
 
 // Execute the actual SFC setup with real Vue refs and controlled request timing.
 // Stub the component imports because these tests exercise state and request targets.
-function setup() {
+function setup(initialTypes?: Promise<List<DictTypeRow>>) {
   const api = {
     listDictTypesApi: vi.fn<(_: { keyword?: string }) => Promise<List<DictTypeRow>>>(),
     listDictItemsApi: vi.fn<(_: { type_code: string }) => Promise<List<DictItemRow>>>(),
@@ -50,7 +52,7 @@ function setup() {
     updateDictItemApi: vi.fn(),
   }
   const confirm = vi.fn<() => Promise<void>>()
-  const message = { error: vi.fn(), success: vi.fn() }
+  const message = { error: vi.fn(), success: vi.fn(), warning: vi.fn() }
   const lifecycle = { activate: () => {}, deactivate: () => {} }
   const libs: Record<string, unknown> = {
     vue: {
@@ -66,6 +68,7 @@ function setup() {
     load: (name: string) => unknown,
   ) => Page
   api.listDictTypesApi.mockResolvedValue(list(typeA, typeB))
+  if (initialTypes) api.listDictTypesApi.mockReturnValueOnce(initialTypes)
   api.listDictItemsApi.mockImplementation(async ({ type_code }) => list(type_code === 'a' ? itemA : itemB))
   confirm.mockResolvedValue()
   const scope = vue.effectScope()
@@ -393,6 +396,180 @@ describe('字典管理页面的读取与写入目标', () => {
     expect(message.error).not.toHaveBeenCalled()
     expect(api.listDictTypesApi).toHaveBeenCalledTimes(1)
     expect(page.types.value[0]).toEqual(current)
+  })
+
+  it('类型写入成功后使新关键词的在途旧快照失效', async () => {
+    vi.useFakeTimers()
+    const { api, page, message } = setup()
+    await settle()
+    const mutation = deferred<void>()
+    api.updateDictTypeApi.mockReturnValueOnce(mutation.promise)
+    const update = page.onToggleType(page.types.value[0], false)
+    const previous = deferred<List<DictTypeRow>>()
+    const disabled = { ...typeA, enabled: false, version: 2 }
+    api.listDictTypesApi.mockReturnValueOnce(previous.promise).mockResolvedValueOnce(list(disabled))
+    page.keyword.value = 'a'
+    page.onKeywordInput()
+    await vi.advanceTimersByTimeAsync(300)
+    expect(page.types.value).toEqual([])
+    mutation.resolve()
+    await update
+    previous.resolve(list(typeA))
+    await settle()
+    expect(api.listDictTypesApi).toHaveBeenLastCalledWith(
+      { page: 1, page_size: 100, keyword: 'a' }, { _silentError: true },
+    )
+    expect(page.types.value).toEqual([disabled])
+    expect(message.success).not.toHaveBeenCalled()
+  })
+
+  it('旧类型写入后的回读失败保留当前字典项草稿，成功重试前禁止写入', async () => {
+    const { api, page, message } = setup()
+    await settle()
+    const mutation = deferred<void>()
+    api.updateDictTypeApi.mockReturnValueOnce(mutation.promise)
+    const update = page.onToggleType(page.types.value[0], false)
+    page.selectType(page.types.value[1])
+    await settle()
+    page.openItemCreate()
+    Object.assign(page.itemForm, { code: 'draft', label: '保留的 B 草稿' })
+    const readBack = deferred<List<DictTypeRow>>()
+    api.listDictTypesApi.mockReturnValueOnce(readBack.promise)
+
+    mutation.resolve()
+    await update
+    readBack.reject({ response: { data: { message: '类型暂不可读' } } })
+    await settle()
+    expect(page.typesReadError.value).toBe('类型暂不可读')
+    expect(page.types.value).toEqual([typeA, typeB])
+    expect(page.selectedType.value?.id).toBe(typeB.id)
+    expect(page.itemVisible.value).toBe(true)
+    expect(page.itemForm).toMatchObject({ code: 'draft', label: '保留的 B 草稿' })
+    expect(message.success).not.toHaveBeenCalled()
+
+    await page.submitItem()
+    await page.onToggleType(page.types.value[1], false)
+    await page.onToggleItem(page.items.value[0], false)
+    expect(api.createDictItemApi).not.toHaveBeenCalled()
+    expect(api.updateDictTypeApi).toHaveBeenCalledTimes(1)
+    expect(api.updateDictItemApi).not.toHaveBeenCalled()
+
+    const retry = deferred<List<DictTypeRow>>()
+    api.listDictTypesApi.mockReturnValueOnce(retry.promise)
+    const retrying = page.fetchTypes()
+    await page.submitItem()
+    expect(api.createDictItemApi).not.toHaveBeenCalled()
+    retry.resolve(list({ ...typeA, enabled: false, version: 2 }, { ...typeB }))
+    await retrying
+    expect(page.itemVisible.value).toBe(true)
+    await page.submitItem()
+    expect(api.createDictItemApi).toHaveBeenCalledExactlyOnceWith({
+      type_code: typeB.code, code: 'draft', label: '保留的 B 草稿', sort_order: 2,
+    })
+  })
+
+  it('首次读取和新关键词读取失败都不保留旧类型数据', async () => {
+    vi.useFakeTimers()
+    const { api, page } = setup(Promise.reject(new Error('首读失败')))
+    await settle()
+    expect(page.typesReadError.value).toBe('读取字典类型失败')
+    expect(page.types.value).toEqual([])
+    expect(page.selectedType.value).toBeNull()
+    await page.fetchTypes()
+    expect(page.selectedType.value?.id).toBe(typeA.id)
+
+    api.listDictTypesApi.mockRejectedValueOnce(new Error('筛选失败'))
+    page.keyword.value = 'b'
+    page.onKeywordInput()
+    await vi.advanceTimersByTimeAsync(300)
+    expect(page.typesReadError.value).toBe('读取字典类型失败')
+    expect(page.types.value).toEqual([])
+    expect(page.selectedType.value).toBeNull()
+    expect(page.items.value).toEqual([])
+  })
+
+  it('缓存页重激活后接纳已创建的类型并保留当前选择，不显示上一代提示', async () => {
+    const { api, page, message, lifecycle } = setup()
+    await settle()
+    page.selectType(page.types.value[1])
+    const mutation = deferred<DictTypeRow>()
+    api.createDictTypeApi.mockReturnValueOnce(mutation.promise)
+    page.openTypeCreate()
+    Object.assign(page.typeForm, { code: 'new', name: '合成新类型' })
+    const saving = page.submitType()
+    lifecycle.deactivate()
+    lifecycle.activate()
+    await settle()
+    expect(page.selectedType.value?.id).toBe(typeB.id)
+
+    const created = { ...typeA, id: 'type-new', code: 'new' }
+    api.listDictTypesApi.mockResolvedValueOnce(list(created, typeA, typeB))
+    mutation.resolve(created)
+    await saving
+    await settle()
+    expect(page.types.value).toEqual([created, typeA, typeB])
+    expect(page.selectedType.value?.id).toBe(typeB.id)
+    expect(message.success).not.toHaveBeenCalled()
+  })
+
+  it('独立类型刷新替换表格行后，接受相同编码和版本的删除确认', async () => {
+    const { api, page, confirm } = setup()
+    await settle()
+    const mutation = deferred<void>()
+    const approval = deferred<void>()
+    api.updateDictTypeApi.mockReturnValueOnce(mutation.promise)
+    confirm.mockReturnValueOnce(approval.promise)
+    const update = page.onToggleType(page.types.value[0], false)
+    const row = page.types.value[1]
+    const deletion = page.onDeleteType(row)
+    api.listDictTypesApi.mockResolvedValueOnce(list({ ...typeA, enabled: false, version: 2 }, { ...typeB }))
+    mutation.resolve()
+    await update
+    await settle()
+    expect(page.types.value[1]).not.toBe(row)
+
+    approval.resolve()
+    await deletion
+    expect(api.deleteDictTypeApi).toHaveBeenCalledExactlyOnceWith(typeB.code)
+  })
+
+  it('独立条目刷新替换表格行后，接受当前类型内相同版本的删除确认', async () => {
+    const { api, page, confirm } = setup()
+    await settle()
+    const second = { ...itemA, id: 'item-a-2', code: 'alpha-2', label: '项 A-2' }
+    api.listDictItemsApi.mockResolvedValueOnce(list(itemA, second))
+    await page.fetchItems()
+    const mutation = deferred<void>()
+    const approval = deferred<void>()
+    api.updateDictItemApi.mockReturnValueOnce(mutation.promise)
+    confirm.mockReturnValueOnce(approval.promise)
+    const update = page.onToggleItem(page.items.value[0], false)
+    const row = page.items.value[1]
+    const deletion = page.onDeleteItem(row)
+    api.listDictItemsApi.mockResolvedValueOnce(list({ ...itemA, enabled: false, version: 2 }, { ...second }))
+    mutation.resolve()
+    await update
+    await settle()
+    expect(page.items.value[1]).not.toBe(row)
+
+    approval.resolve()
+    await deletion
+    expect(api.deleteDictItemApi).toHaveBeenCalledExactlyOnceWith(second.id)
+  })
+
+  it('同一字典项已变更版本时必须重新确认删除', async () => {
+    const { api, page, confirm, message } = setup()
+    await settle()
+    const approval = deferred<void>()
+    confirm.mockReturnValueOnce(approval.promise)
+    const deletion = page.onDeleteItem(page.items.value[0])
+    api.listDictItemsApi.mockResolvedValueOnce(list({ ...itemA, label: '新的名称', version: 2 }))
+    await page.fetchItems()
+
+    approval.resolve()
+    await deletion
+    expect(api.deleteDictItemApi).not.toHaveBeenCalled()
+    expect(message.warning).toHaveBeenCalledExactlyOnceWith('字典项正在刷新或已变化，请重新确认')
   })
 
   it('缓存页离开后废弃旧确认和旧读取，回到页面重新加载', async () => {

@@ -57,6 +57,36 @@ describe('我的组织名册世代', () => {
     expect(action).not.toHaveBeenCalled()
   })
 
+  it('点击当前组织卡片回到第一页，迟到的翻页错误不能覆盖回读', async () => {
+    const { load, session } = fixture()
+    await session.selectOrg(A)
+    const oldPage = Promise.withResolvers<ReturnType<typeof data>>()
+    load.mockReturnValueOnce(oldPage.promise).mockResolvedValueOnce(data('回到首页的当前成员'))
+
+    const paging = session.selectPage(2)
+    await session.selectOrg(A)
+    oldPage.reject(new Error('旧分页失败'))
+    await paging
+
+    expect(load.mock.calls).toEqual([[A, 1, 20], [A, 2, 20], [A, 1, 20]])
+    expect(session.state).toMatchObject({
+      orgId: A, page: 1, status: 'ready', rows: [{ username: '回到首页的当前成员' }],
+    })
+  })
+
+  it('再次点击当前只读组织可重新读取授权和名册', async () => {
+    const { load, session } = fixture()
+    load.mockRejectedValueOnce(forbidden).mockResolvedValueOnce(data('授权后的当前成员'))
+    await session.selectOrg(A)
+    expect(session.state.status).toBe('readonly')
+
+    await session.selectOrg(A)
+
+    expect(load.mock.calls).toEqual([[A, 1, 20], [A, 1, 20]])
+    expect(session.state).toMatchObject({ status: 'ready', rows: [{ username: '授权后的当前成员' }] })
+    expect(session.canEdit.value).toBe(true)
+  })
+
   it('当前 403 为只读，当前故障显示错误并可重读', async () => {
     const { load, session } = fixture()
     load.mockRejectedValueOnce(forbidden).mockRejectedValueOnce(new Error('网络中断'))

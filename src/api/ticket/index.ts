@@ -6,6 +6,7 @@
  * keyword/时间/me 为本批后端同补；keyword=标题 ILIKE 子串，纯数字 OR 工单 ID）。
  * Ticket 行无 version（乐观锁三件套=用户/组织/角色，工单除外）。
  */
+import type { AxiosRequestConfig } from 'axios'
 import request from '@vea/request'
 import type { components } from '@/api/__generated__/schema'
 
@@ -59,8 +60,9 @@ export interface TicketListQuery {
 
 export async function listTicketsApi(
   params: { page: number; page_size: number } & TicketListQuery,
+  config?: Pick<AxiosRequestConfig, '_silentError'>,
 ): Promise<{ list: TicketRow[]; total: number }> {
-  const data = await request.get('/api/v1/tickets', { params })
+  const data = await request.get('/api/v1/tickets', { params, ...config })
   return data as unknown as { list: TicketRow[]; total: number }
 }
 

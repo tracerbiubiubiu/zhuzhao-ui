@@ -1,4 +1,4 @@
-import { test, expect, type Page, type Response } from '@playwright/test'
+import { errors, test, expect, type Page, type Response } from '@playwright/test'
 import { api, apiLogin, loadState, mustData, waitUserRateBudget } from './helpers'
 import { uiLogin } from './ui'
 
@@ -31,6 +31,10 @@ test('P5-S2：旧影响查询和保存响应不得接管重开的类型编辑', 
   const writes: unknown[] = []
   const impact = Promise.withResolvers<string>()
   const releaseImpact = Promise.withResolvers<void>()
+  const failedImpact = Promise.withResolvers<string>()
+  const releaseFailedImpact = Promise.withResolvers<void>()
+  const impactFailureMessage = '合成：旧类型的影响查询失败'
+  let failNextImpact = false
   const saving = Promise.withResolvers<void>()
   const releaseSaving = Promise.withResolvers<void>()
   try {
@@ -55,8 +59,18 @@ test('P5-S2：旧影响查询和保存响应不得接管重开的类型编辑', 
     await page.route('**/api/v1/tickets?**', async (route) => {
       const url = new URL(route.request().url())
       if (url.searchParams.get('type_code') !== codeA || url.searchParams.get('status') !== 'legacy') return route.continue()
+      const shouldFail = failNextImpact
+      failNextImpact = false
       const response = await route.fetch()
       expect(response.status()).toBe(200)
+      if (shouldFail) {
+        failedImpact.resolve(url.href)
+        await releaseFailedImpact.promise
+        return route.fulfill({
+          status: 503,
+          json: { code: 10008, message: impactFailureMessage, data: null },
+        })
+      }
       impact.resolve(url.href)
       await releaseImpact.promise
       await route.fulfill({ response })
@@ -138,10 +152,32 @@ test('P5-S2：旧影响查询和保存响应不得接管重开的类型编辑', 
     // 画布实例有自己的撤销栈，切换类型后撤销不得恢复上一类型的图。
     const canvas = dialog.getByTestId('fg-canvas')
     await expect(canvas.getByText('legacy', { exact: true })).toBeVisible()
+    failNextImpact = true
+    await editGraph({ states: ['open', 'assigned', 'closed'], transitions: { open: ['assigned'], assigned: ['closed'] } })
+    await save.click()
+    const failedImpactUrl = await failedImpact.promise
     await cancel.click()
     await expect(dialog).toBeHidden()
+
+    // API 回读证明已落库，再等页面缓存自身完成刷新，避免从旧表格行打开 B。
+    await expect(page.getByRole('row').filter({ hasText: codeB }).getByText(newName, { exact: true })).toBeVisible()
     await open(codeB)
     await expect(canvas.getByText('review_b', { exact: true })).toBeVisible()
+
+    const oldFailure = page.waitForResponse((response) =>
+      response.url() === failedImpactUrl && response.status() === 503, { timeout: 10_000 })
+    // 错误提示组件是异步加载的。监听这条唯一消息，避免在错误组件尚未挂载时断言通过。
+    const staleToast = page.getByText(impactFailureMessage, { exact: true }).waitFor({ state: 'visible', timeout: 2_500 })
+      .then(() => true, (err: unknown) => {
+        if (!(err instanceof errors.TimeoutError)) throw err
+        return false
+      })
+    releaseFailedImpact.resolve()
+    await flushResponse(page, await oldFailure)
+    expect(await staleToast).toBe(false)
+    await expect(page.getByRole('dialog', { name: '改图影响在途工单' })).toBeHidden()
+    await expect(titleField).toHaveValue(newName)
+    await expect(save).toBeEnabled()
     await canvas.click({ position: { x: 20, y: 300 } })
     await page.keyboard.press('ControlOrMeta+z')
     await expect(canvas.getByText('legacy', { exact: true })).toHaveCount(0)
@@ -169,6 +205,7 @@ test('P5-S2：旧影响查询和保存响应不得接管重开的类型编辑', 
   } finally {
     releaseImpact.resolve()
     releaseSaving.resolve()
+    releaseFailedImpact.resolve()
     for (const code of created) {
       await mustData(api('/api/v1/ticket-types/delete', { ...auth, method: 'POST', body: { code } }), '清理合成工单类型')
     }
