@@ -33,8 +33,9 @@ export interface DictItemRow {
 
 export async function listDictTypesApi(
   params: { page: number; page_size: number; keyword?: string },
+  config?: { _silentError?: boolean },
 ): Promise<{ list: DictTypeRow[]; total: number }> {
-  const data = await request.get('/api/v1/dicts', { params })
+  const data = await request.get('/api/v1/dicts', { params, ...config })
   return data as unknown as { list: DictTypeRow[]; total: number }
 }
 
@@ -59,8 +60,9 @@ export async function deleteDictTypeApi(code: string): Promise<void> {
 
 export async function listDictItemsApi(
   params: { page: number; page_size: number; type_code: string },
+  config?: { _silentError?: boolean },
 ): Promise<{ list: DictItemRow[]; total: number }> {
-  const data = await request.get('/api/v1/dict-items', { params })
+  const data = await request.get('/api/v1/dict-items', { params, ...config })
   return data as unknown as { list: DictItemRow[]; total: number }
 }
 

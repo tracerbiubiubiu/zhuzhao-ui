@@ -13,7 +13,7 @@
  *   编辑框说明与S3a保持一致：实际流转受权限/条件/校验器约束；审批节点仍属S3b
  * - 乐观锁：类型/模板 version 回传 CAS（可省略——管理页应带上），10006 → 关框刷新范式
  */
-import { computed, nextTick, reactive, ref, watch} from 'vue'
+import { computed, nextTick, onBeforeUnmount, onDeactivated, reactive, ref, watch } from 'vue'
 import { useTableFit } from '@vea/hooks'
 import { compareInt64Desc } from '@/utils/int64'
 import {
@@ -90,12 +90,28 @@ const typeColumns = [
 
 const typeDialog = reactive({ visible: false, isCreate: true, loading: false, error: '' })
 const typeFormRef = ref<FormInstance>()
+const typeSession = ref(0)
+
+function closeTypeDialog() {
+  typeSession.value++
+  typeDialog.visible = false
+  typeDialog.loading = false
+}
+
+onDeactivated(closeTypeDialog)
+onBeforeUnmount(closeTypeDialog)
+
+function isCurrentTypeSession(session: number): boolean {
+  return session === typeSession.value && typeDialog.visible
+}
+
 const typeForm = reactive({
   code: '', name: '', description: '', is_active: true,
   statesText: '', transitionsText: '', version: 0,
 })
 
 function openTypeCreate() {
+  typeSession.value++
   Object.assign(typeDialog, { visible: true, isCreate: true, loading: false, error: '' })
   Object.assign(typeForm, { code: '', name: '', description: '', is_active: true, statesText: '', transitionsText: '', version: 0 })
   metaRows.value = []
@@ -103,6 +119,7 @@ function openTypeCreate() {
 }
 
 function openTypeEdit(row: TicketTypeFullRow) {
+  const session = ++typeSession.value
   Object.assign(typeDialog, { visible: true, isCreate: false, loading: false, error: '' })
   Object.assign(typeForm, {
     code: row.code, name: row.name, description: row.description, is_active: row.is_active,
@@ -114,7 +131,9 @@ function openTypeEdit(row: TicketTypeFullRow) {
   originalStates.value = Array.isArray(row.states) ? (row.states as unknown[]).filter((s): s is string => typeof s === 'string') : []
   loadMetaFromRow(row.transition_meta)
   graphMode.value = 'canvas'
-  void nextTick().then(loadCanvasFromText)
+  void nextTick().then(() => {
+    if (isCurrentTypeSession(session)) return loadCanvasFromText()
+  })
 }
 
 /** JSON 源码模式校验（空=不传，后端缺省 6 态默认图） */
@@ -232,8 +251,7 @@ function serializeMeta(states: string[]): Record<string, unknown> | null {
  * 逐状态 `GET /tickets?type_code&status` 取 total（零后端改动）；查询失败按"数量未知"仍提示。
  * 返回 false = 用户取消。
  */
-async function confirmInflightImpact(code: string, states: string[], transitions: Adjacency): Promise<boolean> {
-  const candidates = stuckStates(originalStates.value, states, transitions)
+async function confirmInflightImpact(session: number, code: string, candidates: string[]): Promise<boolean> {
   if (!candidates.length) return true
   const counts = await Promise.all(candidates.map(async (s) => {
     try {
@@ -243,6 +261,7 @@ async function confirmInflightImpact(code: string, states: string[], transitions
       return [s, -1] as const
     }
   }))
+  if (!isCurrentTypeSession(session)) return false
   const hit = counts.filter(([, n]) => n !== 0)
   if (!hit.length) return true
   const label = (s: string) => (STATUS_LABEL[s] ? `${s}·${STATUS_LABEL[s]}` : s)
@@ -259,43 +278,52 @@ async function confirmInflightImpact(code: string, states: string[], transitions
   }
 }
 
-async function submitType() {
-  const valid = await typeFormRef.value?.validate().catch(() => false)
-  if (!valid) return
-  let graph: { states: string[]; transitions: Adjacency } | null = null
-  let transitionMeta: Record<string, unknown> | null = null
-  if (!typeDialog.isCreate) {
-    // 画布模式先回写文本（画布有错则拦）；两模式最终都经 graphFromText 镜像预检
-    if (graphMode.value === 'canvas' && !syncCanvasToText()) return
-    graph = graphFromText()
-    if (!graph) return
-    transitionMeta = serializeMeta(graph.states)
-    if (transitionMeta === null) return
-    if (!(await confirmInflightImpact(typeForm.code, graph.states, graph.transitions))) return
+function snapshotTypeGraph() {
+  // 画布模式先回写文本（画布有错则拦）；两模式最终都经 graphFromText 镜像预检。
+  if (graphMode.value === 'canvas' && !syncCanvasToText()) return null
+  const graph = graphFromText()
+  if (!graph) return null
+  const transitionMeta = serializeMeta(graph.states)
+  if (transitionMeta === null) return null
+  return {
+    payload: {
+      ...graph,
+      // 透传元数据可能仍引用响应里的嵌套对象，保存草稿须独立。
+      transition_meta: JSON.parse(JSON.stringify(transitionMeta)) as Record<string, unknown>,
+      version: typeForm.version,
+    },
+    candidates: stuckStates(originalStates.value, graph.states, graph.transitions),
   }
+}
+
+async function submitType() {
+  if (!typeDialog.visible || typeDialog.loading) return
+  const session = typeSession.value
+  const isCreate = typeDialog.isCreate
+  const { code, name, description, is_active } = typeForm
+  const fields = { code, name, description: description || undefined, is_active }
   typeDialog.loading = true
   typeDialog.error = ''
   try {
-    if (typeDialog.isCreate) {
-      await createTicketTypeApi({
-        code: typeForm.code, name: typeForm.name,
-        description: typeForm.description || undefined,
-        is_active: typeForm.is_active,
-      })
-      ElMessage.success('类型已创建')
+    const edit = isCreate ? null : snapshotTypeGraph()
+    if (!isCreate && !edit) return
+    const valid = await typeFormRef.value?.validate().catch(() => false)
+    if (!valid || !isCurrentTypeSession(session)) return
+
+    if (edit) {
+      if (!(await confirmInflightImpact(session, code, edit.candidates)) || !isCurrentTypeSession(session)) return
+      await updateTicketTypeApi({ ...fields, ...edit.payload })
     } else {
-      await updateTicketTypeApi({
-        code: typeForm.code, name: typeForm.name,
-        description: typeForm.description || undefined,
-        states: graph!.states, transitions: graph!.transitions,
-        transition_meta: transitionMeta ?? {},
-        is_active: typeForm.is_active, version: typeForm.version, // 乐观锁回传
-      })
-      ElMessage.success('类型已更新')
+      await createTicketTypeApi(fields)
     }
-    typeDialog.visible = false
+
+    if (isCurrentTypeSession(session)) {
+      ElMessage.success(isCreate ? '类型已创建' : '类型已更新')
+      typeDialog.visible = false
+    }
     await queryClient.invalidateQueries({ queryKey: ['ticket', 'types'] })
   } catch (err: unknown) {
+    if (!isCurrentTypeSession(session)) return
     const resp = (err as { response?: { data?: { code?: number; message?: string } } })?.response?.data
     if (resp?.code === 10006) {
       typeDialog.visible = false
@@ -305,7 +333,7 @@ async function submitType() {
       typeDialog.error = resp?.message ?? '保存失败，请稍后重试'
     }
   } finally {
-    typeDialog.loading = false
+    if (session === typeSession.value) typeDialog.loading = false
   }
 }
 
@@ -619,7 +647,7 @@ useTableFit(tplTable, () => pagedTplRows.value)
 
     <!-- 类型新建/编辑（states/transitions=画布模式默认 + JSON 源码模式专家兜底——S2 B2-2） -->
     <el-dialog :close-on-click-modal="false" v-model="typeDialog.visible" :title="typeDialog.isCreate ? '新建类型' : '编辑类型'" :width="typeDialog.isCreate ? '600px' : '980px'">
-      <el-form ref="typeFormRef" :model="typeForm" label-width="110px">
+      <el-form ref="typeFormRef" :model="typeForm" :inert="typeDialog.loading" label-width="110px">
         <el-form-item label="编码" required>
           <el-input v-model="typeForm.code" :disabled="!typeDialog.isCreate" placeholder="如 incident" maxlength="50" />
         </el-form-item>
@@ -642,7 +670,8 @@ useTableFit(tplTable, () => pagedTplRows.value)
             <span class="text-xs text-gray-400 ml-2">画布与源码为同一份数据，切换即同步；节点坐标只存本机不入库</span>
           </el-form-item>
           <div v-show="graphMode === 'canvas'" class="mb-3">
-            <FlowGraphDesigner ref="flowRef" :type-code="typeForm.code" />
+            <!-- LogicFlow 重载图时保留历史；每次打开使用独立画布，切换模式则保留本次草稿与历史。 -->
+            <FlowGraphDesigner :key="typeSession" ref="flowRef" :type-code="typeForm.code" />
           </div>
           <template v-if="graphMode === 'json'">
             <el-form-item label="states(JSON)">
