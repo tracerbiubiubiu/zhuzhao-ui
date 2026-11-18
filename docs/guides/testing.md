@@ -33,6 +33,12 @@ pnpm gate
 
 ESLint是纯检查，修复用lint:fix后重跑。E2E使用[playwright.config.ts](../../playwright.config.ts)，workers=1、当前默认retries=1；默认门禁有重试时必须披露实际首轮失败/重试/跳过，不能写成零重试。CI范围见[ci.yml](../../.github/workflows/ci.yml)，E2E当前由本地真栈承接；未推送/未执行的远端CI不写通过。
 
+### 开发期已接受的依赖公告
+
+2026-11-18所有者明确接受`picomatch@4.0.7`的high公告[GHSA-fc5q-39xc-vjpf](https://github.com/advisories/GHSA-fc5q-39xc-vjpf)在开发期不阻塞进度，状态为`accepted_open`，漏洞尚未修复。`pnpm-workspace.yaml`只通过[pnpm 12原生`audit.ignore`](https://pnpm.io/cli/audit#auditignore)登记这一条GHSA；本地与CI沿用同一`pnpm audit --prod`入口和默认级别，其他未接受公告继续阻断。审计退出0须披露已接受条目，不能表述为无漏洞。
+
+本轮r2候选的独立静态构建观察在模块图与输出中均未包含`picomatch`，仅证明该次产物，不能覆盖构建时消费者或未来导入；材料ID为`maintenance/commit-push-merge-20261118/ui/security/`，实现侧回链见[依赖风险状态](../design/frontend-ui.md#依赖风险状态)。后续开发/构建时随正常依赖审计检查官方修复或兼容升级，可用时立即升级、移除该ignore并重跑适用门禁，正式使用前复核；等待期间不另设固定到期阻断，也不为此安排额外回补、换库或裁剪。
+
 ### 维护任务的真实正向旅程
 
 任务管理页面及`task:submit/manage`不授予审计维护资格。`w5-task-center.spec.ts`继续用未获独立维护资格的管理账号验证403与定义/运行数不变；`w5-task-maintenance.spec.ts`另用专属已批准维护者，从真实浏览器提交任务，核对任务查询结果、核心PG与TR SQLite双端持久`succeeded`、200天合成旧审计记录从在线表移除及近期记录保留。该浏览器用例不单独检查JSONL文件；导出内容须由准确候选的真实JSONL专项验证并另记收据，不能仅凭在线旧行消失记为文件归档已验证。两者不能互相替代，不能因默认拒绝而自动给管理员或种子号维护权。
@@ -83,6 +89,14 @@ ESLint是纯检查，修复用lint:fix后重跑。E2E使用[playwright.config.ts
 新增防漂移闸（扫描/契约断言类）合入前**必须变异证明**：故意制造目标缺陷→测试变红→还原。先例：epImports（删模板 import→红）、useTableFit 扫描（摘 Profile 挂接→红）。未验牙的闸视同不存在。
 
 E2E **运行时**负向断言闸同纪律（2026-11-09 增补）：s5 B5-3「离开详情零空 id 附件请求」哨兵合入前，checkout 缺陷版组件跑 spec 验证精确变红再还原——运行时闸与静态扫描闸同一标准，未验牙视同不存在。
+
+## 角色菜单读取与错序回归
+
+角色菜单整体替换由`src/views/system/role/menuAssignment.test.ts`覆盖读取/渲染就绪、失败重试、同角色重开、迟到保存和清空确认；`src/api/system/menu.test.ts`与`assignmentPayload.test.ts`区分坏载荷和明确空集合，`menuTreeCascade.test.ts`保留目录联动与页面/按钮独立合同。并发守卫使用可控Promise交错及移除世代检查的稳定变异，不靠加长等待堆通过率。
+
+`e2e/s4-role-menu-races.spec.ts`使用真实临时角色、菜单读取、绑定与后端回读，指定菜单树读取注入延迟/503、指定旧角色菜单读取仅延迟原响应，验证页脚在树未就绪/失败时禁止保存以及同角色重开后不被旧响应污染。其余请求和写入均走真实服务，临时角色在finally删除；这些故障注入检查不能冒称所有网络均无替身。既有`s4-role-admin.spec.ts`继续验证目录联动、只勾页面的真实保存与精确回显；专项通过不替代完整六件和全量真实栈E2E。
+
+本批过程材料ID为`maintenance/commit-push-merge-20261118/ui/`，分别记录测试先行红例、首次失败、变异、mock单测与真实浏览器结果。运行前必须核候选UI来源；不能对旧静态前端跑绿后把结果记到新源码。临时验证端口仍遵守主仓分配和S3 Origin配置，结束精确退出候选前端并恢复既有环境。
 
 ## 非 admin 盲区教训（2026-10-12 双例）
 

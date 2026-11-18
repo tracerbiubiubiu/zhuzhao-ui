@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import request from '@vea/request'
 import { getUserOrgsApi, getUserRoleIdsApi, setUserOrgsApi, setUserRolesApi } from './user'
-import { listRolesApi } from './role'
+import { getRoleMenuIdsApi, listRolesApi } from './role'
 
 vi.mock('@vea/request', () => ({ default: { get: vi.fn(), post: vi.fn() } }))
 const role = { id: '9007199254740993', name: '合成角色', code: 'synthetic_role', status: 0 }
@@ -10,6 +10,17 @@ const org = { user_id: '12', org_id: '9007199254740993', is_primary: true, joine
 beforeEach(() => vi.clearAllMocks())
 
 describe('IAM 整体替换读取载荷', () => {
+  it.each([undefined, null, {}, { menu_ids: null }, { menu_ids: '1' }, { menu_ids: [''] }, { menu_ids: [9007199254740992] }, { menu_ids: ['9223372036854775808'] }, { menu_ids: ['1', 1] }])('菜单读取坏载荷拒绝而非成功空集合：%j', async (data) => {
+    vi.mocked(request.get).mockResolvedValue(data as never)
+    await expect(getRoleMenuIdsApi('12')).rejects.toThrow()
+  })
+
+  it('明确空菜单成功，大ID保持精确字符串及安全整数兼容', async () => {
+    vi.mocked(request.get).mockResolvedValueOnce({ menu_ids: [] } as never).mockResolvedValueOnce({ menu_ids: [12, role.id] } as never)
+    await expect(getRoleMenuIdsApi('12')).resolves.toEqual([])
+    await expect(getRoleMenuIdsApi('12')).resolves.toEqual(['12', role.id])
+  })
+
   it.each([undefined, null, {}, { role_ids: null }, { role_ids: '1' }, { role_ids: [''] }, { role_ids: ['0'] }, { role_ids: [9007199254740992] }, { role_ids: ['9223372036854775808'] }, { role_ids: ['1', 1] }])('角色读取坏载荷拒绝而非成功空集合：%j', async (data) => {
     vi.mocked(request.get).mockResolvedValue(data as never)
     await expect(getUserRoleIdsApi('12')).rejects.toThrow()

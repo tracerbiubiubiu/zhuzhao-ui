@@ -14,7 +14,7 @@
  * - 菜单树走 vue-query（queryKey=['system','menus']）
  */
 import { apiErrorBody } from '@/utils/apiError'
-import { reactive, ref } from 'vue'
+import { nextTick, onBeforeUnmount, onDeactivated, reactive, ref } from 'vue'
 import {
   ElButton, ElCard, ElDialog, ElForm, ElFormItem, ElInput, ElInputNumber, ElMessage,
   ElMessageBox, ElOption, ElSelect, ElSwitch, ElTag, ElTree,
@@ -26,6 +26,7 @@ import ProTable from '@/components/ProTable/index.vue'
 import type { ProTableColumn } from '@/components/ProTable/types'
 import { getMenuTreeApi, type MenuTreeNode } from '@/api/system/menu'
 import { dirCascadeKeys } from './menuTreeCascade'
+import { createMenuEditor } from './menuAssignment'
 import {
   assignRoleMenusApi, createRoleApi, deleteRoleApi, getRoleMenuIdsApi,
   listRolesApi, updateRoleApi, type RoleRow,
@@ -173,60 +174,52 @@ async function submitEdit() {
   }
 }
 
-// ─── 分配菜单（check-strictly 勾选树）───
-const menusVisible = ref(false)
-const menusLoading = ref(false)
-const menusError = ref('')
+// ─── 分配菜单（check-strictly 勾选树；世代守卫见 ./menuAssignment）───
 const menuTreeRef = ref<MenuTreeInstance>()
-const menusForm = reactive({ roleId: '', roleName: '' })
 const menuTreeQuery = useQuery({ queryKey: ['system', 'menus'], queryFn: getMenuTreeApi })
 
-async function openAssignMenus(row: RoleRow) {
-  Object.assign(menusForm, { roleId: row.id, roleName: row.name })
-  menusError.value = ''
-  menusVisible.value = true
-  // 初始勾选=角色已绑精确集合（替换语义）；树展开一级
-  try {
-    const ids = await getRoleMenuIdsApi(row.id)
-    // menu_ids 与树 node-key 均 number（menus 域 wire 实况）——直传勿 String 化
-    menuTreeRef.value?.setCheckedKeys(ids, false)
-  } catch {
-    menusError.value = '加载角色菜单失败，请重试'
-  }
-}
+const menuEditor = createMenuEditor({
+  loadIds: (id) => getRoleMenuIdsApi(id),
+  loadTree: () => queryClient.fetchQuery({ queryKey: ['system', 'menus'], queryFn: getMenuTreeApi, staleTime: 0 }),
+  async prepareTree(ids, current) {
+    await nextTick() // ElDialog懒渲染与树data更新完成后，再落本世代的精确勾选集。
+    if (!current()) return
+    const tree = menuTreeRef.value
+    if (!tree) throw new Error('菜单树尚未就绪，请重新读取')
+    tree.setCheckedKeys(ids, false)
+  },
+  applyChecked: (ids) => menuTreeRef.value?.setCheckedKeys(ids, false),
+  // check-strictly：getCheckedKeys 即用户精确勾选集（无级联半选）——整体替换
+  readChecked: () => {
+    if (!menuTreeRef.value) throw new Error('菜单树尚未就绪，请重新读取')
+    return menuTreeRef.value.getCheckedKeys(false)
+  },
+  confirmEmpty: async (target) => {
+    // 只有成功读取并回填后的显式空集才能进入清空确认；空数组是合法整体替换。
+    try {
+      await ElMessageBox.confirm(`未勾选任何菜单，保存将清空「${target.name}」的全部菜单授权。确认继续？`, '危险操作', {
+        type: 'warning', confirmButtonText: '确认清空', confirmButtonClass: 'el-button--danger',
+      })
+      return true
+    } catch {
+      return false
+    }
+  },
+  // 发送侧 string（P3-6——el-tree 键形态无关，后端 Int64Slice 双兼容）
+  save: (id, ids) => assignRoleMenusApi(id, ids),
+  success: (target) => {
+    ElMessage.success(`已更新「${target.name}」的菜单（整体替换）`)
+    tableRef.value?.refresh()
+  },
+})
+const menusState = menuEditor.state
+onDeactivated(menuEditor.close)
+onBeforeUnmount(menuEditor.close)
 
 /** 目录级联动接线：@check 交给纯逻辑重算（页面/按钮点击原样返回 null，不动勾选集） */
 function onMenuCheck(data: MenuTreeNode, info: { checkedKeys: Array<string | number> }) {
   const next = dirCascadeKeys(menuTreeQuery.data.value ?? [], data.id, info.checkedKeys)
   if (next) menuTreeRef.value?.setCheckedKeys(next, false)
-}
-
-async function submitAssignMenus() {
-  // check-strictly：getCheckedKeys 即用户精确勾选集（无级联半选）——整体替换
-  const keys = (menuTreeRef.value?.getCheckedKeys(false) ?? []) as Array<string | number>
-  if (keys.length === 0) {
-    // 空集=清空全部菜单（替换语义合法但高危；后端 binding required 拒空数组——前端先确认拦下）
-    try {
-      await ElMessageBox.confirm('未勾选任何菜单，保存将清空该角色的全部菜单授权。确认继续？', '危险操作', {
-        type: 'warning', confirmButtonText: '确认清空', confirmButtonClass: 'el-button--danger',
-      })
-    } catch {
-      return
-    }
-  }
-  menusLoading.value = true
-  menusError.value = ''
-  try {
-    await assignRoleMenusApi(menusForm.roleId, keys.map(String)) // 发送侧 string（P3-6——el-tree 键形态无关，后端 Int64Slice 双兼容）
-    ElMessage.success(`已更新「${menusForm.roleName}」的菜单（整体替换）`)
-    menusVisible.value = false
-    tableRef.value?.refresh()
-  } catch (err: unknown) {
-    const resp = (err as { response?: { data?: { message?: string } } })?.response?.data
-    menusError.value = resp?.message ?? '保存失败，请稍后重试'
-  } finally {
-    menusLoading.value = false
-  }
 }
 
 // ─── 删除 ───
@@ -262,7 +255,7 @@ async function onDelete(row: RoleRow) {
 
         <template #actions="{ row }">
           <el-button v-permission="'role:update'" link type="primary" size="small" @click="openEdit(row)">编辑</el-button>
-          <el-button v-permission="'role:assign_menu'" link type="primary" size="small" @click="openAssignMenus(row)">分配菜单</el-button>
+          <el-button v-permission="'role:assign_menu'" link type="primary" size="small" @click="menuEditor.open({ id: row.id, name: row.name })">分配菜单</el-button>
           <el-button v-permission="'role:create'" link type="primary" size="small" @click="openCreate(row)">复制</el-button>
           <el-button v-permission="'role:delete'" link type="danger" size="small" @click="onDelete(row)">删除</el-button>
         </template>
@@ -304,16 +297,22 @@ async function onDelete(row: RoleRow) {
       </template>
     </el-dialog>
 
-    <!-- 分配菜单（check-strictly 勾选树） -->
-    <el-dialog :close-on-click-modal="false" v-model="menusVisible" :title="`分配菜单 — ${menusForm.roleName}`" width="520px">
+    <!-- 分配菜单（check-strictly 勾选树；世代守卫见 ./menuAssignment） -->
+    <el-dialog
+      :model-value="menusState.visible"
+      :close-on-click-modal="false"
+      :title="`分配菜单 — ${menusState.target?.name ?? ''}`"
+      width="520px"
+      @update:model-value="!$event && menuEditor.close()"
+    >
       <el-alert
         type="info" :closable="false" class="mb-2"
         title="勾选/取消目录会联动其下全部页面与按钮；页面与按钮之间勾选相互独立（可只勾页面不勾按钮=只读授权），保存为整体替换。"
       />
-      <el-alert v-if="menusError" :title="menusError" type="error" show-icon class="mb-2" :closable="false" />
+      <el-alert v-if="menusState.error" :title="menusState.error" type="error" show-icon class="mb-2" :closable="false" />
       <el-tree
         ref="menuTreeRef"
-        v-loading="menuTreeQuery.isLoading.value"
+        v-loading="menuTreeQuery.isLoading.value || menusState.loading"
         :data="menuTreeQuery.data.value ?? []"
         node-key="id"
         :props="{ label: 'name', children: 'children' }"
@@ -333,9 +332,10 @@ async function onDelete(row: RoleRow) {
           </span>
         </template>
       </el-tree>
+      <el-button v-if="menusState.visible && !menusState.ready && !menusState.loading" class="mt-2" @click="menuEditor.retry()">重新读取</el-button>
       <template #footer>
-        <el-button @click="menusVisible = false">取消</el-button>
-        <el-button type="primary" :loading="menusLoading" @click="submitAssignMenus">保存（整体替换）</el-button>
+        <el-button @click="menuEditor.close()">取消</el-button>
+        <el-button type="primary" :loading="menusState.saving" :disabled="!menuEditor.editable()" @click="menuEditor.submit()">保存（整体替换）</el-button>
       </template>
     </el-dialog>
   </div>

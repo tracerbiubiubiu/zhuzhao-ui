@@ -4,7 +4,7 @@
  * 入参接 codegen 生成类型；出参手写行形状（裸信封，注明对齐 model.Role）。
  */
 import request from '@vea/request'
-import { assignmentId, assignmentRecord } from './assignmentPayload'
+import { assignmentId, assignmentIds, assignmentRecord } from './assignmentPayload'
 import type { components } from '@/api/__generated__/schema'
 
 type Schemas = components['schemas']
@@ -58,9 +58,9 @@ export async function deleteRoleApi(roleId: string): Promise<void> {
 }
 
 /** 角色已绑菜单 ID 集（替换语义——AssignMenus 保存前的初始勾选） */
-export async function getRoleMenuIdsApi(roleId: string): Promise<number[]> {
+export async function getRoleMenuIdsApi(roleId: string): Promise<string[]> {
   const data = await request.get(`/api/v1/roles/${roleId}/menus`)
-  return ((data as unknown as { menu_ids?: number[] })?.menu_ids ?? [])
+  return assignmentIds(assignmentRecord(data).menu_ids)
 }
 
 /** 分配菜单（整体替换；check-strictly 精确勾选集直传。P3-6：menu_ids 发送侧 string——standards §3-12②） */
