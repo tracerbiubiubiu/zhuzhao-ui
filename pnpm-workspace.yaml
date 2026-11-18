@@ -22,3 +22,9 @@ overrides:
 
   # CVE-2026-118764：仅替换受影响的开发链范围；11.0.7 保留调用API，glob矩阵与门禁验证。
   'minimatch@>=7.0.0 <11.0.1': 11.0.7
+
+# 2026-11-18 所有者接受下列已知漏洞的开发期风险，状态仍为 accepted_open（未修复）。
+# 官方修复/兼容升级可用即升级并移除此项；正式使用前复核，详见 docs/guides/testing.md。
+audit:
+  ignore:
+    - GHSA-fc5q-39xc-vjpf
