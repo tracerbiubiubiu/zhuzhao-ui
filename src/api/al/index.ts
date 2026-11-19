@@ -158,15 +158,15 @@ export async function updateAlDataApi(
   return data as unknown as AlDataDoc
 }
 
-/** 软删（幂等；返回删除后完整文档） */
-export async function deleteAlDataApi(typeName: string, id: string): Promise<AlDataDoc> {
-  const data = await request.post(`/al/api/v1/data/${encodeURIComponent(typeName)}/${id}/delete`, {}, { _silentError: true })
+/** 软删：version 为可选 JSON number；实际迁移按版本校验，已删除仍幂等。 */
+export async function deleteAlDataApi(typeName: string, id: string, version?: number): Promise<AlDataDoc> {
+  const data = await request.post(`/al/api/v1/data/${encodeURIComponent(typeName)}/${id}/delete`, version === undefined ? {} : { version }, { _silentError: true })
   return data as unknown as AlDataDoc
 }
 
 /** 恢复软删行（幂等；000032 整改形态——标识入 body。废弃类型下仍放行：存量数据生命周期操作） */
-export async function restoreAlDataApi(typeName: string, id: string): Promise<AlDataDoc> {
-  const data = await request.post('/al/api/v1/data/restore', { type_name: typeName, id }, { _silentError: true })
+export async function restoreAlDataApi(typeName: string, id: string, version?: number): Promise<AlDataDoc> {
+  const data = await request.post('/al/api/v1/data/restore', { type_name: typeName, id, ...(version === undefined ? {} : { version }) }, { _silentError: true })
   return data as unknown as AlDataDoc
 }
 

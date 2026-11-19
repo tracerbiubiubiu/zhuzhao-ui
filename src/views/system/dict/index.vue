@@ -4,6 +4,7 @@
  *
  * 左右布局：左类型列表（选中驱动右侧）+右所选类型的项列表。启停开关即时生效
  * （消费端点只回启用项——停用即从业务表单选项消失）；version 乐观锁（92301/92302 冲突内联）。
+ * 删除提交确认前捕获的 id+code/version 快照，409 冲突回读权威行、不自动重试。
  */
 import { computed, onActivated, onDeactivated, onScopeDispose, reactive, ref } from 'vue'
 import {
@@ -38,6 +39,8 @@ let selectionGeneration = 0
 const items = ref<DictItemRow[]>([])
 const itemsLoading = ref(false)
 const itemsReadError = ref('')
+const itemDeleteConflict = ref('')
+const typeDeleteConflict = ref('')
 const itemsReady = ref(false)
 
 const typeVisible = ref(false)
@@ -69,12 +72,25 @@ function responseMessage(err: unknown, fallback: string) {
   return resp?.message ?? fallback
 }
 
+function isConflict(err: unknown) {
+  const response = (err as { response?: { status?: number; data?: { code?: number } } })?.response
+  return response?.status === 409 || response?.data?.code === 10005
+}
+
+// 删除失败提示：冲突说明对象已被他人更新且本次零写，回读后要求重新看当前对象再确认，不自动重试。
+function deleteFailure(err: unknown, fallback: string) {
+  return isConflict(err)
+    ? `${responseMessage(err, fallback)}；已刷新，请重新确认当前对象后再删除`
+    : responseMessage(err, fallback)
+}
+
 function invalidateItems() {
   ++selectionGeneration
   ++itemsRequest
   items.value = []
   itemsLoading.value = false
   itemsReadError.value = ''
+  itemDeleteConflict.value = ''
   itemsReady.value = false
   itemVisible.value = false
   itemTarget.value = null
@@ -139,6 +155,7 @@ function selectType(row: DictTypeRow) {
 // 输入时即作废旧请求，防抖等待期间也不能用上一关键词的行发起写入。
 function onKeywordInput() {
   clearTimeout(kwTimer)
+  typeDeleteConflict.value = ''
   ++typesRequest
   typesLoading.value = true
   typesReadError.value = ''
@@ -222,11 +239,13 @@ function refreshTypesAfterWrite(preferredId?: string) {
 
 async function onToggleType(row: DictTypeRow, enabled: boolean) {
   if (!canUseType(row)) return
-  const { id, name, version } = row
+  const { id, name, remark, version } = row
+  // 启停沿用完整替换更新；所有可写字段与版本一起取快照，包含空备注。
+  const payload = { id, name, enabled, remark, version }
   const generation = selectionGeneration
   pendingTypes.add(id)
   try {
-    await updateDictTypeApi({ id, name, enabled, version })
+    await updateDictTypeApi(payload)
     if (generation === selectionGeneration) ElMessage.success(enabled ? '已启用' : '已停用（消费端点不再返回该项集）')
     refreshTypesAfterWrite()
   } catch (err: unknown) {
@@ -253,14 +272,21 @@ async function onDeleteType(row: DictTypeRow) {
     return
   }
   pendingTypes.add(id)
+  typeDeleteConflict.value = ''
   try {
-    await deleteDictTypeApi(code)
+    // 提交确认前捕获的快照（id+code+version），后端按版本乐观锁删除；版本不符 409 且零写。
+    await deleteDictTypeApi({ id, code, version })
     if (generation === selectionGeneration) ElMessage.success('已删除')
     if (active && selectedType.value?.id === id) setSelectedType(null)
     refreshTypesAfterWrite()
   } catch (err: unknown) {
-    if (generation === selectionGeneration) ElMessage.error(responseMessage(err, '删除失败'))
-    if (types.value.some(type => type.id === id)) refreshTypesAfterWrite()
+    if (generation === selectionGeneration) {
+      const message = deleteFailure(err, '删除失败')
+      if (isConflict(err)) typeDeleteConflict.value = message
+      ElMessage.error(message)
+    }
+    // 冲突说明对象仍存在且版本已前进：无条件回读权威行（行可能已被本地过滤掉）。
+    if (isConflict(err) || types.value.some(type => type.id === id)) refreshTypesAfterWrite()
   } finally {
     pendingTypes.delete(id)
   }
@@ -314,10 +340,11 @@ function canUseItem(row: DictItemRow, target: ItemTarget) {
 async function onToggleItem(row: DictItemRow, enabled: boolean) {
   const target = currentItemTarget()
   if (!target || !canUseItem(row, target)) return
-  const { id, label, sort_order, version } = row
+  const { id, label, sort_order, remark, version } = row
+  const payload = { id, label, sort_order, enabled, remark, version }
   pendingItems.add(id)
   try {
-    await updateDictItemApi({ id, label, sort_order, enabled, version })
+    await updateDictItemApi(payload)
   } catch (err: unknown) {
     if (isCurrentItemTarget(target)) ElMessage.error(responseMessage(err, '操作失败'))
   } finally {
@@ -340,11 +367,17 @@ async function onDeleteItem(row: DictItemRow) {
     return
   }
   pendingItems.add(id)
+  itemDeleteConflict.value = ''
   try {
-    await deleteDictItemApi(id)
+    // 提交确认前捕获的快照（id+version），后端按版本乐观锁删除；版本不符 409 且零写。
+    await deleteDictItemApi({ id, version })
     if (isCurrentItemTarget(target)) ElMessage.success('已删除')
   } catch (err: unknown) {
-    if (isCurrentItemTarget(target)) ElMessage.error(responseMessage(err, '删除失败'))
+    if (isCurrentItemTarget(target)) {
+      const message = deleteFailure(err, '删除失败')
+      if (isConflict(err)) itemDeleteConflict.value = message
+      ElMessage.error(message)
+    }
   } finally {
     pendingItems.delete(id)
     refreshItemsAfterWrite(target)
@@ -393,6 +426,7 @@ useTableFit(itemsTable, () => items.value)
         <el-form inline @submit.prevent class="mb-2">
           <el-input v-model="keyword" placeholder="code/name 过滤" clearable class="!w-[160px]" @input="onKeywordInput" />
         </el-form>
+        <el-alert v-if="typeDeleteConflict" :title="typeDeleteConflict" type="warning" show-icon :closable="false" data-testid="dict-type-delete-conflict" />
         <el-alert v-if="typesReadError" :title="typesReadError" type="error" show-icon :closable="false">
           <el-button link type="primary" @click="fetchTypes()">重试</el-button>
         </el-alert>
@@ -431,6 +465,7 @@ useTableFit(itemsTable, () => items.value)
             <el-button v-permission="'dict:manage'" type="primary" size="small" :disabled="!itemsWritable" @click="openItemCreate">新增项</el-button>
           </div>
         </template>
+        <el-alert v-if="itemDeleteConflict" :title="itemDeleteConflict" type="warning" show-icon :closable="false" data-testid="dict-item-delete-conflict" />
         <el-alert v-if="!selectedType" title="选择左侧类型查看字典项" type="info" show-icon :closable="false" />
         <el-alert v-else-if="itemsReadError" :title="itemsReadError" type="error" show-icon :closable="false">
           <el-button link type="primary" @click="fetchItems()">重试</el-button>

@@ -115,6 +115,70 @@ describe('字典管理页面的读取与写入目标', () => {
     expect(page.items.value).toEqual([itemA])
   })
 
+  const toggleCases = [
+    { enabled: false, remark: '  合成备注：停用后保留\n第二行  ' },
+    { enabled: true, remark: '  合成备注：启用后保留\n第二行  ' },
+    { enabled: false, remark: '' },
+    { enabled: true, remark: '' },
+  ]
+
+  it.each(toggleCases)('类型启停绑定完整版本快照：enabled=$enabled remark="$remark"', async ({ enabled, remark }) => {
+    const original = { ...typeA, name: '合成类型名称', enabled: !enabled, version: 7, remark }
+    const { api, page } = setup(Promise.resolve(list({ ...original }, typeB)))
+    await settle()
+    const writing = deferred<void>()
+    api.updateDictTypeApi.mockReturnValueOnce(writing.promise)
+    const row = page.types.value[0]
+    const update = page.onToggleType(row, enabled)
+    const payload = api.updateDictTypeApi.mock.calls[0]?.[0]
+
+    // 等待期间既不重复提交，也不从已变化的响应式行补取字段。
+    Object.assign(row, { name: '稍后的名称', remark: '稍后的备注', version: 99 })
+    await page.onToggleType(row, !enabled)
+    expect(api.updateDictTypeApi).toHaveBeenCalledTimes(1)
+    expect(payload).toEqual({ id: 'type-a', name: '合成类型名称', enabled, remark, version: 7 })
+
+    const current = { ...original, enabled, version: 8 }
+    api.listDictTypesApi.mockResolvedValueOnce(list(current, typeB))
+    writing.resolve()
+    await update
+    await settle()
+    expect(page.types.value[0]).toEqual(current)
+    await page.onToggleType(page.types.value[0], !enabled)
+    expect(api.updateDictTypeApi).toHaveBeenLastCalledWith({
+      id: 'type-a', name: '合成类型名称', enabled: !enabled, remark, version: 8,
+    })
+  })
+
+  it.each(toggleCases)('字典项启停绑定完整版本快照：enabled=$enabled remark="$remark"', async ({ enabled, remark }) => {
+    const { api, page } = setup()
+    await settle()
+    const original = { ...itemA, label: '合成条目名称', sort_order: 13, enabled: !enabled, version: 7, remark }
+    api.listDictItemsApi.mockResolvedValueOnce(list({ ...original }))
+    await page.fetchItems()
+    const writing = deferred<void>()
+    api.updateDictItemApi.mockReturnValueOnce(writing.promise)
+    const row = page.items.value[0]
+    const update = page.onToggleItem(row, enabled)
+    const payload = api.updateDictItemApi.mock.calls[0]?.[0]
+
+    Object.assign(row, { label: '稍后的名称', sort_order: 99, remark: '稍后的备注', version: 99 })
+    await page.onToggleItem(row, !enabled)
+    expect(api.updateDictItemApi).toHaveBeenCalledTimes(1)
+    expect(payload).toEqual({ id: 'item-a', label: '合成条目名称', sort_order: 13, enabled, remark, version: 7 })
+
+    const current = { ...original, enabled, version: 8 }
+    api.listDictItemsApi.mockResolvedValueOnce(list(current))
+    writing.resolve()
+    await update
+    await settle()
+    expect(page.items.value[0]).toEqual(current)
+    await page.onToggleItem(page.items.value[0], !enabled)
+    expect(api.updateDictItemApi).toHaveBeenLastCalledWith({
+      id: 'item-a', label: '合成条目名称', sort_order: 13, enabled: !enabled, remark, version: 8,
+    })
+  })
+
   it('新搜索发出后拒绝上一关键词的结果与 loading 更新', async () => {
     vi.useFakeTimers()
     const { api, page } = setup()
@@ -258,7 +322,7 @@ describe('字典管理页面的读取与写入目标', () => {
     expect(api.deleteDictItemApi).not.toHaveBeenCalled()
   })
 
-  it('已发送的删除保留原项 ID，迟到成功不刷新新类型', async () => {
+  it('已发送的删除保留确认前快照，迟到成功不刷新新类型', async () => {
     const { api, page } = setup()
     await settle()
     page.selectType(page.types.value[0])
@@ -267,7 +331,7 @@ describe('字典管理页面的读取与写入目标', () => {
     api.deleteDictItemApi.mockReturnValueOnce(deleting.promise)
     const deletion = page.onDeleteItem(page.items.value[0])
     await settle()
-    expect(api.deleteDictItemApi).toHaveBeenCalledWith(itemA.id)
+    expect(api.deleteDictItemApi).toHaveBeenCalledWith({ id: itemA.id, version: itemA.version })
     page.selectType(page.types.value[1])
     await settle()
     api.listDictItemsApi.mockClear()
@@ -286,7 +350,7 @@ describe('字典管理页面的读取与写入目标', () => {
     api.updateDictItemApi.mockReturnValueOnce(mutation.promise)
     const update = page.onToggleItem(page.items.value[0], false)
     expect(api.updateDictItemApi).toHaveBeenCalledWith({
-      id: itemA.id, version: itemA.version, enabled: false, label: itemA.label, sort_order: 1,
+      id: itemA.id, version: itemA.version, enabled: false, label: itemA.label, sort_order: 1, remark: '',
     })
     page.selectType(page.types.value[1])
     page.selectType(page.types.value[0])
@@ -353,15 +417,33 @@ describe('字典管理页面的读取与写入目标', () => {
     await settle()
     page.selectType(page.types.value[0])
     await settle()
-    const current = { ...itemA, version: 2 }
-    api.updateDictItemApi.mockRejectedValueOnce({ response: { data: { message: '版本冲突' } } })
+    const current = { ...itemA, label: '当前条目', sort_order: 17, remark: '当前条目备注', version: 2 }
+    api.updateDictItemApi.mockRejectedValueOnce({ response: { status: 409, data: { message: '版本冲突' } } })
     api.listDictItemsApi.mockResolvedValueOnce(list(current))
     await page.onToggleItem(page.items.value[0], false)
     await settle()
     expect(message.error).toHaveBeenCalledWith('版本冲突')
     expect(page.items.value).toEqual([current])
     await page.onToggleItem(page.items.value[0], false)
-    expect(api.updateDictItemApi.mock.lastCall?.[0]).toMatchObject({ version: 2 })
+    expect(api.updateDictItemApi).toHaveBeenLastCalledWith({
+      id: 'item-a', label: '当前条目', sort_order: 17, enabled: false, remark: '当前条目备注', version: 2,
+    })
+  })
+
+  it('类型乐观锁失败刷新权威行，重试绑定当前名称、备注和版本', async () => {
+    const { api, page, message } = setup()
+    await settle()
+    const current = { ...typeA, name: '当前类型', remark: '当前类型备注', version: 2 }
+    api.updateDictTypeApi.mockRejectedValueOnce({ response: { status: 409, data: { message: '类型版本冲突' } } })
+    api.listDictTypesApi.mockResolvedValueOnce(list(current, typeB))
+    await page.onToggleType(page.types.value[0], false)
+    await settle()
+    expect(message.error).toHaveBeenCalledWith('类型版本冲突')
+    expect(page.types.value[0]).toEqual(current)
+    await page.onToggleType(page.types.value[0], false)
+    expect(api.updateDictTypeApi).toHaveBeenLastCalledWith({
+      id: 'type-a', name: '当前类型', enabled: false, remark: '当前类型备注', version: 2,
+    })
   })
 
   it('过滤变更后旧类型删除确认不能提交', async () => {
@@ -530,7 +612,7 @@ describe('字典管理页面的读取与写入目标', () => {
 
     approval.resolve()
     await deletion
-    expect(api.deleteDictTypeApi).toHaveBeenCalledExactlyOnceWith(typeB.code)
+    expect(api.deleteDictTypeApi).toHaveBeenCalledExactlyOnceWith({ id: typeB.id, code: typeB.code, version: typeB.version })
   })
 
   it('独立条目刷新替换表格行后，接受当前类型内相同版本的删除确认', async () => {
@@ -554,7 +636,7 @@ describe('字典管理页面的读取与写入目标', () => {
 
     approval.resolve()
     await deletion
-    expect(api.deleteDictItemApi).toHaveBeenCalledExactlyOnceWith(second.id)
+    expect(api.deleteDictItemApi).toHaveBeenCalledExactlyOnceWith({ id: second.id, version: second.version })
   })
 
   it('同一字典项已变更版本时必须重新确认删除', async () => {
@@ -570,6 +652,65 @@ describe('字典管理页面的读取与写入目标', () => {
     await deletion
     expect(api.deleteDictItemApi).not.toHaveBeenCalled()
     expect(message.warning).toHaveBeenCalledExactlyOnceWith('字典项正在刷新或已变化，请重新确认')
+  })
+
+  it('同一类型已变更版本时必须重新确认删除', async () => {
+    const { api, page, confirm, message } = setup()
+    await settle()
+    const approval = deferred<void>()
+    confirm.mockReturnValueOnce(approval.promise)
+    const deletion = page.onDeleteType(page.types.value[0])
+    api.listDictTypesApi.mockResolvedValueOnce(list({ ...typeA, name: '新的名称', version: 2 }, typeB))
+    await page.fetchTypes()
+
+    approval.resolve()
+    await deletion
+    expect(api.deleteDictTypeApi).not.toHaveBeenCalled()
+    expect(message.warning).toHaveBeenCalledExactlyOnceWith('字典类型正在刷新或已变化，请重新确认')
+  })
+
+  it('类型删除版本冲突刷新权威行，不自动重试，重试须重新确认当前对象', async () => {
+    const { api, page, message } = setup()
+    await settle()
+    const current = { ...typeA, name: '当前类型', version: 2 }
+    api.deleteDictTypeApi.mockRejectedValueOnce({ response: { status: 409, data: { message: '类型已被他人更新' } } })
+    api.listDictTypesApi.mockResolvedValueOnce(list(current, typeB))
+    await page.onDeleteType(page.types.value[0])
+    await settle()
+    expect(api.deleteDictTypeApi).toHaveBeenCalledExactlyOnceWith({ id: 'type-a', code: 'a', version: 1 })
+    expect(message.error).toHaveBeenCalledWith('类型已被他人更新；已刷新，请重新确认当前对象后再删除')
+    expect(page.types.value[0]).toEqual(current)
+
+    await page.onDeleteType(page.types.value[0])
+    expect(api.deleteDictTypeApi).toHaveBeenCalledTimes(2)
+    expect(api.deleteDictTypeApi).toHaveBeenLastCalledWith({ id: 'type-a', code: 'a', version: 2 })
+  })
+
+  it('条目删除版本冲突刷新权威行，不自动重试，重试须重新确认当前对象', async () => {
+    const { api, page, message } = setup()
+    await settle()
+    const current = { ...itemA, label: '当前条目', version: 2 }
+    api.deleteDictItemApi.mockRejectedValueOnce({ response: { status: 409, data: { message: '条目已被他人更新' } } })
+    api.listDictItemsApi.mockResolvedValueOnce(list(current))
+    await page.onDeleteItem(page.items.value[0])
+    await settle()
+    expect(api.deleteDictItemApi).toHaveBeenCalledExactlyOnceWith({ id: 'item-a', version: 1 })
+    expect(message.error).toHaveBeenCalledWith('条目已被他人更新；已刷新，请重新确认当前对象后再删除')
+    expect(page.items.value).toEqual([current])
+
+    await page.onDeleteItem(page.items.value[0])
+    expect(api.deleteDictItemApi).toHaveBeenCalledTimes(2)
+    expect(api.deleteDictItemApi).toHaveBeenLastCalledWith({ id: 'item-a', version: 2 })
+  })
+
+  it('条目删除非冲突失败透传后端消息并回读，不自动重试', async () => {
+    const { api, page, message } = setup()
+    await settle()
+    api.deleteDictItemApi.mockRejectedValueOnce({ response: { status: 400, data: { message: '存在引用' } } })
+    await page.onDeleteItem(page.items.value[0])
+    await settle()
+    expect(message.error).toHaveBeenCalledWith('存在引用')
+    expect(api.deleteDictItemApi).toHaveBeenCalledTimes(1)
   })
 
   it('缓存页离开后废弃旧确认和旧读取，回到页面重新加载', async () => {
