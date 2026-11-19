@@ -8,6 +8,7 @@
  * zhuzhao gateway target 指向 127.0.0.1:18081（分配表迁移后）（compose 形态天然可达）。
  */
 import { test, expect } from '@playwright/test'
+import type { AlDataDoc } from '../src/api/al'
 import { api, apiLogin, loadState, waitUserRateBudget } from './helpers'
 import { uiLogin } from './ui'
 
@@ -78,7 +79,7 @@ test('W5 冒烟：al 类型注册/数据写入/cursor 分页/软删恢复', asyn
     await expect(page.locator('.el-table__row').filter({ hasText: 'row_ui_written' })).toBeVisible()
 
     // ── 软删 → 行转「已删除」灰态（include_deleted 混排——行不再消失）→ UI 恢复闭环
-    //    （恢复消费 000032 整改端点形态 body={type_name,id}，入口在行操作列/详情抽屉）──
+    //    （恢复消费 000032 整改端点形态 body={type_name,id,version}，入口在行操作列/详情抽屉）──
     const uiRow = page.locator('.el-table__row').filter({ hasText: 'row_ui_written' })
     await uiRow.getByRole('button', { name: '删除' }).click()
     // 分步归因：先等弹窗本体（写入 Dialog 关闭动画收尾期点击存在吞没窗口），再点确认
@@ -94,6 +95,7 @@ test('W5 冒烟：al 类型注册/数据写入/cursor 分页/软删恢复', asyn
 
     // UI 恢复 → 行回正常态（灰态类消失、编辑回归、恢复按钮退场——行为闭环不再借道 API）
     await uiRow.getByRole('button', { name: '恢复' }).click()
+    await confirmBox.getByRole('button', { name: '恢复', exact: true }).click()
     await expect(uiRow).toHaveClass(/al-data-row/, { timeout: 10_000 })
     await expect(uiRow.getByRole('button', { name: '恢复' })).toHaveCount(0)
     await expect(uiRow.getByRole('button', { name: '编辑' })).toBeVisible()
@@ -103,6 +105,224 @@ test('W5 冒烟：al 类型注册/数据写入/cursor 分页/软删恢复', asyn
   }
 })
 
+test('W5 普通编辑保真：差异 patch/逐项文本/清空/创建/旧版本拒绝并真实回读', async ({ page }) => {
+  const state = loadState()
+  const typeName = `e2e_al_edit_${Date.now().toString(36)}`
+  const admin = await apiLogin(state.admin.employeeNo, state.admin.password, 'w5-al-edit')
+  const h = { token: admin.env!.data.access_token } as const
+  const created = await api('/al/api/v1/admin/types', {
+    ...h, method: 'POST',
+    body: {
+      type_name: typeName,
+      fields: [
+        { name: 'name', type: 'string', required: true },
+        { name: 'score', type: 'int' },
+        { name: 'note', type: 'string' },
+        { name: 'labels', type: 'string_list', max_chars: 40, max_list_items: 10 },
+        { name: 'numbers', type: 'int_list' },
+        { name: 'missing_text', type: 'string' },
+        { name: 'missing_list', type: 'string_list' },
+        { name: 'null_text', type: 'string' },
+        { name: 'empty_text', type: 'string' },
+      ],
+    },
+  })
+  expect(created.env!.code).toBe(0)
+  try {
+    const original = {
+      name: 'preserve_fixture', score: 1, note: '合成说明',
+      labels: ['a,b', 'c；d', 'line1\nline2', '  首尾  ', '', '重复', '重复'],
+      numbers: [3, 1, 3, 0, -2], null_text: null, empty_text: '',
+    }
+    const written = await api<AlDataDoc>(`/al/api/v1/data/${typeName}`, {
+      ...h, method: 'POST', body: { data: original },
+    })
+    expect(written.env!.code).toBe(0)
+    const id = written.env!.data.id
+    let version = written.env!.data.version
+    async function readRow() {
+      const read = await api<{ list: AlDataDoc[] }>(`/al/api/v1/data/${typeName}`, h)
+      expect(read.status).toBe(200)
+      const result = read.env!.data.list.find(item => item.id === id)
+      expect(result).toBeDefined()
+      version = result!.version
+      return result!
+    }
+    await waitUserRateBudget()
+    await uiLogin(page, state.admin.employeeNo, state.admin.password)
+    await expect(page.getByRole('menuitem', { name: '活动列表' })).toBeVisible({ timeout: 15_000 })
+    await page.goto('/#/al/data')
+    await page.getByPlaceholder('搜索类型').fill(typeName)
+    await page.locator('.al-type-item').filter({ hasText: typeName }).click()
+    const fixture = page.locator('.el-table__row').filter({ hasText: 'preserve_fixture' })
+    const dialog = page.getByRole('dialog', { name: `编辑 #${id}`, exact: true })
+    const field = (name: string) => dialog.locator('.el-form-item').filter({
+      has: page.locator('.el-form-item__label').filter({ hasText: new RegExp(`^${name}$`) }),
+    })
+    async function openEdit() {
+      // 本例九个动态字段之前有 ID 列；等列表真正接纳回读版本后再打开，避免刷新竞态。
+      await expect(fixture.getByRole('cell').nth(10)).toHaveText(String(version))
+      await fixture.getByRole('button', { name: '编辑', exact: true }).click()
+    }
+    async function save(patch: Record<string, unknown>, status = 200) {
+      const response = page.waitForResponse(res => res.url().endsWith(`/al/api/v1/data/${typeName}/${id}/update`) && res.request().method() === 'POST')
+      await dialog.getByRole('button', { name: '更新', exact: true }).click()
+      const result = await response
+      expect(result.request().postDataJSON()).toEqual({ data: patch, version })
+      expect(result.status()).toBe(status)
+      if (status === 200) await expect(dialog).not.toBeVisible()
+    }
+
+    // 原样保存也保持全部数据；只改 score 不重发数组和缺省字段。
+    await openEdit()
+    await save({})
+    expect((await readRow()).data).toEqual(original)
+    await openEdit()
+    await field('score').locator('input').fill('2')
+    await save({ score: 2 })
+    expect((await readRow()).data).toEqual({ ...original, score: 2 })
+
+    // 在一个输入框修改一个元素，其他元素含空项逐项相等。
+    const labels = ['a,b', '  新,项；\n保留  ', 'line1\nline2', '  首尾  ', '', '重复', '重复']
+    await openEdit()
+    await dialog.getByRole('textbox', { name: 'labels 第 2 项', exact: true }).fill(labels[1])
+    await save({ labels })
+    expect((await readRow()).data).toEqual({ ...original, score: 2, labels })
+    await openEdit()
+    await field('note').locator('input').fill('')
+    await save({ note: null })
+    expect((await readRow()).data).toEqual({ ...original, score: 2, labels, note: null })
+
+    // 创建仍用分隔符/Excel 粘贴及去重，独立回读其数组。
+    await page.getByRole('button', { name: '写入', exact: true }).click()
+    const createDialog = page.getByRole('dialog', { name: `写入「${typeName}」`, exact: true })
+    const createField = (name: string) => createDialog.locator('.el-form-item').filter({
+      has: page.locator('.el-form-item__label').filter({ hasText: new RegExp(`^${name}$`) }),
+    })
+    await createField('name').locator('input').fill('created_fixture')
+    await createField('labels').locator('textarea').fill('甲,乙；甲\n丙，丁;乙')
+    await createField('labels').getByRole('button', { name: '去重', exact: true }).click()
+    await createField('numbers').locator('textarea').fill('1, 2\n1;3')
+    await createDialog.getByRole('button', { name: '写入', exact: true }).click()
+    await expect(createDialog).not.toBeVisible()
+    const readCreated = await api<{ list: AlDataDoc[] }>(`/al/api/v1/data/${typeName}`, h)
+    expect(readCreated.status).toBe(200)
+    expect(readCreated.env!.data.list.find(item => item.data.name === 'created_fixture')?.data).toEqual({
+      name: 'created_fixture', labels: ['甲', '乙', '丙', '丁'], numbers: [1, 2, 1, 3], missing_list: [],
+    })
+
+    // 对照：打开后经正式 API 修改版本，旧草稿不能覆盖最新数据。
+    await openEdit()
+    const newer = await api<AlDataDoc>(`/al/api/v1/data/${typeName}/${id}/update`, {
+      ...h, method: 'POST', body: { version, data: { score: 8 } },
+    })
+    expect(newer.env!.code).toBe(0)
+    await field('score').locator('input').fill('9')
+    await save({ score: 9 }, 409)
+    await expect(dialog.getByText('版本冲突：')).toBeVisible()
+    await expect(field('score').locator('input')).toHaveValue('9')
+    expect((await readRow()).data).toEqual({ ...original, score: 8, labels, note: null })
+    await dialog.getByRole('button', { name: '取消', exact: true }).click()
+    await openEdit()
+    await expect(dialog.getByText(`编辑版本 v${version}`, { exact: true })).toBeVisible()
+    await expect(field('score').locator('input')).toHaveValue('8')
+    await field('score').locator('input').fill('10')
+    await save({ score: 10 })
+    expect((await readRow()).data).toEqual({ ...original, score: 10, labels, note: null })
+  } finally {
+    await api('/al/api/v1/admin/types/deprecate', { ...h, method: 'POST', body: { type_name: typeName } }).catch(() => {})
+  }
+})
+
+
+test('W5 删除/恢复：原版本冲突读回与重新确认后的真实状态迁移', async ({ page }) => {
+  const state = loadState()
+  const typeName = `e2e_al_cas_${Date.now().toString(36)}`
+  const admin = await apiLogin(state.admin.employeeNo, state.admin.password, 'w5-al-cas')
+  const h = { token: admin.env!.data.access_token } as const
+  const created = await api('/al/api/v1/admin/types', {
+    ...h, method: 'POST', body: { type_name: typeName, fields: [{ name: 'name', type: 'string', required: true }, { name: 'score', type: 'int' }] },
+  })
+  expect(created.env!.code).toBe(0)
+  try {
+    const written = await api<AlDataDoc>(`/al/api/v1/data/${typeName}`, {
+      ...h, method: 'POST', body: { data: { name: 'cas_fixture', score: 1 } },
+    })
+    expect(written.env!.code).toBe(0)
+    const id = written.env!.data.id
+    async function readRow() {
+      const read = await api<{ list: AlDataDoc[] }>(`/al/api/v1/data/${typeName}?include_deleted=true`, h)
+      expect(read.status).toBe(200)
+      const found = read.env!.data.list.find(item => item.id === id)
+      expect(found).toBeDefined()
+      return found!
+    }
+    await waitUserRateBudget()
+    await uiLogin(page, state.admin.employeeNo, state.admin.password)
+    await expect(page.getByRole('menuitem', { name: '活动列表' })).toBeVisible({ timeout: 15_000 })
+    await page.goto('/#/al/data')
+    await page.getByPlaceholder('搜索类型').fill(typeName)
+    await page.locator('.al-type-item').filter({ hasText: typeName }).click()
+    const fixture = page.locator('.el-table__row').filter({ hasText: 'cas_fixture' })
+    const waitVersion = (version: number) => expect(fixture.getByRole('cell').nth(3)).toHaveText(String(version))
+    const writes: string[] = []
+    page.on('request', request => {
+      if (request.method() === 'POST' && (request.url().endsWith(`/${id}/delete`) || request.url().endsWith('/data/restore'))) writes.push(request.url())
+    })
+    async function operate(action: '删除' | '恢复', version: number, status: number) {
+      const suffix = action === '删除' ? `/${id}/delete` : '/data/restore'
+      await fixture.getByRole('button', { name: action, exact: true }).click()
+      const confirm = page.locator('.el-message-box')
+      await expect(confirm).toContainText(typeName)
+      await expect(confirm).toContainText(`#${id}（v${version}）`)
+      const response = page.waitForResponse(res => res.url().endsWith(suffix) && res.request().method() === 'POST')
+      await confirm.getByRole('button', { name: action, exact: true }).click()
+      const result = await response
+      expect(result.request().postDataJSON()).toEqual(action === '删除' ? { version } : { type_name: typeName, id, version })
+      expect(result.status()).toBe(status)
+      expect((await result.json()).code).toBe(status === 409 ? 100008 : 0)
+    }
+
+    const originalVersion = written.env!.data.version
+    await waitVersion(originalVersion)
+    const newer = await api<AlDataDoc>(`/al/api/v1/data/${typeName}/${id}/update`, {
+      ...h, method: 'POST', body: { version: originalVersion, data: { score: 8 } },
+    })
+    expect(newer.env!.code).toBe(0)
+    await operate('删除', originalVersion, 409)
+    await waitVersion(newer.env!.data.version)
+    expect(await readRow()).toMatchObject({ status: 'active', version: newer.env!.data.version, data: { name: 'cas_fixture', score: 8 } })
+    expect(writes).toHaveLength(1)
+    await operate('删除', newer.env!.data.version, 200)
+    const deleted = await readRow()
+    expect(deleted.status).toBe('deleted')
+    expect(deleted.version).toBeGreaterThan(newer.env!.data.version)
+    await waitVersion(deleted.version)
+
+    // 仅提前恢复会命中目标态幂等；恢复后再次删除以构造仍为 deleted 的新版本。
+    const restored = await api<AlDataDoc>('/al/api/v1/data/restore', {
+      ...h, method: 'POST', body: { type_name: typeName, id, version: deleted.version },
+    })
+    expect(restored.env!.code).toBe(0)
+    const redeleted = await api<AlDataDoc>(`/al/api/v1/data/${typeName}/${id}/delete`, {
+      ...h, method: 'POST', body: { version: restored.env!.data.version },
+    })
+    expect(redeleted.env!.code).toBe(0)
+    await operate('恢复', deleted.version, 409)
+    await waitVersion(redeleted.env!.data.version)
+    expect(await readRow()).toMatchObject({ status: 'deleted', version: redeleted.env!.data.version, data: { name: 'cas_fixture', score: 8 } })
+    expect(writes).toHaveLength(3)
+    await operate('恢复', redeleted.env!.data.version, 200)
+    const final = await readRow()
+    expect(final.status).toBe('active')
+    expect(final.version).toBeGreaterThan(redeleted.env!.data.version)
+    expect(final.data).toEqual({ name: 'cas_fixture', score: 8 })
+    await waitVersion(final.version)
+    expect(writes).toHaveLength(4)
+  } finally {
+    await api('/al/api/v1/admin/types/deprecate', { ...h, method: 'POST', body: { type_name: typeName } }).catch(() => {})
+  }
+})
 
 test('活动列表：废弃类型只读视图（分组可选/写入隐藏/导出保留/行详情抽屉）', async ({ page }) => {
   const state = loadState()

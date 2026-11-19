@@ -15,7 +15,7 @@
  */
 import { apiErrorBody } from '@/utils/apiError'
 import { formatDateTime } from '@/utils/datetime'
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, onActivated, onDeactivated, onScopeDispose, reactive, ref, watch } from 'vue'
 import { useTableFit } from '@vea/hooks'
 import {
   ElAlert, ElButton, ElCard, ElCheckbox, ElDescriptions, ElDescriptionsItem, ElDialog, ElDrawer,
@@ -146,10 +146,14 @@ watch(selectedType, () => {
   fetchPage(null)
 })
 
-function refresh() {
+function refresh(expectedDetailSession = detailSession) {
   // 刷新回首页（cursor 可能因写入漂移——保守重置）
   resetCursor(cursorStack.value)
-  fetchPage(null)
+  if (expectedDetailSession === detailSession) {
+    detailVisible.value = false
+    detailRow.value = null
+  }
+  return fetchPage(null)
 }
 
 // ─── 新增/编辑（schema 驱动表单）───
@@ -157,15 +161,34 @@ const formVisible = ref(false)
 const formIsCreate = ref(true)
 const formSaving = ref(false)
 const formError = ref('')
+const formConflict = ref(false)
+let formSession = 0
+let formType = ''
+let pageGeneration = 0
+function invalidateForm() {
+  ++formSession
+  formSaving.value = false
+  formConflict.value = false
+}
+watch(formVisible, (visible) => {
+  if (!visible) invalidateForm()
+}, { flush: 'sync' })
 /** 编辑态隐藏携带：行 id+version 乐观锁 */
 const editing = reactive({ id: '', version: 0 })
-/** 表单值：list 类字段编辑态用换行文本，提交时拆分 */
+/** 编辑态文本列表逐项保存边界；快捷分隔输入仅用于创建和整数列表。 */
 const formData = ref<Record<string, unknown>>({})
 const listText = ref<Record<string, string>>({})
+const originalData = ref<Record<string, unknown>>({})
+const originalListText = ref<Record<string, string>>({})
+
+function cloneFieldValue(value: unknown): unknown {
+  // schema 仅含标量和标量数组；草稿及对照快照均不得引用列表原行的数组。
+  return Array.isArray(value) ? [...value] : value
+}
 
 function toFormFieldValue(f: AlFieldDef, doc?: AlDataDoc): { value: unknown; text: string } {
   if (!doc) return { value: f.type === 'int' ? undefined : '', text: '' }
-  const raw = doc.data[f.name]
+  const raw = cloneFieldValue(doc.data[f.name])
   if (f.type === 'int_list' || f.type === 'string_list') {
     return { value: raw, text: Array.isArray(raw) ? raw.join('\n') : String(raw ?? '') }
   }
@@ -174,10 +197,14 @@ function toFormFieldValue(f: AlFieldDef, doc?: AlDataDoc): { value: unknown; tex
 
 function openCreate() {
   if (!selectedDef.value || isDeprecated.value) return
+  invalidateForm()
+  formType = selectedType.value
   formIsCreate.value = true
   formError.value = ''
   formData.value = {}
   listText.value = {}
+  originalData.value = {}
+  originalListText.value = {}
   for (const f of schema.value) {
     const { value, text } = toFormFieldValue(f)
     formData.value[f.name] = value
@@ -187,16 +214,23 @@ function openCreate() {
 }
 
 function openEdit(row: AlDataDoc) {
+  if (listLoading.value) return
+  invalidateForm()
+  formType = selectedType.value
   formIsCreate.value = false
   formError.value = ''
   editing.id = row.id
   editing.version = row.version
   formData.value = {}
   listText.value = {}
+  originalData.value = {}
+  originalListText.value = {}
   for (const f of schema.value) {
     const { value, text } = toFormFieldValue(f, row)
     formData.value[f.name] = value
     listText.value[f.name] = text
+    originalData.value[f.name] = cloneFieldValue(value)
+    originalListText.value[f.name] = text
   }
   formVisible.value = true
 }
@@ -205,6 +239,27 @@ function openEdit(row: AlDataDoc) {
  *  逗号串直接可用；trim + 剔空。校验与提交共用此解析，无第二份分隔语义） */
 function parseListLines(text: string | undefined): string[] {
   return (text ?? '').split(/[\n,，;；]+/).map((s) => s.trim()).filter(Boolean)
+}
+
+/** 文本列表编辑不解析分隔符，空字符串也占一项。 */
+function listItems(f: AlFieldDef): string[] {
+  if (!formIsCreate.value && f.type === 'string_list') {
+    const value = formData.value[f.name]
+    return Array.isArray(value) ? value : []
+  }
+  return parseListLines(listText.value[f.name])
+}
+
+function addTextItem(name: string) {
+  const value = formData.value[name]
+  formData.value[name] = [...(Array.isArray(value) ? value : []), '']
+}
+
+function sameFieldValue(left: unknown, right: unknown): boolean {
+  if (Array.isArray(left) && Array.isArray(right)) {
+    return left.length === right.length && left.every((item, i) => item === right[i])
+  }
+  return left === right
 }
 
 /** 去重（保序，首个出现位留原值）写回文本域 */
@@ -218,38 +273,59 @@ function dedupList(name: string) {
   else ElMessage.info('无重复项')
 }
 
-/** 表单值 → 提交 body（list 文本经 parseListLines 拆分；int_list 转 number[]） */
+/** 创建保留快捷粘贴语义；更新只提交相对打开时快照的实际变化。 */
 function buildDataBody(): Record<string, unknown> {
   const out: Record<string, unknown> = {}
   for (const f of schema.value) {
+    let value = formData.value[f.name]
     if (f.type === 'int_list' || f.type === 'string_list') {
-      const lines = parseListLines(listText.value[f.name])
-      out[f.name] = f.type === 'int_list' ? lines.map(Number) : lines
-    } else {
-      const v = formData.value[f.name]
-      if (v !== undefined && v !== '') out[f.name] = v
+      if (formIsCreate.value || (f.type === 'int_list' && listText.value[f.name] !== originalListText.value[f.name])) {
+        const items = listItems(f)
+        value = f.type === 'int_list' ? items.map(Number) : items
+      }
     }
+    if (formIsCreate.value) {
+      if (value !== undefined && value !== '') out[f.name] = value
+      continue
+    }
+    const original = originalData.value[f.name]
+    if (sameFieldValue(value, original)) continue
+    if (f.type === 'string' && (value === '' || value == null)) {
+      // 从未有值的输入仍属未修改；已有文本被明确清空才覆写为 null。
+      if (original === '' || original == null) continue
+      value = null
+    }
+    if (value !== undefined) out[f.name] = cloneFieldValue(value)
   }
   return out
 }
 
 async function submitForm() {
+  if (!formVisible.value || formSaving.value || formConflict.value || formType !== selectedType.value) return
+  const session = formSession
+  const details = detailSession
+  const type = formType
+  const isCreate = formIsCreate.value
+  const { id, version } = editing
+  const isCurrent = () => session === formSession && formVisible.value && type === selectedType.value
+  const body = buildDataBody()
   // required + 长度手检（动态 prop 校验在此场景过重——四类型封闭手检即可；
   // 长度上限与后端 checkValue 同源语义：字符数非字节，0/缺省=255——2026-10-27 拍板）
   for (const f of schema.value) {
+    if (!formIsCreate.value && !Object.hasOwn(body, f.name)) continue
     if (f.required) {
       if (f.type === 'int_list' || f.type === 'string_list') {
-        if (!parseListLines(listText.value[f.name]).length) {
+        if (!listItems(f).length) {
           formError.value = `「${f.name}」为必填`
           return
         }
-      } else if (formData.value[f.name] === undefined || formData.value[f.name] === '') {
+      } else if (formData.value[f.name] == null || formData.value[f.name] === '') {
         formError.value = `「${f.name}」为必填`
         return
       }
     }
     if (f.type === 'int_list' || f.type === 'string_list') {
-      const items = parseListLines(listText.value[f.name])
+      const items = listItems(f)
       const itemLimit = f.max_list_items || 100
       if (items.length > itemLimit) {
         formError.value = `「${f.name}」共 ${items.length} 项，超上限 ${itemLimit}`
@@ -258,7 +334,7 @@ async function submitForm() {
     }
     if (f.type === 'string_list') {
       const limit = f.max_chars || 255
-      const lines = parseListLines(listText.value[f.name])
+      const lines = listItems(f)
       const bad = lines.findIndex((s) => [...s].length > limit)
       if (bad >= 0) {
         formError.value = `「${f.name}」第 ${bad + 1} 项超长（上限 ${limit} 字符）`
@@ -269,58 +345,74 @@ async function submitForm() {
   formSaving.value = true
   formError.value = ''
   try {
-    const body = buildDataBody()
-    if (formIsCreate.value) {
-      await createAlDataApi(selectedType.value, body)
-      ElMessage.success('已写入')
-    } else {
-      await updateAlDataApi(selectedType.value, editing.id, { data: body, version: editing.version })
-      ElMessage.success('已更新')
-    }
+    if (isCreate) await createAlDataApi(type, body)
+    else await updateAlDataApi(type, id, { data: body, version })
+    if (!isCurrent()) return
+    ElMessage.success(isCreate ? '已写入' : '已更新')
     formVisible.value = false
-    refresh()
+    await refresh(details)
   } catch (err: unknown) {
+    if (!isCurrent()) return
     const resp = apiErrorBody(err)
-    // 100008(CONFLICT) 双语义分档：版本冲突仅存在于更新路径（插入无乐观锁）；
-    // 插入态透传后端原文（唯一键冲突等——否则被误标成「版本冲突」）
-    if (!formIsCreate.value && resp?.code === 100008) {
-      formError.value = '版本冲突：该行已被他人变更，关闭后重开编辑（乐观锁）'
+    // AL 同一冲突码还用于唯一键和短时锁冲突。只有过期的行快照需要重开。
+    const message = resp.message ?? ''
+    const changed = message.startsWith('数据已软删') || /[（；]expected_version=\d+/.test(message)
+    if (!isCreate && resp.code === 100008 && changed) {
+      formConflict.value = true
+      formError.value = message.startsWith('数据已软删') ? message : '版本冲突：该行已被他人变更，请关闭后从刷新列表重新打开确认（乐观锁）'
+      list.value = []
+      await refresh(details)
     } else {
-      formError.value = resp?.message ?? '保存失败，请稍后重试'
+      formError.value = resp.message ?? '保存失败，请核对结果后重试'
     }
   } finally {
-    formSaving.value = false
+    if (isCurrent()) formSaving.value = false
   }
 }
 
-// ─── 删除/恢复（软删）───
-async function onDelete(row: AlDataDoc) {
+// ─── 删除/恢复（目标快照 + 可选版本 CAS；不自动重试写入）───
+const pendingRows = new Set<string>()
+async function changeRowState(row: AlDataDoc, restore: boolean) {
+  if (!selectedType.value || listLoading.value) return
+  // 首个 await 前拍下目标，确认过程中切类型或原行对象变化均不能改写目标。
+  const details = detailSession
+  const target = { type: selectedType.value, id: row.id, version: row.version, generation: pageGeneration }
+  const key = `${target.type}/${target.id}`
+  if (pendingRows.has(key)) return
+  pendingRows.add(key)
+  const action = restore ? '恢复' : '删除'
+  const isCurrent = () => target.generation === pageGeneration && target.type === selectedType.value
   try {
-    await ElMessageBox.confirm(`确认删除 #${row.id}？（软删，可恢复）`, '删除数据', {
-      type: 'warning', confirmButtonText: '删除', cancelButtonText: '取消',
-    })
-  } catch { return }
-  try {
-    await deleteAlDataApi(selectedType.value, row.id)
-    ElMessage.success(`#${row.id} 已删除（软删）`)
-    refresh()
-  } catch (err: unknown) {
-    const resp = (err as { response?: { data?: { message?: string } } })?.response?.data
-    ElMessage.error(resp?.message ?? '删除失败')
+    try {
+      await ElMessageBox.confirm(`确认${action}「${target.type}」#${target.id}（v${target.version}）？${restore ? '' : '（软删，可恢复）'}`, `${action}数据`, {
+        type: 'warning', confirmButtonText: action, cancelButtonText: '取消',
+      })
+    } catch { return }
+    if (!isCurrent()) return
+    try {
+      if (restore) await restoreAlDataApi(target.type, target.id, target.version)
+      else await deleteAlDataApi(target.type, target.id, target.version)
+      if (!isCurrent()) return
+      ElMessage.success(`#${target.id} 已${action}${restore ? '' : '（软删）'}`)
+      await refresh(details)
+    } catch (err: unknown) {
+      if (!isCurrent()) return
+      const resp = apiErrorBody(err)
+      if (resp.code === 100008) {
+        ElMessage.error(`${action}冲突：${resp.message ?? '该行已变更'}，请从刷新列表重新确认`)
+        list.value = []
+        await refresh(details)
+      } else {
+        ElMessage.error(resp.message ?? `${action}失败，请核对结果后重试`)
+      }
+    }
+  } finally {
+    pendingRows.delete(key)
   }
 }
-
-/** 恢复软删行（幂等；废弃类型下仍放行——gateType 对存量生命周期操作放行） */
-async function onRestore(row: AlDataDoc) {
-  try {
-    await restoreAlDataApi(selectedType.value, row.id)
-    ElMessage.success(`#${row.id} 已恢复`)
-    refresh()
-  } catch (err: unknown) {
-    const resp = (err as { response?: { data?: { message?: string } } })?.response?.data
-    ElMessage.error(resp?.message ?? '恢复失败')
-  }
-}
+function onDelete(row: AlDataDoc) { return changeRowState(row, false) }
+/** 恢复软删行：废弃类型仍放行，目标态幂等由服务端判断。 */
+function onRestore(row: AlDataDoc) { return changeRowState(row, true) }
 
 /** 行样式：软删行灰态（已删除徽标+恢复入口的数据面） */
 function rowClass({ row }: { row: AlDataDoc }): string {
@@ -448,10 +540,32 @@ function formatTime(iso?: string): string {
 // ─── 行详情抽屉（点行开——动态 schema 行的全字段视图；编辑/删除收进抽屉底部）───
 const detailVisible = ref(false)
 const detailRow = ref<AlDataDoc | null>(null)
+let detailSession = 0
+watch(detailVisible, (visible) => {
+  if (!visible) ++detailSession
+}, { flush: 'sync' })
 function openDetail(row: AlDataDoc) {
+  if (listLoading.value) return
+  ++detailSession
   detailRow.value = row
   detailVisible.value = true
 }
+
+function invalidatePageTarget() {
+  ++pageGeneration
+  ++fetchSeq
+  listLoading.value = false
+  invalidateForm()
+  formVisible.value = false
+  detailVisible.value = false
+  detailRow.value = null
+}
+watch(selectedType, invalidatePageTarget, { flush: 'sync' })
+onActivated(() => {
+  if (selectedType.value) void refresh()
+})
+onDeactivated(invalidatePageTarget)
+onScopeDispose(invalidatePageTarget)
 
 const dataTable = ref()
 useTableFit(dataTable, () => list.value)
@@ -620,13 +734,31 @@ useTableFit(dataTable, () => list.value)
     <!-- 写入/编辑（schema 驱动表单——四类型） -->
     <el-dialog :close-on-click-modal="false" v-model="formVisible" :title="formIsCreate ? `写入「${selectedType}」` : `编辑 #${editing.id}`" width="560px">
       <el-alert v-if="formError" :title="formError" type="error" show-icon class="mb-4" :closable="false" />
-      <el-form label-width="120px">
+      <div v-if="!formIsCreate" class="text-xs text-gray-400 mb-2">编辑版本 v{{ editing.version }}</div>
+      <el-form label-width="120px" class="max-h-[60vh] overflow-y-auto">
         <el-form-item v-for="f in schema" :key="f.name" :label="f.name" :required="f.required">
           <el-input-number v-if="f.type === 'int'" v-model="(formData[f.name] as number | undefined)" :controls="false" class="!w-48" />
           <el-input
             v-else-if="f.type === 'string'" v-model="(formData[f.name] as string | undefined)"
             :maxlength="f.max_chars || 255" show-word-limit clearable
           />
+          <div v-else-if="!formIsCreate && f.type === 'string_list'" class="w-full">
+            <div class="text-xs text-gray-400 mb-1">每个输入框为一项，保留空白、换行与分隔符；空框也算一项。</div>
+            <div v-for="(_, index) in listItems(f)" :key="index" class="flex items-start gap-2 mb-2">
+              <el-input
+                v-model="(formData[f.name] as string[])[index]" type="textarea" :rows="2"
+                :aria-label="`${f.name} 第 ${index + 1} 项`"
+              />
+              <el-button :aria-label="`删除 ${f.name} 第 ${index + 1} 项`" @click="(formData[f.name] as string[]).splice(index, 1)">删除项</el-button>
+            </div>
+            <div class="flex items-center gap-2">
+              <span
+                class="text-xs"
+                :class="listItems(f).length > (f.max_list_items || 100) ? 'text-red-500' : 'text-gray-400'"
+              >共 {{ listItems(f).length }} 项 / 上限 {{ f.max_list_items || 100 }}</span>
+              <el-button :disabled="listItems(f).length >= (f.max_list_items || 100)" @click="addTextItem(f.name)">添加项</el-button>
+            </div>
+          </div>
           <template v-else>
             <el-input
               v-model="listText[f.name]" type="textarea" :rows="3" clearable
@@ -644,7 +776,7 @@ useTableFit(dataTable, () => list.value)
       </el-form>
       <template #footer>
         <el-button @click="formVisible = false">取消</el-button>
-        <el-button type="primary" :loading="formSaving" @click="submitForm">{{ formIsCreate ? '写入' : '更新' }}</el-button>
+        <el-button type="primary" :loading="formSaving" :disabled="formConflict" @click="submitForm">{{ formIsCreate ? '写入' : '更新' }}</el-button>
       </template>
     </el-dialog>
 

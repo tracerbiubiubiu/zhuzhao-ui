@@ -48,14 +48,16 @@ export async function updateDictTypeApi(input: {
   id: string
   name: string
   enabled?: boolean
-  remark?: string
+  /** 必填：启停沿用完整替换更新，空备注也要显式回传，防止启停清掉备注 */
+  remark: string
   version: number
 }): Promise<void> {
   await request.post('/api/v1/dicts/update', input, { _silentError: true })
 }
 
-export async function deleteDictTypeApi(code: string): Promise<void> {
-  await request.post('/api/v1/dicts/delete', { code }, { _silentError: true })
+/** 删除类型：旧 code 定位目标 + 成对 id+version 乐观锁；版本不符 409 且零写 */
+export async function deleteDictTypeApi(input: { id: string; code: string; version: number }): Promise<void> {
+  await request.post('/api/v1/dicts/delete', input, { _silentError: true })
 }
 
 export async function listDictItemsApi(
@@ -83,14 +85,16 @@ export async function updateDictItemApi(input: {
   label: string
   sort_order?: number
   enabled?: boolean
-  remark?: string
+  /** 必填：启停沿用完整替换更新，空备注也要显式回传，防止启停清掉备注 */
+  remark: string
   version: number
 }): Promise<void> {
   await request.post('/api/v1/dict-items/update', input, { _silentError: true })
 }
 
-export async function deleteDictItemApi(id: string): Promise<void> {
-  await request.post('/api/v1/dict-items/delete', { id }, { _silentError: true })
+/** 删除条目：id+version 乐观锁；版本不符 409 且零写（旧无版本请求后端仍兼容，前端一律带版本） */
+export async function deleteDictItemApi(input: { id: string; version: number }): Promise<void> {
+  await request.post('/api/v1/dict-items/delete', input, { _silentError: true })
 }
 
 /** 消费面：按 type 拉取字典项（业务表单选项——登录可读）。默认仅启用项；
