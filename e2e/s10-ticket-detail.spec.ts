@@ -101,14 +101,18 @@ test('S10/S11：详情评论/备注分层+关联判重+分派/关闭流+viewer �
       }
       const picker = relationCard.locator('.el-select')
       await picker.click()
-      const searched = page.waitForRequest(req => req.method() === 'GET' && candidateSearch(new URL(req.url())))
-      await page.keyboard.type(t2, { delay: 80 })
-      await searched
+      const searchBox = picker.getByRole('combobox')
+      await Promise.all([
+        page.waitForRequest(req => req.method() === 'GET' && candidateSearch(new URL(req.url())), { timeout: 10_000 }),
+        searchBox.pressSequentially(t2, { delay: 80 }),
+      ])
+      await expect(searchBox).toHaveValue(t2)
       if (retry) {
         await expect(relationCard.getByText('合成候选读取故障')).toBeVisible()
-        const retried = page.waitForResponse(res => candidateSearch(new URL(res.url())) && res.ok())
-        await relationCard.getByRole('button', { name: '重试搜索' }).click()
-        await retried
+        await Promise.all([
+          page.waitForResponse(res => candidateSearch(new URL(res.url())) && res.ok(), { timeout: 10_000 }),
+          relationCard.getByRole('button', { name: '重试搜索' }).click(),
+        ])
         await picker.click()
       }
       await page.locator('.el-select-dropdown:visible .el-select-dropdown__item').filter({ hasText: `#${t2} ` }).first().click()
