@@ -112,7 +112,7 @@ describe('分配菜单守卫：迟到响应与世代', () => {
 
     savingB.resolve()
     await submittingB
-    expect(deps.save).toHaveBeenLastCalledWith('B', ['1', '2'])
+    expect(deps.save).toHaveBeenLastCalledWith('B', ['1', '2'], ['1', '2'])
     expect(editor.state.visible).toBe(false)
   })
 })
@@ -195,7 +195,7 @@ describe('分配菜单守卫：读取与失败路径', () => {
     await editor.retry()
     expect(editor.state.ready).toBe(true)
     await editor.submit()
-    expect(deps.save).toHaveBeenCalledWith('B', ['4', '5'])
+    expect(deps.save).toHaveBeenCalledWith('B', ['4', '5'], ['4', '5'])
   })
 })
 
@@ -216,7 +216,7 @@ describe('分配菜单守卫：空集确认与保存结果', () => {
     await editor.open(role('A'))
     deps.applyChecked([])
     await editor.submit()
-    expect(deps.save).toHaveBeenCalledWith('A', [])
+    expect(deps.save).toHaveBeenCalledWith('A', [], ['1', '2'])
     expect(editor.state.visible).toBe(false)
     expect(deps.success).toHaveBeenCalledWith(role('A'))
   })
@@ -231,6 +231,19 @@ describe('分配菜单守卫：空集确认与保存结果', () => {
     expect(editor.state.saving).toBe(false)
     expect(tree()).toEqual(['1', '2'])
     await editor.submit()
-    expect(deps.save).toHaveBeenLastCalledWith('A', ['1', '2'])
+    expect(deps.save).toHaveBeenLastCalledWith('A', ['1', '2'], ['1', '2'])
   })
 })
+
+ it('提交携原菜单集合；409 保留草稿，重新读取前不可重试保存', async () => {
+  const { editor, deps, tree } = fixture()
+  await editor.open(role('A')); deps.applyChecked(['3'])
+  deps.save.mockRejectedValueOnce({ response: { status: 409, data: { message: '集合已变化' } } })
+  await editor.submit()
+  expect(deps.save).toHaveBeenCalledWith('A', ['3'], ['1', '2'])
+  expect(tree()).toEqual(['3']); expect(editor.state.visible).toBe(true)
+  expect(editor.state.error).toContain('重新读取'); expect(editor.editable()).toBe(false)
+  await editor.submit(); expect(deps.save).toHaveBeenCalledTimes(1)
+  deps.loadIds.mockResolvedValueOnce(['4']); await editor.retry(); await editor.submit()
+  expect(deps.save).toHaveBeenLastCalledWith('A', ['4'], ['4'])
+ })

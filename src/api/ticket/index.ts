@@ -133,6 +133,7 @@ export async function createTicketTypeApi(input: {
 /** 更新类型（patch；code 不可改入 body；states/transitions/transition_meta 传
  * JSONB 原文；version 可选 CAS——nil 保持旧 patch 行为，管理页应带上收 10006 内联） */
 export async function updateTicketTypeApi(input: {
+  id?: string
   code: string
   name?: string
   description?: string
@@ -146,12 +147,13 @@ export async function updateTicketTypeApi(input: {
 }
 
 /** 删除类型（有工单禁删 → 409+10005） */
-export async function deleteTicketTypeApi(code: string): Promise<void> {
-  await request.post('/api/v1/ticket-types/delete', { code }, { _silentError: true })
+export async function deleteTicketTypeApi(input: string | { code: string; id: string; version: number }): Promise<void> {
+  await request.post('/api/v1/ticket-types/delete', typeof input === 'string' ? { code: input } : input, { _silentError: true })
 }
 
 /** 字段全量替换（S12/S23：危险确认弹窗是前端硬要求——整组替换语义） */
 export async function replaceTicketTypeFieldsApi(input: {
+  id?: string
   code: string
   fields: TicketTypeFieldInput[]
   version?: number
@@ -195,6 +197,7 @@ export async function createTicketTemplateApi(input: {
 
 /** 更新模板（patch；code/type_code/org 不可改；version 可选 CAS） */
 export async function updateTicketTemplateApi(input: {
+  id?: string
   code: string
   name?: string
   default_priority?: number
@@ -205,8 +208,8 @@ export async function updateTicketTemplateApi(input: {
   await request.post('/api/v1/ticket-templates/update', input, { _silentError: true })
 }
 
-export async function deleteTicketTemplateApi(code: string): Promise<void> {
-  await request.post('/api/v1/ticket-templates/delete', { code }, { _silentError: true })
+export async function deleteTicketTemplateApi(input: string | { code: string; id: string; version: number }): Promise<void> {
+  await request.post('/api/v1/ticket-templates/delete', typeof input === 'string' ? { code: input } : input, { _silentError: true })
 }
 
 /** 自定义字段定义（= model.TicketTypeField 投影；field_type 七枚举） */

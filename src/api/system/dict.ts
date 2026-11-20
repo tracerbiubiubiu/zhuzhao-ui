@@ -48,8 +48,8 @@ export async function updateDictTypeApi(input: {
   id: string
   name: string
   enabled?: boolean
-  /** 必填：启停沿用完整替换更新，空备注也要显式回传，防止启停清掉备注 */
-  remark: string
+  /** 省略保留原备注，显式空串清空；当前管理页始终回传草稿 */
+  remark?: string
   version: number
 }): Promise<void> {
   await request.post('/api/v1/dicts/update', input, { _silentError: true })
@@ -69,6 +69,7 @@ export async function listDictItemsApi(
 }
 
 export async function createDictItemApi(input: {
+  type_id?: string
   type_code: string
   code: string
   label: string
@@ -85,8 +86,8 @@ export async function updateDictItemApi(input: {
   label: string
   sort_order?: number
   enabled?: boolean
-  /** 必填：启停沿用完整替换更新，空备注也要显式回传，防止启停清掉备注 */
-  remark: string
+  /** 省略保留原备注，显式空串清空；当前管理页始终回传草稿 */
+  remark?: string
   version: number
 }): Promise<void> {
   await request.post('/api/v1/dict-items/update', input, { _silentError: true })

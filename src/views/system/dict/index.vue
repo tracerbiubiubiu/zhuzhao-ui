@@ -314,7 +314,7 @@ async function submitItem() {
   itemError.value = ''
   try {
     await createDictItemApi({
-      type_code: target.code, code: itemForm.code.trim(), label: itemForm.label.trim(),
+      type_code: target.code, type_id: target.id, code: itemForm.code.trim(), label: itemForm.label.trim(),
       sort_order: itemForm.sort_order, ...(itemForm.remark ? { remark: itemForm.remark } : {}),
     })
     if (itemVisible.value && itemTarget.value === target) {
@@ -323,7 +323,9 @@ async function submitItem() {
     }
   } catch (err: unknown) {
     if (itemVisible.value && itemTarget.value === target) {
-      itemError.value = responseMessage(err, '创建失败')
+      itemError.value = isConflict(err)
+        ? `${responseMessage(err, '创建冲突')}；草稿已保留，请核对后重试`
+        : responseMessage(err, '创建失败')
     }
   } finally {
     if (itemTarget.value === target) itemSaving.value = false
