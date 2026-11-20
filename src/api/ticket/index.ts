@@ -8,7 +8,7 @@
  */
 import type { AxiosRequestConfig } from 'axios'
 import request from '@vea/request'
-import type { components } from '@/api/__generated__/schema'
+import type { components, paths } from '@/api/__generated__/schema'
 
 /** 工单行（= model.Ticket 的 JSON 投影；assigned_to 可空——创建即未分派；
  * created_by_name/assignee_name 为 W4 后端回填字段（03 S9——real_name 优先/空回退
@@ -416,6 +416,15 @@ export async function createTicketNoteApi(ticketId: string, content: string): Pr
   await request.post('/api/v1/tickets/notes', { ticket_id: ticketId, content }, { _silentError: true })
 }
 
+export type TicketRelationCandidate = Pick<TicketRow, 'id' | 'title' | 'status'>
+
+export async function listTicketRelationCandidatesApi(sourceTicketId: string, keyword: string): Promise<TicketRelationCandidate[]> {
+  const params = { relation_source_id: sourceTicketId, keyword } satisfies NonNullable<paths['/api/v1/tickets']['get']['parameters']['query']>
+  const data: unknown = await request.get('/api/v1/tickets', { params, _silentError: true })
+  if (!Array.isArray(data)) throw new Error('关联候选响应格式不匹配')
+  return data as TicketRelationCandidate[]
+}
+
 /** 关联行（= model.TicketRelation 投影；deleted_at 软删不返回） */
 export interface TicketRelationRow {
   id: string
@@ -428,7 +437,7 @@ export interface TicketRelationRow {
 
 /** 关联列表（正反向均返回——渲染按 source 是否为本单判方向） */
 export async function getTicketRelationsApi(id: string): Promise<TicketRelationRow[]> {
-  const data = await request.get(`/api/v1/tickets/${id}/relations`)
+  const data = await request.get(`/api/v1/tickets/${id}/relations`, { _silentError: true })
   return ((data as unknown as { relations?: TicketRelationRow[] })?.relations ?? [])
 }
 

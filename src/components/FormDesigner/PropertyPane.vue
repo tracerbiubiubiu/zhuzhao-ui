@@ -41,7 +41,9 @@
             >
               <el-option v-for="d in dictTypes" :key="d.code" :label="`${d.name}（${d.code}）`" :value="d.code" />
             </el-select>
-            <div v-if="dictPreview.length" class="fd-hint">
+            <el-alert v-if="dictPreviewError" :title="dictPreviewError" type="error" :closable="false"><el-button size="small" @click="loadDictPreview">重试预览</el-button></el-alert>
+            <div v-else-if="dictPreviewLoading" class="fd-hint">预览加载中…</div>
+            <div v-else-if="dictPreview.length" class="fd-hint">
               预览：{{ dictPreview.map((i) => i.label).join(' / ') }}
             </div>
             <div v-else class="fd-hint">（字典无启用项或 code 手输——保存后守卫保引用）</div>
@@ -100,8 +102,9 @@
  * useDesigner 的 keyError/regexError 提供（G2 同款预检，服务端为 SSOT）。
  * 字段类型可在面板内切换（选项面随类型重建——useDesigner.update）。
  */
-import { computed, ref, watch } from 'vue'
-import { ElButton, ElForm, ElFormItem, ElInput, ElInputNumber, ElOption, ElRadioButton, ElRadioGroup, ElSelect, ElSwitch } from 'element-plus'
+import { apiReadError } from '@/utils/apiError'
+import { computed, onScopeDispose, ref, watch } from 'vue'
+import { ElAlert, ElButton, ElForm, ElFormItem, ElInput, ElInputNumber, ElOption, ElRadioButton, ElRadioGroup, ElSelect, ElSwitch } from 'element-plus'
 import { listDictTypesApi, getDictItemsByCodeApi, type DictTypeRow, type DictItemRow } from '@/api/system/dict'
 import { isOptionType } from './schemaAdapter'
 import { FIELD_CATALOG, catalogOf, type DesignerField, type FieldType11 } from './types'
@@ -156,15 +159,27 @@ const dictTypesLoading = ref(false)
 
 // 选中字典的启用项预览
 const dictPreview = ref<DictItemRow[]>([])
-watch(
-  () => field.value?.dictRef,
-  async (code) => {
-    dictPreview.value = []
-    if (!code) return
-    dictPreview.value = (await getDictItemsByCodeApi(code).catch(() => [])) ?? []
-  },
-  { immediate: true },
-)
+const dictPreviewLoading = ref(false)
+const dictPreviewError = ref('')
+let previewSeq = 0
+onScopeDispose(() => { previewSeq++ })
+async function loadDictPreview() {
+  const seq = ++previewSeq
+  const code = field.value?.dictRef
+  dictPreview.value = []
+  dictPreviewError.value = ''
+  dictPreviewLoading.value = !!code
+  if (!code) return
+  try {
+    const items = await getDictItemsByCodeApi(code, false, { _silentError: true })
+    if (seq === previewSeq) dictPreview.value = items ?? []
+  } catch (err) {
+    if (seq === previewSeq) dictPreviewError.value = apiReadError(err, '字典预览加载失败，请重试')
+  } finally {
+    if (seq === previewSeq) dictPreviewLoading.value = false
+  }
+}
+watch([() => field.value, () => field.value?.dictRef], loadDictPreview, { immediate: true, flush: 'sync' })
 </script>
 
 <style scoped>

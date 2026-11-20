@@ -25,8 +25,9 @@
  *   运行记录提交人空值渲染「系统定时」标签——cron 定时触发上游显式留空（设计如此，
  *   taskrunner cron.go「无用户参与」），手动提交经网关恒填 actor，空=系统归因
  */
+import { apiReadError } from '@/utils/apiError'
 import { formatDateTime } from '@/utils/datetime'
-import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
+import { computed, onDeactivated, onScopeDispose, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import FilterBar from '@/components/FilterBar/index.vue'
 import { useAutoFilterRun, useTableFit } from '@vea/hooks'
 import { usePermission } from '@/common/auth'
@@ -152,15 +153,27 @@ const detailVisible = ref(false)
 const detailLoading = ref(false)
 const detail = ref<TaskDetail | null>(null)
 
-async function openDetail(row: TaskRunRow) {
+const detailError = ref('')
+const detailTarget = ref('')
+let detailSeq = 0
+watch(detailVisible, visible => { if (!visible) detailSeq++ }, { flush: 'sync' })
+function pauseDetail() { detailSeq++; detailVisible.value = false }
+onDeactivated(pauseDetail)
+onScopeDispose(pauseDetail)
+async function openDetail(row: Pick<TaskRunRow, 'task_id'>) {
+  const seq = ++detailSeq
+  detailTarget.value = row.task_id
   detailVisible.value = true
   detailLoading.value = true
+  detail.value = null
+  detailError.value = ''
   try {
-    detail.value = await getTaskApi(row.task_id)
-  } catch {
-    detail.value = null
+    const data = await getTaskApi(row.task_id)
+    if (seq === detailSeq) detail.value = data
+  } catch (err) {
+    if (seq === detailSeq) detailError.value = apiReadError(err, '任务加载失败，请重试', '未查到该任务')
   } finally {
-    detailLoading.value = false
+    if (seq === detailSeq) detailLoading.value = false
   }
 }
 
@@ -718,7 +731,8 @@ useTableFit(deadTable, () => deadList.value)
     <!-- 任务详情（job_runs 快照 + live_state）——详情=右抽屉统一形态（docs/design/frontend-ui.md §弹层形态，长文档 620px） -->
     <el-drawer v-model="detailVisible" title="任务详情" size="620px">
       <div v-loading="detailLoading">
-        <template v-if="detail">
+        <el-alert v-if="detailError" :title="detailError" type="error" :closable="false"><el-button size="small" @click="openDetail({ task_id: detailTarget })">重试</el-button></el-alert>
+        <template v-else-if="detail">
           <el-descriptions :column="2" border>
             <el-descriptions-item label="任务 ID">{{ detail.task_id }}</el-descriptions-item>
             <el-descriptions-item label="request_id">{{ detail.request_id || '—' }}</el-descriptions-item>

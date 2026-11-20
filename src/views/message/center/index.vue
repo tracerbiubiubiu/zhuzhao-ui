@@ -5,12 +5,13 @@
  * 通知行=摘要+时间+深链（link 直跳）；单条点击即读+全部已读。
  * 待办 tab 数据源=S10 角标同源（assignee=me 列表——状态派生非快照）。
  */
+import { apiReadError } from '@/utils/apiError'
 import { formatDateTime } from '@/utils/datetime'
 import { compareInt64Desc } from '@/utils/int64'
-import { computed, reactive, ref } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import {
-  ElButton, ElCard, ElCheckbox, ElEmpty, ElMessage, ElPagination, ElTabPane, ElTabs, ElTag,
+  ElAlert, ElButton, ElCard, ElCheckbox, ElEmpty, ElMessage, ElPagination, ElTabPane, ElTabs, ElTag,
 } from 'element-plus'
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
 import {
@@ -32,6 +33,11 @@ const inboxQuery = useQuery({
   queryKey: computed(() => ['message', 'inbox', page.current, page.size, onlyUnread.value]),
   queryFn: () => listNotificationsApi({ page: page.current, page_size: page.size, unread: onlyUnread.value || undefined }),
 })
+// 换页时 Query 暂无当前页数据，不能把未知总数传成 0 触发分页组件回到首页。
+const inboxTotal = ref<number | null>(null)
+watch(inboxQuery.data, data => {
+  if (data) inboxTotal.value = data.total
+}, { immediate: true })
 
 // 待办 tab：assignee=me 未关闭（状态派生——无已读概念）。
 // 2026-10-31 M-4 修复：原 page_size:50 单查询混入已关闭单且超 50 静默截断（total 与
@@ -60,18 +66,24 @@ async function fetchTop(q: TicketListQuery, n: number): Promise<{ rows: TicketRo
 const todosQuery = useQuery({
   queryKey: computed(() => ['message', 'todos', todoPage.value]),
   queryFn: async () => {
-    const budget = todoPage.value * TODO_PAGE_SIZE
+    const requestedPage = todoPage.value
+    const budget = requestedPage * TODO_PAGE_SIZE
     const [{ rows: assigned, total: assignedTotal }, { rows: inProgress, total: inProgressTotal }] = await Promise.all([
       fetchTop({ status: 'assigned', assignee: 'me' }, budget),
       fetchTop({ status: 'in_progress', assignee: 'me' }, budget),
     ])
     // 严格弱序比较器（相等返回 0）；归并键=后端排序键 id DESC
     const merged = [...assigned, ...inProgress].sort((a, b) => compareInt64Desc(a.id, b.id))
-    const start = (todoPage.value - 1) * TODO_PAGE_SIZE
+    const start = (requestedPage - 1) * TODO_PAGE_SIZE
     return { list: merged.slice(start, start + TODO_PAGE_SIZE), total: assignedTotal + inProgressTotal }
   },
   enabled: computed(() => activeTab.value === 'todos'),
 })
+
+const inboxError = computed(() => inboxQuery.isError.value ? apiReadError(inboxQuery.error.value) : '')
+const inboxRows = computed(() => inboxError.value ? [] : inboxQuery.data.value?.list ?? [])
+const todoError = computed(() => todosQuery.isError.value ? apiReadError(todosQuery.error.value) : '')
+const todoRows = computed(() => todoError.value ? [] : todosQuery.data.value?.list ?? [])
 
 async function refresh() {
   await queryClient.invalidateQueries({ queryKey: ['message'] })
@@ -107,8 +119,9 @@ const timeText = (t: string) => formatDateTime(t)
             <el-button size="small" data-testid="read-all" @click="readAll">全部已读</el-button>
           </div>
           <div v-loading="inboxQuery.isLoading.value" class="min-h-[300px]">
+            <el-alert v-if="inboxError" :title="inboxError" type="error" :closable="false"><el-button size="small" @click="inboxQuery.refetch()">重试</el-button></el-alert>
             <div
-              v-for="n in inboxQuery.data.value?.list ?? []"
+              v-for="n in inboxRows"
               :key="n.id"
               class="msg-row"
               :class="{ 'msg-row--unread': !n.read_at }"
@@ -120,25 +133,25 @@ const timeText = (t: string) => formatDateTime(t)
               <el-tag v-if="n.biz_type" size="small" type="info" class="mr-2">{{ n.biz_type }}</el-tag>
               <span class="text-xs text-gray-400">{{ timeText(n.created_at) }}</span>
             </div>
-            <el-empty v-if="!inboxQuery.isLoading.value && !(inboxQuery.data.value?.list ?? []).length" description="暂无消息" />
+            <el-empty v-if="!inboxQuery.isLoading.value && !inboxError && !inboxRows.length" description="暂无消息" />
           </div>
-          <div class="mt-2 flex justify-end">
+          <div v-if="inboxTotal !== null && !inboxError" class="mt-2 flex justify-end">
             <el-pagination
               v-model:current-page="page.current" v-model:page-size="page.size"
-              :total="inboxQuery.data.value?.total ?? 0" layout="total, prev, pager, next"
-              @current-change="() => inboxQuery.refetch()"
+              :total="inboxTotal" layout="total, prev, pager, next"
             />
           </div>
         </el-tab-pane>
 
-        <el-tab-pane :label="`待办（${todosQuery.data.value?.total ?? 0}）`" name="todos" lazy>
+        <el-tab-pane :label="todoError ? '待办' : `待办（${todosQuery.data.value?.total ?? 0}）`" name="todos" lazy>
           <div v-loading="todosQuery.isLoading.value" class="min-h-[300px]">
-            <div v-for="t in todosQuery.data.value?.list ?? []" :key="t.id" class="msg-row" @click="goTodo(t)">
+            <el-alert v-if="todoError" :title="todoError" type="error" :closable="false"><el-button size="small" @click="todosQuery.refetch()">重试</el-button></el-alert>
+            <div v-for="t in todoRows" :key="t.id" class="msg-row" @click="goTodo(t)">
               <span class="flex-1">#{{ t.id }} {{ t.title }}</span>
               <el-tag size="small" class="mr-2">{{ STATUS_LABEL[t.status] ?? t.status }}</el-tag>
               <span class="text-xs text-gray-400">{{ timeText(t.created_at) }}</span>
             </div>
-            <el-empty v-if="!todosQuery.isLoading.value && !(todosQuery.data.value?.list ?? []).length" description="暂无待办" />
+            <el-empty v-if="!todosQuery.isLoading.value && !todoError && !todoRows.length" description="暂无待办" />
             <el-pagination
               v-if="(todosQuery.data.value?.total ?? 0) > TODO_PAGE_SIZE"
               class="mt-2 justify-end"

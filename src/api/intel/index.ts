@@ -17,6 +17,6 @@ export interface IntelQueryResult {
 
 /** 情报查询（先缓存后上游；同键二查命中零上游调用） */
 export async function queryIntelApi(intelType: string, value: string): Promise<IntelQueryResult> {
-  const data = await request.get('/api/v1/intel/query', { params: { type: intelType, value } })
+  const data = await request.get('/api/v1/intel/query', { params: { type: intelType, value }, _silentError: true })
   return data as unknown as IntelQueryResult
 }

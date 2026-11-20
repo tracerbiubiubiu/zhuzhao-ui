@@ -7,9 +7,9 @@
  *   编辑器不拦破坏性操作，仅提示语义
  * - 废弃=幂等危险操作（deprecated 后数据写门关闭）；历史抽屉按 op/version 展示
  */
-import { apiErrorBody } from '@/utils/apiError'
+import { apiErrorBody, apiReadError } from '@/utils/apiError'
 import { formatDateTime } from '@/utils/datetime'
-import { computed, reactive, ref, watch} from 'vue'
+import { computed, onDeactivated, onScopeDispose, reactive, ref, watch} from 'vue'
 import { useTableFit } from '@vea/hooks'
 import {
   ElButton, ElCard, ElDrawer, ElForm, ElFormItem, ElInput, ElEmpty, ElInputNumber, ElMessage, ElMessageBox, ElPagination,
@@ -28,7 +28,8 @@ defineOptions({ name: 'al_types' })
 
 const queryClient = useQueryClient()
 const typesQuery = useQuery({ queryKey: ['al', 'types'], queryFn: listAlTypesApi })
-const rows = computed(() => typesQuery.data.value?.list ?? [])
+const typesError = computed(() => typesQuery.error?.value ? apiReadError(typesQuery.error.value) : '')
+const rows = computed(() => typesError.value ? [] : typesQuery.data.value?.list ?? [])
 // 类型清单客户端筛选（筛选规范：关键字匹配类型名 + 状态过滤；即时生效）
 const typeFilter = ref('')
 const typeStatusFilter = ref<'' | 'active' | 'deprecated'>('')
@@ -60,6 +61,15 @@ const editorVisible = ref(false)
 const editorMode = ref<'create' | 'evolve'>('create')
 const editorError = ref('')
 const editorSaving = ref(false)
+let editorSession = 0
+let editorPendingSession: number | null = null
+watch(editorVisible, (visible) => {
+  if (!visible) {
+    editorSession++
+    editorPendingSession = null
+    editorSaving.value = false
+  }
+}, { flush: 'sync' })
 const editorForm = reactive({
   type_name: '',
   version: 0, // evolve 乐观锁（create 不用）
@@ -88,6 +98,9 @@ const editorRules = {
 }
 
 function openCreate() {
+  editorSession++
+  editorPendingSession = null
+  editorSaving.value = false
   editorMode.value = 'create'
   editorError.value = ''
   editorForm.type_name = ''
@@ -98,6 +111,9 @@ function openCreate() {
 }
 
 function openEvolve(row: AlTypeDef) {
+  editorSession++
+  editorPendingSession = null
+  editorSaving.value = false
   editorMode.value = 'evolve'
   editorError.value = ''
   editorForm.type_name = row.type_name
@@ -108,45 +124,61 @@ function openEvolve(row: AlTypeDef) {
 }
 
 function addFieldRow() {
+  if (editorSaving.value) return
   editorForm.fields.push({ name: '', type: 'string', required: false })
 }
 
 function removeFieldRow(i: number) {
+  if (editorSaving.value) return
   editorForm.fields.splice(i, 1)
 }
 
+function closeEditor(done?: () => void) {
+  if (editorSaving.value) return
+  if (done) done()
+  else editorVisible.value = false
+}
+
 async function submitEditor() {
-  const valid = await formRef.value?.validate().catch(() => false)
-  if (!valid) return
-  const fields = editorForm.fields
-    .filter((f) => f.name.trim())
-    // 约束键按类型剥离（后端注册校验对语义错配 422——提交前清干净）：
-    // int/int_list 无 max_chars；string/string_list 无 max_list_items
-    .map((f) => {
-      if (f.type === 'int' || f.type === 'int_list') return { ...f, max_chars: undefined }
-      if (f.type === 'string' || f.type === 'string_list') return { ...f, max_list_items: undefined }
-      return f
-    })
-  if (!fields.length) {
-    editorError.value = '至少定义一个字段'
-    return
-  }
-  // 唯一键清选：仅保留仍存在的标量字段（删行/改类型后残留选择清干净）
-  const scalarNames = new Set(fields.filter((f) => f.type === 'int' || f.type === 'string').map((f) => f.name.trim()))
-  const uniqueFields = editorForm.uniqueFields.filter((n) => scalarNames.has(n))
+  if (editorPendingSession === editorSession || !editorVisible.value) return
+  const session = editorSession
+  const current = () => session === editorSession && editorVisible.value
+  editorPendingSession = session
   editorSaving.value = true
-  editorError.value = ''
   try {
-    if (editorMode.value === 'create') {
-      await registerAlTypeApi({ type_name: editorForm.type_name.trim(), fields, unique_fields: uniqueFields })
-      ElMessage.success(`类型「${editorForm.type_name}」已注册`)
-    } else {
-      await evolveAlTypeApi({ type_name: editorForm.type_name, fields, unique_fields: uniqueFields, version: editorForm.version })
-      ElMessage.success(`类型「${editorForm.type_name}」schema 已演进（v${editorForm.version + 1}）`)
+    const valid = await formRef.value?.validate().catch(() => false)
+    if (!valid || !current()) return
+    const fields = editorForm.fields
+      .filter((f) => f.name.trim())
+      // 约束键按类型剥离（后端注册校验对语义错配 422——提交前清干净）：
+      // int/int_list 无 max_chars；string/string_list 无 max_list_items
+      .map((f) => {
+        if (f.type === 'int' || f.type === 'int_list') return { ...f, max_chars: undefined }
+        if (f.type === 'string' || f.type === 'string_list') return { ...f, max_list_items: undefined }
+        return f
+      })
+    if (!fields.length) {
+      editorError.value = '至少定义一个字段'
+      return
     }
-    editorVisible.value = false
+    // 唯一键清选：仅保留仍存在的标量字段（删行/改类型后残留选择清干净）
+    const scalarNames = new Set(fields.filter((f) => f.type === 'int' || f.type === 'string').map((f) => f.name.trim()))
+    const uniqueFields = editorForm.uniqueFields.filter((n) => scalarNames.has(n))
+    editorError.value = ''
+    const mode = editorMode.value
+    const typeName = editorForm.type_name.trim()
+    const version = editorForm.version
+    if (mode === 'create') {
+      await registerAlTypeApi({ type_name: typeName, fields, unique_fields: uniqueFields })
+      if (current()) ElMessage.success(`类型「${typeName}」已注册`)
+    } else {
+      await evolveAlTypeApi({ type_name: typeName, fields, unique_fields: uniqueFields, version })
+      if (current()) ElMessage.success(`类型「${typeName}」schema 已演进（v${version + 1}）`)
+    }
+    if (current()) editorVisible.value = false
     refresh()
   } catch (err: unknown) {
+    if (!current()) return
     const resp = apiErrorBody(err)
     if (resp?.code === 100008) {
       // activelist 跨服务码段（≠zhuzhao 10006）——版本冲突统一 409+100008
@@ -155,7 +187,10 @@ async function submitEditor() {
       editorError.value = resp?.message ?? '保存失败，请稍后重试'
     }
   } finally {
-    editorSaving.value = false
+    if (editorPendingSession === session) {
+      editorPendingSession = null
+      if (current()) editorSaving.value = false
+    }
   }
 }
 
@@ -184,17 +219,31 @@ const historyLoading = ref(false)
 const historyRows = ref<AlTypeHistoryRow[]>([])
 const historyType = ref('')
 
-async function openHistory(row: AlTypeDef) {
+let historySeq = 0
+const historyError = ref('')
+watch(historyVisible, visible => { if (!visible) historySeq++ }, { flush: 'sync' })
+function invalidateSessions() {
+  historySeq++
+  editorSession++
+  historyVisible.value = false
+  editorVisible.value = false
+}
+onDeactivated(invalidateSessions)
+onScopeDispose(invalidateSessions)
+async function openHistory(row: Pick<AlTypeDef, 'type_name'>) {
+  const seq = ++historySeq
   historyType.value = row.type_name
   historyVisible.value = true
   historyLoading.value = true
+  historyRows.value = []
+  historyError.value = ''
   try {
     const res = await listAlTypeHistoryApi(row.type_name)
-    historyRows.value = res.list ?? []
-  } catch {
-    historyRows.value = []
+    if (seq === historySeq) historyRows.value = res.list ?? []
+  } catch (err) {
+    if (seq === historySeq) historyError.value = apiReadError(err)
   } finally {
-    historyLoading.value = false
+    if (seq === historySeq) historyLoading.value = false
   }
 }
 
@@ -224,10 +273,11 @@ useTableFit(typesTable, () => rows.value)
         <span class="text-xs text-gray-400">筛选即时生效</span>
         <el-button v-permission="'activelist:type:manage'" type="primary" size="small" class="ml-auto !mr-0" @click="openCreate">注册类型</el-button>
       </div>
+      <el-alert v-if="typesError" :title="typesError" type="error" :closable="false"><el-button size="small" @click="typesQuery.refetch()">重试</el-button></el-alert>
       <div class="min-h-0 flex-initial">
         <el-table ref="typesTable" :data="pagedTypeRows" v-loading="typesQuery.isLoading.value" row-key="type_name" height="100%">
         <template #empty>
-          <el-empty description="暂无活动类型——「注册类型」创建，或调整筛选" :image-size="60" />
+          <el-empty v-if="!typesError && !typesQuery.isLoading.value" description="暂无活动类型——「注册类型」创建，或调整筛选" :image-size="60" />
         </template>
         <el-table-column prop="type_name" label="类型名" min-width="160" />
         <el-table-column label="状态" width="100" align="center">
@@ -274,15 +324,18 @@ useTableFit(typesTable, () => rows.value)
     <el-dialog
       v-model="editorVisible"
       :close-on-click-modal="false"
+      :close-on-press-escape="!editorSaving"
+      :show-close="!editorSaving"
+      :before-close="closeEditor"
       :title="editorMode === 'create' ? '注册类型' : `演进「${editorForm.type_name}」（当前 v${editorForm.version}）`"
       width="640px"
     >
       <el-alert v-if="editorError" :title="editorError" type="error" show-icon class="mb-4" :closable="false" />
-      <el-form ref="formRef" :model="editorForm" :rules="editorRules" label-width="80px">
+      <el-form ref="formRef" :model="editorForm" :rules="editorRules" :disabled="editorSaving" label-width="80px">
         <el-form-item label="类型名" prop="type_name">
           <el-input
             v-model="editorForm.type_name"
-            :disabled="editorMode === 'evolve'"
+            :disabled="editorSaving || editorMode === 'evolve'"
             placeholder="如 ip_blocklist" title="小写字母开头"
           />
         </el-form-item>
@@ -302,7 +355,7 @@ useTableFit(typesTable, () => rows.value)
                 <el-switch v-model="f.sensitive" active-text="敏感" inactive-text="敏感" inline-prompt />
                 <el-button
                   link type="danger" class="ml-auto"
-                  :disabled="editorForm.fields.length <= 1" @click="removeFieldRow(i)"
+                  :disabled="editorSaving || editorForm.fields.length <= 1" @click="removeFieldRow(i)"
                 >删</el-button>
               </div>
               <!-- 约束行（随类型显隐；2026-10-27 拍板：字符上限/项数上限两级护栏） -->
@@ -337,7 +390,7 @@ useTableFit(typesTable, () => rows.value)
                 <el-option v-for="n in uniqueKeyOptions" :key="n" :label="n" :value="n" />
               </el-select>
             </div>
-            <el-button size="small" @click="addFieldRow">+ 添加字段</el-button>
+            <el-button size="small" :disabled="editorSaving" @click="addFieldRow">+ 添加字段</el-button>
             <div class="text-xs text-gray-400 mt-2">
               演进为全量替换：兼容变更（加可选/放宽）零迁移；破坏性变更（删字段/收紧）允许提交、旧数据懒执行
             </div>
@@ -345,7 +398,7 @@ useTableFit(typesTable, () => rows.value)
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="editorVisible = false">取消</el-button>
+        <el-button :disabled="editorSaving" @click="closeEditor()">取消</el-button>
         <el-button type="primary" :loading="editorSaving" @click="submitEditor">
           {{ editorMode === 'create' ? '注册' : '提交演进' }}
         </el-button>
@@ -355,6 +408,7 @@ useTableFit(typesTable, () => rows.value)
     <!-- 变更历史 -->
     <el-drawer v-model="historyVisible" :title="`「${historyType}」变更历史（新→旧）`" size="560px">
       <div v-loading="historyLoading">
+        <el-alert v-if="historyError" :title="historyError" type="error" :closable="false"><el-button size="small" @click="openHistory({ type_name: historyType })">重试</el-button></el-alert>
         <div v-for="(h, i) in historyRows" :key="i" class="mb-3 pb-3 border-b border-gray-100 last:border-0">
           <div class="flex items-center gap-2 text-sm">
             <el-tag size="small" :type="h.op === 'register' ? 'success' : 'warning'">{{ h.op }}</el-tag>
@@ -364,7 +418,7 @@ useTableFit(typesTable, () => rows.value)
           </div>
           <div class="text-xs text-gray-500 mt-1">{{ fieldSummary(h.fields) }}</div>
         </div>
-        <div v-if="!historyLoading && !historyRows.length" class="text-sm text-gray-400">无历史记录</div>
+        <div v-if="!historyLoading && !historyError && !historyRows.length" class="text-sm text-gray-400">无历史记录</div>
       </div>
     </el-drawer>
   </div>

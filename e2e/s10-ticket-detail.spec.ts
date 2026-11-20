@@ -38,7 +38,14 @@ test('S10/S11：详情评论/备注分层+关联判重+分派/关闭流+viewer �
   }
   const longDescription = '首行：保留  两个空格。\nhttps://example.invalid/' + 'abcd1234efgh'.repeat(40) + '\n末行：完整保留。'
   const t1 = await mk(`S10 主单_${suffix}`, longDescription)
-  const t2 = await mk(`S10 从单_${suffix}`)
+  const extraTickets: string[] = []
+  let t2 = await mk(`S10 从单_${suffix}`)
+  // This spec must still exercise multiple keystrokes when run alone.
+  for (let i = 0; t2.length < 2 && i < 9; i++) {
+    extraTickets.push(t2)
+    t2 = await mk(`S10 从单_${suffix}_${i}`)
+  }
+  expect(t2).toMatch(/^\d{2,}$/)
 
   // viewer 绑根组织（透明读旁观者——幂等 upsert，重复运行安全）。
   // ⚠ 必须显式 ticket_scope:'group'：AddMember 缺省 scope='assigned'（repo 159），
@@ -89,17 +96,57 @@ test('S10/S11：详情评论/备注分层+关联判重+分派/关闭流+viewer �
     // ── 关联：UI 建 t1→t2 成功；重复提交 → 409 内联 el-alert ──
     // 2026-10-29 适配：关联入口改远程搜索下拉（keyword 支持 纯数字=工单 ID），选项名 `#<id> <标题>`
     const relationCard = page.locator('.el-card').filter({ hasText: '关联工单' })
-    const pickRelation = async () => {
-      // EP 2.14 select 空态 placeholder 为独立 span 点不中 → 点 .el-select 容器；
-      // 选项 teleport 到 body → 页面级 :visible 下拉定位（w5 同配方）
-      await relationCard.locator('.el-select').click()
-      await page.keyboard.type(t2, { delay: 80 })
-      await page.locator('.el-select-dropdown:visible .el-select-dropdown__item').filter({ hasText: `#${t2} ` }).first().click()
-      await relationCard.getByRole('button', { name: '建立关联' }).click()
+    const candidateSearch = (url: URL) => url.pathname === '/api/v1/tickets'
+      && url.searchParams.get('relation_source_id') === t1 && url.searchParams.get('keyword') === t2
+    const pickRelation = async (expectedStatus: number, retry = false) => {
+      // EP select 的下拉 teleport 到 body。候选查找与写入分别断言。
+      if (retry) {
+        await page.route(candidateSearch, route => route.fulfill({
+          status: 503,
+          json: { code: 10008, message: '合成候选读取故障' },
+        }), { times: 1 })
+      }
+      const picker = relationCard.locator('.el-select')
+      await picker.click()
+      const searchBox = picker.getByRole('combobox')
+      await Promise.all([
+        page.waitForRequest(req => req.method() === 'GET' && candidateSearch(new URL(req.url())), { timeout: 10_000 }),
+        searchBox.pressSequentially(t2, { delay: 80 }),
+      ])
+      await expect(searchBox).toHaveValue(t2)
+      const candidate = page.locator('.el-select-dropdown:visible .el-select-dropdown__item').filter({ hasText: `#${t2} ` }).first()
+      if (retry) {
+        await expect(relationCard.getByText('合成候选读取故障')).toBeVisible()
+        await Promise.all([
+          page.waitForResponse(res => candidateSearch(new URL(res.url())) && res.ok(), { timeout: 10_000 }),
+          relationCard.getByRole('button', { name: '重试搜索' }).click(),
+        ])
+        await picker.click()
+      } else {
+        // Chromium can end composition without another non-composing input.
+        // Committing the same term must restore the invalidated candidate list.
+        await expect(candidate).toBeVisible()
+        await Promise.all([
+          page.waitForResponse(res => candidateSearch(new URL(res.url())) && res.ok(), { timeout: 10_000 }),
+          searchBox.evaluate((node, term) => {
+            const input = node as HTMLInputElement
+            input.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true }))
+            input.value = term
+            input.dispatchEvent(new InputEvent('input', { bubbles: true, isComposing: true, data: term }))
+            input.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true, data: term }))
+          }, t2),
+        ])
+      }
+      await candidate.click()
+      const [saved] = await Promise.all([
+        page.waitForResponse(res => res.request().method() === 'POST' && new URL(res.url()).pathname === '/api/v1/tickets/relations', { timeout: 10_000 }),
+        relationCard.getByRole('button', { name: '建立关联' }).click(),
+      ])
+      expect(saved.status()).toBe(expectedStatus)
     }
-    await pickRelation()
+    await pickRelation(200, true)
     await expect(relationCard.getByText(`关联 → #${t2}`)).toBeVisible()
-    await pickRelation()
+    await pickRelation(409)
     await expect(relationCard.locator('.el-alert')).toBeVisible({ timeout: 10_000 }) // 判重 409 内联（勿纯 toast）
 
     // ── viewer 只读边界（S10）：公开评论可见/内部备注不可见/composer 不渲染 ──
@@ -121,6 +168,8 @@ test('S10/S11：详情评论/备注分层+关联判重+分派/关闭流+viewer �
     await page.waitForURL(/#\/home/, { timeout: 30_000 })
     await page.goto(`/#/tickets/${t2}`)
     await page.reload()
+
+    await expect(relationCard.getByText(`被关联 ← #${t1}`)).toBeVisible({ timeout: 20_000 })
 
     const statusTag = page.locator('.el-card').first().locator('.el-tag').first()
     await expect(statusTag).toHaveText('待处理', { timeout: 20_000 })
@@ -153,8 +202,9 @@ test('S10/S11：详情评论/备注分层+关联判重+分派/关闭流+viewer �
     await expect(page.locator('.el-card').first().getByRole('button', { name: '删除' })).toBeVisible()
   } finally {
     // 清理：两单软删（不污染列表）
-    await api('/api/v1/tickets/delete', { ...h, method: 'POST', body: { id: t1 } }).catch(() => {})
-    await api('/api/v1/tickets/delete', { ...h, method: 'POST', body: { id: t2 } }).catch(() => {})
+    for (const id of [t1, t2, ...extraTickets]) {
+      await api('/api/v1/tickets/delete', { ...h, method: 'POST', body: { id } }).catch(() => {})
+    }
     await tt.cleanup()
   }
 })

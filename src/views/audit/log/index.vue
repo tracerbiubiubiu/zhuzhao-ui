@@ -7,8 +7,9 @@
  * - offset 分页（ProTable）；行展开显 request_body/user_agent（审计溯源载荷）
  * - P4-8 对账/指标极简查询页：后端本体未开工（穿插池件），本页不含——随本体批交付
  */
+import { apiReadError } from '@/utils/apiError'
 import { formatDateTime } from '@/utils/datetime'
-import { reactive, ref, watch } from 'vue'
+import { onActivated, onDeactivated, onScopeDispose, reactive, ref, watch } from 'vue'
 import { ElMessage, ElAlert, ElButton, ElCard, ElDatePicker, ElDescriptions, ElDescriptionsItem, ElDrawer, ElInput, ElOption, ElPagination, ElSelect, ElTabPane, ElTable, ElTableColumn, ElTabs, ElTag, ElRadioButton, ElRadioGroup} from 'element-plus'
 import ProTable from '@/components/ProTable/index.vue'
 import UserNameText from '@/components/UserNameText/index.vue'
@@ -118,19 +119,36 @@ async function copyRequestBody() {
 const activeTab = ref('logs')
 const panics = ref<PanicRow[]>([])
 const panicsLoading = ref(false)
-const panicsTotal = ref(0)
+const panicsTotal = ref<number | null>(null)
 const panicsPage = ref(1)
 watch(activeTab, (t) => { if (t === 'panics' && !panics.value.length) fetchPanics() })
 
+const panicsError = ref('')
+let panicsSeq = 0
+let panicsPaused = false
+function pausePanics() { panicsPaused = true; panicsSeq++; panicsLoading.value = false }
+onActivated(() => {
+  if (panicsPaused && activeTab.value === 'panics') void fetchPanics()
+  panicsPaused = false
+})
+onDeactivated(pausePanics)
+onScopeDispose(pausePanics)
 async function fetchPanics(p = panicsPage.value) {
+  const seq = ++panicsSeq
+  panicsPage.value = p
+  panics.value = []
+  panicsError.value = ''
   panicsLoading.value = true
   try {
     const data = await listPanicsApi(p, 20)
+    if (seq !== panicsSeq) return
     panics.value = data.list ?? []
     panicsTotal.value = data.total
     panicsPage.value = data.page
+  } catch (err) {
+    if (seq === panicsSeq) panicsError.value = apiReadError(err)
   } finally {
-    panicsLoading.value = false
+    if (seq === panicsSeq) panicsLoading.value = false
   }
 }
 
@@ -239,8 +257,10 @@ async function copyPanicStack() {
            面板：卡拉伸/表内滚/分页钉底，与同页主日志 tab（ProTable fill）同款 -->
       <el-tab-pane label="Panic 聚合" name="panics">
         <el-card shadow="never" class="panics-card">
+          <el-alert v-if="panicsError" :title="panicsError" type="error" :closable="false"><el-button size="small" @click="fetchPanics()">重试</el-button></el-alert>
           <div class="min-h-0 flex-1">
             <el-table ref="panicsTable" :data="panics" v-loading="panicsLoading" row-key="id" height="100%">
+              <template #empty><span v-if="!panicsLoading && !panicsError">暂无聚合记录</span></template>
               <el-table-column prop="count" label="次数" width="80" align="center" />
               <el-table-column prop="path" label="路径" min-width="200" />
               <el-table-column prop="message" label="消息" min-width="260" show-overflow-tooltip />
@@ -255,8 +275,9 @@ async function copyPanicStack() {
             </el-table>
           </div>
           <div class="mt-3 flex flex-none items-center justify-between">
-            <span class="text-xs text-gray-400">共 {{ panicsTotal }} 个聚合指纹</span>
+            <span v-if="panicsTotal !== null && !panicsError" class="text-xs text-gray-400">共 {{ panicsTotal }} 个聚合指纹</span>
             <el-pagination
+              v-if="panicsTotal !== null"
               :total="panicsTotal"
               :current-page="panicsPage"
               :page-size="20"

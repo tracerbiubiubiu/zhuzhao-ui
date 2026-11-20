@@ -61,7 +61,7 @@ export interface PanicPage {
 
 /** panic 聚合列表（offset 分页） */
 export async function listPanicsApi(page = 1, pageSize = 20): Promise<PanicPage> {
-  const data = await request.get('/api/v1/audit/panics', { params: { page, page_size: pageSize } })
+  const data = await request.get('/api/v1/audit/panics', { params: { page, page_size: pageSize }, _silentError: true })
   return data as unknown as PanicPage
 }
 

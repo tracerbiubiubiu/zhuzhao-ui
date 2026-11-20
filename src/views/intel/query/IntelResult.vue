@@ -62,15 +62,15 @@ async function copyScalar(v: unknown) {
     <span
       v-else-if="data === null" class="ir-scalar ir-null"
     >null</span>
-    <span
+    <button type="button"
       v-else-if="typeof data === 'boolean'" class="ir-scalar ir-bool ir-copy" :class="isWideScalar(data) ? 'ir-col-wide' : ''"
       title="点击复制" @click="copyScalar(data)"
-    >{{ data }}</span>
-    <span
+    >{{ data }}</button>
+    <button type="button"
       v-else-if="typeof data === 'number'" class="ir-scalar ir-num ir-copy" :class="isWideScalar(data) ? 'ir-col-wide' : ''"
       title="点击复制" @click="copyScalar(data)"
-    >{{ data }}</span>
-    <span v-else class="ir-scalar ir-str ir-copy" :class="isWideScalar(data) ? 'ir-col-wide' : ''" title="点击复制" @click="copyScalar(data)">{{ String(data) }}</span>
+    >{{ data }}</button>
+    <button v-else type="button" class="ir-scalar ir-str ir-copy" :class="isWideScalar(data) ? 'ir-col-wide' : ''" title="点击复制" @click="copyScalar(data)">{{ String(data) }}</button>
   </div>
 </template>
 
@@ -141,6 +141,15 @@ async function copyScalar(v: unknown) {
 /* 标量值点击复制（hover 反馈提示可点） */
 .ir-copy {
   cursor: pointer;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  font-family: inherit;
+  text-align: left;
+}
+.ir-copy:focus-visible {
+  outline: 2px solid var(--el-color-primary);
+  outline-offset: 2px;
 }
 
 .ir-copy:hover {

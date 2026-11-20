@@ -104,6 +104,8 @@ MyOrg 的 `rosterSession.test.ts` 以可控响应覆盖切组、重选当前组�
 
 状态图的 `p5-s2-flow-save-races.spec.ts` 使用真实画布和服务，控制部分请求响应的时机，并向浏览器交付一个迟到的预检失败以验证提示归属。通过浏览器切换类型、撤销、重复点击与重开后，核对写请求只有原目标快照，并从实际服务回读两种类型的图、元数据与版本。相关基线红例、候选证据和隔离栈收据归材料ID `maintenance/pass8-target-write-20261118/`。
 
+本地续修的页面状态回归使用 `src/test/sfcHarness.ts` 编译执行真实 SFC setup，网络请求用可控 Promise 合成替身：`typeSession.test.ts`（AL 类型）、`readSession.test.ts`（通知管理）、`detailSession.test.ts`（任务）、`panicSession.test.ts`（Panic）、`loadState.test.ts`（建单）、`dictCache.test.ts`（工单详情字典）、`dictPreview.test.ts`（字段预览）、`querySession.test.ts` / `scalarKeyboard.test.ts`（情报）和 `src/views/readStates.test.ts`（附带失败状态）。`src/api/readFeedback.test.ts` 核对页面接管错误反馈的读取使用静默传输提示、仍传播原错误，字典默认调用者与含停用项参数保持原义。标量复制用实际模板 VNode 校验原生按钮及复制事件；它不替代浏览器 Tab/焦点、视觉、真实权限与业务写入验收。过程红例和复验收据交由本批统筹归档，不把离线单测计为真实 E2E 或 schema 验收。
+
 ## 非 admin 盲区教训（2026-10-12 双例）
 
 两例缺陷均为 admin 单账号 E2E 的盲区：① 工单列表筛选占位符冲突 500（`4a18789`——viewer/operator 任意筛选即 500）；② 任务定义 Tab 急切拉 `/jobs` 403 toast（`ce13f5d7`——Tab 未按 task:manage 门控）。由此固化：

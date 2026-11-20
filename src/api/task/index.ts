@@ -101,7 +101,7 @@ export async function submitTaskApi(input: {
 }
 
 export async function getTaskApi(taskId: string): Promise<TaskDetail> {
-  const data = await request.get(`/api/v1/tasks/${encodeURIComponent(taskId)}`)
+  const data = await request.get(`/api/v1/tasks/${encodeURIComponent(taskId)}`, { _silentError: true })
   return data as unknown as TaskDetail
 }
 

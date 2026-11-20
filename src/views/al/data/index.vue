@@ -13,7 +13,7 @@
  * - 2026-10-12 两栏改版：类型选择由下拉改**左右双栏**（左类型清单分组+搜索，右数据区）——
  *   类型全集与废弃态一眼可见；废弃只读/门控语义不变
  */
-import { apiErrorBody } from '@/utils/apiError'
+import { apiErrorBody, apiReadError } from '@/utils/apiError'
 import { formatDateTime } from '@/utils/datetime'
 import { computed, onActivated, onDeactivated, onScopeDispose, reactive, ref, watch } from 'vue'
 import { useTableFit } from '@vea/hooks'
@@ -27,7 +27,7 @@ import { useQuery } from '@tanstack/vue-query'
 import {
   createAlDataApi, deleteAlDataApi, exportAlDataApi, importAlDataApi, listAlDataApi,
   listAlTypesApi, restoreAlDataApi, updateAlDataApi,
-  type AlCursor, type AlDataDoc, type AlFieldDef,
+  type AlCursor, type AlDataDoc, type AlFieldDef, type AlTypeDef,
 } from '@/api/al'
 import { popCursor, pushCursor, resetCursor } from './cursorPager'
 
@@ -39,7 +39,13 @@ const router = useRouter()
 // ─── 类型选择（schema 驱动列；废弃类型只读可见——API 读取本就放行（gateType 仅查存在），
 //     UI 开只读存档入口：浏览/导出/删行清理放行，写入/导入/编辑随 409 门同步关闭）───
 const typesQuery = useQuery({ queryKey: ['al', 'types'], queryFn: listAlTypesApi })
-const allTypes = computed(() => typesQuery.data.value?.list ?? [])
+const typesError = computed(() => typesQuery.error?.value ? apiReadError(typesQuery.error.value) : '')
+// 后台重读失败不撤掉已打开表单的字段定义；成功重读后才采用新 schema。
+const confirmedTypes = ref<AlTypeDef[]>([])
+watch([() => typesQuery.data.value, typesError], ([data, error]) => {
+  if (data && !error) confirmedTypes.value = data.list
+}, { immediate: true, flush: 'sync' })
+const allTypes = computed(() => confirmedTypes.value)
 // 左栏类型清单搜索（两栏改版——取代下拉；按类型名不区分大小写过滤）
 const typeFilter = ref('')
 const filteredTypes = computed(() => {
@@ -59,6 +65,10 @@ const isDeprecated = computed(() => selectedDef.value?.status === 'deprecated')
 const schema = computed<AlFieldDef[]>(
   () => selectedDef.value?.fields ?? [],
 )
+const schemaReady = computed(() =>
+  !typesError.value && !typesQuery.isLoading.value && !!typesQuery.data.value && !!selectedDef.value,
+)
+const canWrite = computed(() => schemaReady.value && !isDeprecated.value)
 
 const FIELD_TYPE_LABELS: Record<AlFieldDef['type'], string> = {
   int: '整数', string: '文本', int_list: '整数列表', string_list: '文本列表',
@@ -70,6 +80,7 @@ function fieldTypeLabel(t: AlFieldDef['type']): string {
 // ─── cursor 分页列表 ───
 const list = ref<AlDataDoc[]>([])
 const listLoading = ref(false)
+const listError = ref('')
 const pageSize = ref(20)
 const nextCursor = ref<AlCursor | null>(null)
 /** 页栈：stack[k-1]=第 k 页末 cursor——上一页弹栈、下一页压栈（纯函数见 cursorPager） */
@@ -83,6 +94,7 @@ async function fetchPage(cursor: AlCursor | null) {
   if (!selectedType.value) return
   const seq = ++fetchSeq
   listLoading.value = true
+  listError.value = ''
   try {
     const res = await listAlDataApi(selectedType.value, {
       page_size: pageSize.value,
@@ -95,9 +107,10 @@ async function fetchPage(cursor: AlCursor | null) {
     list.value = res.list
     pageSize.value = res.page_size
     nextCursor.value = res.next_cursor
-  } catch {
+  } catch (err) {
     if (seq !== fetchSeq) return
     list.value = []
+    listError.value = apiReadError(err)
     nextCursor.value = null
   } finally {
     if (seq === fetchSeq) listLoading.value = false
@@ -196,7 +209,7 @@ function toFormFieldValue(f: AlFieldDef, doc?: AlDataDoc): { value: unknown; tex
 }
 
 function openCreate() {
-  if (!selectedDef.value || isDeprecated.value) return
+  if (!canWrite.value) return
   invalidateForm()
   formType = selectedType.value
   formIsCreate.value = true
@@ -214,7 +227,7 @@ function openCreate() {
 }
 
 function openEdit(row: AlDataDoc) {
-  if (listLoading.value) return
+  if (listLoading.value || !canWrite.value) return
   invalidateForm()
   formType = selectedType.value
   formIsCreate.value = false
@@ -301,7 +314,7 @@ function buildDataBody(): Record<string, unknown> {
 }
 
 async function submitForm() {
-  if (!formVisible.value || formSaving.value || formConflict.value || formType !== selectedType.value) return
+  if (!canWrite.value || !formVisible.value || formSaving.value || formConflict.value || formType !== selectedType.value) return
   const session = formSession
   const details = detailSession
   const type = formType
@@ -373,7 +386,7 @@ async function submitForm() {
 // ─── 删除/恢复（目标快照 + 可选版本 CAS；不自动重试写入）───
 const pendingRows = new Set<string>()
 async function changeRowState(row: AlDataDoc, restore: boolean) {
-  if (!selectedType.value || listLoading.value) return
+  if (!schemaReady.value || !selectedType.value || listLoading.value) return
   // 首个 await 前拍下目标，确认过程中切类型或原行对象变化均不能改写目标。
   const details = detailSession
   const target = { type: selectedType.value, id: row.id, version: row.version, generation: pageGeneration }
@@ -388,7 +401,7 @@ async function changeRowState(row: AlDataDoc, restore: boolean) {
         type: 'warning', confirmButtonText: action, cancelButtonText: '取消',
       })
     } catch { return }
-    if (!isCurrent()) return
+    if (!isCurrent() || !schemaReady.value) return
     try {
       if (restore) await restoreAlDataApi(target.type, target.id, target.version)
       else await deleteAlDataApi(target.type, target.id, target.version)
@@ -460,7 +473,7 @@ const importFormatError = computed(() => {
   return '导入内容须为有效的 JSON 数组'
 })
 const importReady = computed(() =>
-  importVisible.value && importType.value === selectedType.value && !isDeprecated.value
+  importVisible.value && importType.value === selectedType.value && canWrite.value
   && !importReading.value && !importBusy.value && !!importPayload.value && !importFormatError.value,
 )
 
@@ -474,7 +487,7 @@ function editImportText(value: string) {
 }
 
 function openImport() {
-  if (importBusy.value || !selectedType.value || isDeprecated.value) return
+  if (importBusy.value || !canWrite.value) return
   editImportText('')
   importType.value = selectedType.value
   importVisible.value = true
@@ -580,7 +593,8 @@ useTableFit(dataTable, () => list.value)
           <span class="font-semibold">活动类型</span>
         </template>
         <el-input v-model="typeFilter" placeholder="搜索类型" clearable size="small" class="mb-2" />
-        <div class="al-type-list">
+        <el-alert v-if="typesError" :title="typesError" type="error" :closable="false"><el-button size="small" @click="typesQuery.refetch()">重试</el-button></el-alert>
+        <div v-else class="al-type-list">
           <template v-if="!typesQuery.isLoading.value && filteredTypes.length">
             <div
               class="al-type-group al-type-group--toggle"
@@ -625,7 +639,7 @@ useTableFit(dataTable, () => list.value)
       </el-card>
 
       <!-- 右：所选类型的数据区（原单卡内容平移） -->
-      <el-card shadow="never" class="flex-1 al-pane al-pane--right">
+      <el-card v-if="!typesError" shadow="never" class="flex-1 al-pane al-pane--right">
         <template #header>
           <div class="flex items-center justify-between">
             <span class="font-semibold">{{ selectedType || '活动数据' }}</span>
@@ -684,10 +698,11 @@ useTableFit(dataTable, () => list.value)
           <el-button size="small" @click="resetFilt">重置</el-button>
         </div>
 
-        <el-empty v-if="selectedType && !listLoading && !list.length" description="暂无数据">
+        <el-alert v-if="selectedType && listError" :title="listError" type="error" :closable="false"><el-button size="small" @click="fetchPage(cursorStack[cursorStack.length - 1] ?? null)">重试</el-button></el-alert>
+        <el-empty v-if="selectedType && !listLoading && !listError && !list.length" description="暂无数据">
           <el-button v-if="!isDeprecated" v-permission="'activelist:data:write'" type="primary" @click="openCreate">写入首条</el-button>
         </el-empty>
-        <template v-else-if="selectedType">
+        <template v-else-if="selectedType && !listError">
           <!-- min-h-0 flex-1 + height 100%：表格吃满剩余视口内部滚动（fill 链，与 ProTable 同款） -->
           <div class="min-h-0 flex-initial">
             <el-table ref="dataTable" :data="list" v-loading="listLoading" row-key="id" :row-class-name="rowClass" height="100%" @row-click="openDetail">
@@ -708,11 +723,11 @@ useTableFit(dataTable, () => list.value)
               <template #default="{ row }">
                 <!-- .stop：行点击开详情抽屉，按钮动作不冒泡 -->
                 <template v-if="(row as AlDataDoc).status === 'deleted'">
-                  <el-button v-permission="'activelist:data:write'" link type="primary" size="small" @click.stop="onRestore(row as AlDataDoc)">恢复</el-button>
+                  <el-button v-permission="'activelist:data:write'" link type="primary" size="small" :disabled="!schemaReady" @click.stop="onRestore(row as AlDataDoc)">恢复</el-button>
                 </template>
                 <template v-else>
                   <el-button v-if="!isDeprecated" v-permission="'activelist:data:write'" link type="primary" size="small" @click.stop="openEdit(row as AlDataDoc)">编辑</el-button>
-                  <el-button v-permission="'activelist:data:write'" link type="danger" size="small" @click.stop="onDelete(row as AlDataDoc)">删除</el-button>
+                  <el-button v-permission="'activelist:data:write'" link type="danger" size="small" :disabled="!schemaReady" @click.stop="onDelete(row as AlDataDoc)">删除</el-button>
                 </template>
               </template>
             </el-table-column>
@@ -733,6 +748,7 @@ useTableFit(dataTable, () => list.value)
 
     <!-- 写入/编辑（schema 驱动表单——四类型） -->
     <el-dialog :close-on-click-modal="false" v-model="formVisible" :title="formIsCreate ? `写入「${selectedType}」` : `编辑 #${editing.id}`" width="560px">
+      <el-alert v-if="!schemaReady" :title="typesError || '类型定义尚不可用，请重新读取后保存'" type="error" :closable="false" class="mb-4"><el-button size="small" @click="typesQuery.refetch()">重试</el-button></el-alert>
       <el-alert v-if="formError" :title="formError" type="error" show-icon class="mb-4" :closable="false" />
       <div v-if="!formIsCreate" class="text-xs text-gray-400 mb-2">编辑版本 v{{ editing.version }}</div>
       <el-form label-width="120px" class="max-h-[60vh] overflow-y-auto">
@@ -776,7 +792,7 @@ useTableFit(dataTable, () => list.value)
       </el-form>
       <template #footer>
         <el-button @click="formVisible = false">取消</el-button>
-        <el-button type="primary" :loading="formSaving" :disabled="formConflict" @click="submitForm">{{ formIsCreate ? '写入' : '更新' }}</el-button>
+        <el-button type="primary" :loading="formSaving" :disabled="formConflict || !canWrite" @click="submitForm">{{ formIsCreate ? '写入' : '更新' }}</el-button>
       </template>
     </el-dialog>
 
@@ -795,6 +811,7 @@ useTableFit(dataTable, () => list.value)
         type="warning" show-icon :closable="false" class="mb-4"
       />
       <el-alert v-if="importError || importFormatError" :title="importError || importFormatError" type="error" show-icon class="mb-4" :closable="false" />
+      <el-alert v-if="!schemaReady" :title="typesError || '类型定义尚不可用，请重新读取后导入'" type="error" :closable="false" class="mb-4"><el-button size="small" @click="typesQuery.refetch()">重试</el-button></el-alert>
       <el-alert v-if="importResult" :title="importResult" type="success" show-icon class="mb-4" :closable="false" />
       <input type="file" accept=".json,application/json" class="mb-3" :disabled="importBusy" @change="onImportFile">
       <span v-if="importReading" class="ml-2 text-sm" role="status">正在读取文件…</span>
@@ -833,14 +850,14 @@ useTableFit(dataTable, () => list.value)
       <template v-if="detailRow" #footer>
         <el-button @click="detailVisible = false">关闭</el-button>
         <template v-if="detailRow.status === 'deleted'">
-          <el-button v-permission="'activelist:data:write'" type="primary" @click="detailVisible = false; onRestore(detailRow as AlDataDoc)">恢复</el-button>
+          <el-button v-permission="'activelist:data:write'" type="primary" :disabled="!schemaReady" @click="detailVisible = false; onRestore(detailRow as AlDataDoc)">恢复</el-button>
         </template>
         <template v-else>
           <el-button
             v-if="!isDeprecated" v-permission="'activelist:data:write'"
             type="primary" @click="detailVisible = false; openEdit(detailRow as AlDataDoc)"
           >编辑</el-button>
-          <el-button v-permission="'activelist:data:write'" type="danger" @click="detailVisible = false; onDelete(detailRow as AlDataDoc)">删除</el-button>
+          <el-button v-permission="'activelist:data:write'" type="danger" :disabled="!schemaReady" @click="detailVisible = false; onDelete(detailRow as AlDataDoc)">删除</el-button>
         </template>
       </template>
     </el-drawer>
