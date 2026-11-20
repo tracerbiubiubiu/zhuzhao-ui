@@ -26,7 +26,7 @@ export interface SetMemberScopeInput {
 
 /** 我的组织列表（SelfService 数据源） */
 export async function getMyOrgsApi(): Promise<MyOrgItem[]> {
-  const data = await request.get('/api/v1/user/orgs')
+  const data = await request.get('/api/v1/user/orgs', { _silentError: true })
   return ((data as unknown as { list?: MyOrgItem[] })?.list ?? [])
 }
 

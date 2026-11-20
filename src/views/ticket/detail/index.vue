@@ -11,8 +11,9 @@
  * - 按钮码（000010/000031 种子）：ticket:update/close/assign/delete/comment/note/relation
  * - 静态路由（§3.2④，菜单外——入口在列表页「详情」按钮，挂 ticket:read 码）
  */
+import { apiReadError } from '@/utils/apiError'
 import { formatDateTime } from '@/utils/datetime'
-import { computed, onActivated, onDeactivated, reactive, ref, toRef, watch } from 'vue'
+import { computed, onActivated, onBeforeUnmount, onDeactivated, reactive, ref, toRef, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   ElAlert, ElButton, ElCard, ElCheckbox, ElDescriptions, ElDescriptionsItem, ElDialog,
@@ -24,7 +25,7 @@ import {
   addTicketCCApi, assignTicketApi, closeTicketApi, createTicketCommentApi, createTicketNoteApi,
   createTicketRelationApi, deleteTicketApi, getTicketApi, getTicketCommentsApi,
   getTicketRelationsApi, listAvailableTransitionsApi, listTicketCCApi, listTicketTagsApi,
-  listTicketTypesApi, listTicketsApi, addTicketTagsApi, removeTicketCCApi, removeTicketTagApi,
+  listTicketTypesApi, listTicketRelationCandidatesApi, addTicketTagsApi, removeTicketCCApi, removeTicketTagApi,
   transitionTicketApi, STATUS_LABEL, updateTicketApi, type TagRow, type TicketCCRow,
 } from '@/api/ticket'
 import { useUserStoreWithOut } from '@/store/modules/user'
@@ -33,6 +34,7 @@ import { getTicketTypeFieldsApi, type TicketTypeFieldDef , renderRichtextApi } f
 import { getDictItemsByCodeApi } from '@/api/system/dict'
 import UserPicker from '@/components/UserPicker/index.vue'
 import TicketAttachments from '@/components/TicketAttachments.vue'
+import { createRelationSession } from './relationSession'
 import { useRenderedRichtext } from './useRenderedRichtext'
 
 // keep-alive 契约：name=静态路由名（参数路由——同工单不同 ID 依赖 :key 路由 fullPath 分实例）
@@ -230,24 +232,34 @@ async function removeCC(cc: TicketCCRow) {
 
 // ── B1-7 批3（三路F-E-4）：字典引用选项预载——select/multi_select 显示 label 而非 code ──
 const dictCache = ref<Record<string, Array<{ value: string; label: string }>>>({})
-watch(
-  () => customFields.value,
-  async (fs) => {
-    const codes = new Set<string>()
-    for (const f of fs ?? []) {
-      const raw = f.field_options
-      if (Array.isArray(raw) && raw.length === 1 && typeof raw[0] === 'string' && raw[0].startsWith('dict:')) {
-        codes.add(raw[0].slice(5))
-      }
+const dictErrors = ref<Record<string, string>>({})
+const dictPending = new Map<string, Promise<void>>()
+async function loadDictionary(code: string) {
+  if (!code || dictCache.value[code]) return
+  if (dictPending.has(code)) return dictPending.get(code)
+  dictErrors.value[code] = ''
+  const pending = (async () => {
+    try {
+      // 存量回显继续含停用项，与建单可选项的口径不同。
+      const items = await getDictItemsByCodeApi(code, true, { _silentError: true })
+      dictCache.value[code] = (items ?? []).map(i => ({ value: i.code, label: i.label }))
+    } catch (err) {
+      dictErrors.value[code] = apiReadError(err, '字典回显加载失败，请重试')
+    } finally {
+      dictPending.delete(code)
     }
-    for (const code of codes) {
-      if (dictCache.value[code]) continue
-      const items = (await getDictItemsByCodeApi(code, true).catch(() => [])) ?? []
-      dictCache.value[code] = items.map((i) => ({ value: i.code, label: i.label }))
-    }
-  },
-  { immediate: true },
-)
+  })()
+  dictPending.set(code, pending)
+  return pending
+}
+watch(() => customFields.value, fs => {
+  const codes = new Set<string>()
+  for (const f of fs) {
+    const raw = f.field_options
+    if (Array.isArray(raw) && raw.length === 1 && typeof raw[0] === 'string' && raw[0].startsWith('dict:')) codes.add(raw[0].slice(5))
+  }
+  codes.forEach(code => { void loadDictionary(code) })
+}, { immediate: true })
 
 /** 选项 label 解析（三形态与 create 页 optionsOf 同款——dict 引用展开缓存，兜底原值） */
 function labelOf(f: TicketTypeFieldDef, v: string): string {
@@ -460,61 +472,28 @@ function goTicket(id: string) {
 function openInTab(id: string) {
   window.open(`/#/tickets/${id}`, '_blank')
 }
-const relationForm = reactive({ targetId: '' })
-const relationLoading = ref(false)
-const relationError = ref('')
-const relationSearching = ref(false)
-const relationOptions = ref<Array<{ value: string; label: string; status: string }>>([])
-let relationSearchTimer: ReturnType<typeof setTimeout> | undefined
+const relationSession = createRelationSession({
+  source: () => ticketId.value,
+  active: () => active.value,
+  lookup: listTicketRelationCandidatesApi,
+  save: createTicketRelationApi,
+  refresh: (source, target) => Promise.all([
+    queryClient.invalidateQueries({ queryKey: ['ticket', 'relations', source] }, { throwOnError: true }),
+    queryClient.invalidateQueries({ queryKey: ['ticket', 'relations', target] }, { throwOnError: true }),
+  ]),
+  saved: target => ElMessage.success(`已关联 #${target}`),
+})
+const relation = relationSession.state
+watch([ticketId, active], relationSession.reset, { flush: 'sync' })
+onBeforeUnmount(relationSession.reset)
 
-/** 远程搜索（300ms 防抖同筛选栏配方）：后端 keyword 模糊、L2 可见面内。
- * 仅排除自身（自关联 400 无意义）；已关联的保留可选——选了走后端 409 内联提示，
- * 也是判重路径的 UI 可达形态（S10 验收点） */
-function searchRelationOptions(query: string) {
-  if (relationSearchTimer) clearTimeout(relationSearchTimer)
-  const kw = query.trim()
-  if (!kw) {
-    relationOptions.value = []
-    return
-  }
-  relationSearchTimer = setTimeout(async () => {
-    relationSearching.value = true
-    try {
-      const { list } = await listTicketsApi({ page: 1, page_size: 20, keyword: kw })
-      relationOptions.value = list
-        .filter((t) => String(t.id) !== ticketId.value)
-        .map((t) => ({ value: String(t.id), label: `#${t.id} ${t.title}`, status: t.status }))
-    } catch {
-      relationOptions.value = []
-    } finally {
-      relationSearching.value = false
-    }
-  }, 300)
+function onRelationInput(event: Event) {
+  if (!(event.target instanceof HTMLInputElement)) return
+  if (!event.target.value.trim() || (event instanceof InputEvent && event.isComposing)) relationSession.clear()
+  else relationSession.search(event.target.value)
 }
 
-async function submitRelation() {
-  const target = relationForm.targetId
-  if (!target) {
-    relationError.value = '请先搜索并选择对方工单'
-    return
-  }
-  if (target === ticketId.value) {
-    relationError.value = '不能关联自身'
-    return
-  }
-  relationLoading.value = true
-  relationError.value = ''
-  try {
-    await createTicketRelationApi(ticketId.value, target)
-    ElMessage.success(`已关联 #${target}`)
-    relationForm.targetId = ''
-    await queryClient.invalidateQueries({ queryKey: ['ticket', 'relations', ticketId.value] })
-  } catch (err: unknown) {
-    relationError.value = backendMessage(err)
-  } finally {
-    relationLoading.value = false
-  }
-}
+
 </script>
 
 <template>
@@ -579,6 +558,9 @@ async function submitRelation() {
     <!-- B1-5 自定义字段回显（01 号 §3.5——"填了看不见"痛点收口件） -->
     <el-card v-if="customFields.length" shadow="hover" class="mb-4">
       <template #header><span class="font-semibold">自定义字段</span></template>
+      <template v-for="(message, code) in dictErrors" :key="code">
+        <el-alert v-if="message" :title="message" type="error" :closable="false"><el-button size="small" @click="loadDictionary(code)">重试字段选项</el-button></el-alert>
+      </template>
       <el-descriptions :column="2" border size="small">
         <el-descriptions-item
           v-for="f in customFields"
@@ -719,29 +701,40 @@ async function submitRelation() {
             <span>被关联 ← <el-link type="primary" class="!align-baseline" @click="goTicket(r.source_ticket_id)">#{{ r.source_ticket_id }}</el-link></span>
           </template>
         </div>
-        <el-empty v-if="!relationsQuery.isLoading.value && !relationsQuery.data.value?.length" description="暂无关联" :image-size="60" />
+        <div v-if="relationsQuery.isError.value" class="flex gap-2 items-center">
+          <el-alert :title="apiReadError(relationsQuery.error.value, '关联列表加载失败，请重试', '当前工单不可用')" type="error" show-icon :closable="false" />
+          <el-button size="small" @click="relationsQuery.refetch()">重试读取</el-button>
+        </div>
+        <el-empty v-else-if="relationsQuery.isSuccess.value && !relationsQuery.data.value?.length" description="暂无关联" :image-size="60" />
       </div>
 
       <div v-if="userStore.hasPermission('ticket:relation')" class="border-t pt-3">
-        <div class="flex items-center gap-2">
-          <!-- 远程搜索下拉：标题/工单号 keyword 定位（后端 L2 可见面内），选项带状态 -->
+        <div class="flex items-center gap-2" @input.capture="onRelationInput">
+          <!-- 候选由服务端按当前关联资格返回；提交仍会重新校验双端授权。 -->
           <el-select
-            v-model="relationForm.targetId" filterable remote clearable
-            :remote-method="searchRelationOptions" :loading="relationSearching"
+            :model-value="relation.target" filterable remote clearable :disabled="relation.saving"
+            :debounce="0" @update:model-value="relationSession.choose"
+            :remote-method="relationSession.search" :loading="relation.searching" @clear="relationSession.clear"
+            :no-match-text="relation.searchError || '无符合条件的工单'"
+            :no-data-text="relation.searchError || (relation.searched ? '无符合条件的工单' : '输入标题或工单号')"
             placeholder="搜索标题或工单号" class="!w-[340px]"
           >
-            <el-option v-for="o in relationOptions" :key="o.value" :value="o.value" :label="o.label">
+            <el-option v-for="o in relation.options" :key="o.id" :value="o.id" :label="`#${o.id} ${o.title}`">
               <span class="flex items-center gap-2">
-                <span>{{ o.label }}</span>
+                <span>{{ `#${o.id} ${o.title}` }}</span>
                 <el-tag size="small" type="info">{{ STATUS_LABEL[o.status] ?? o.status }}</el-tag>
                 <!-- 查看详情：新标签打开不丢已填关联态；@click.stop 防触发选中/收起下拉 -->
-                <el-link type="primary" class="!h-auto ml-auto !align-baseline" @click.stop="openInTab(o.value)">查看</el-link>
+                <el-link type="primary" class="!h-auto ml-auto !align-baseline" @click.stop="openInTab(o.id)">查看</el-link>
               </span>
             </el-option>
           </el-select>
-          <el-button size="small" :loading="relationLoading" @click="submitRelation">建立关联</el-button>
+          <el-button size="small" :loading="relation.saving" :disabled="relation.searching" @click="relationSession.submit">建立关联</el-button>
         </div>
-        <el-alert v-if="relationError" :title="relationError" type="error" show-icon class="mt-2" :closable="false" />
+        <div v-if="relation.searchError" class="mt-2 flex gap-2 items-center">
+          <el-alert :title="relation.searchError" type="error" show-icon :closable="false" />
+          <el-button size="small" @click="relationSession.retry">重试搜索</el-button>
+        </div>
+        <el-alert v-if="relation.saveError" :title="relation.saveError" type="error" show-icon class="mt-2" :closable="false" />
       </div>
     </el-card>
 

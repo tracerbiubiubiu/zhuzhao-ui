@@ -79,7 +79,7 @@ export interface AlImportResult {
 // ─── 类型管理（activelist:type:read / type:manage）───
 
 export async function listAlTypesApi(): Promise<{ list: AlTypeDef[]; total: number }> {
-  const data = await request.get('/al/api/v1/admin/types')
+  const data = await request.get('/al/api/v1/admin/types', { _silentError: true })
   return data as unknown as { list: AlTypeDef[]; total: number }
 }
 
@@ -116,7 +116,7 @@ export async function deprecateAlTypeApi(typeName: string): Promise<AlTypeDef> {
 }
 
 export async function listAlTypeHistoryApi(typeName: string): Promise<{ list: AlTypeHistoryRow[] }> {
-  const data = await request.get(`/al/api/v1/admin/types/${encodeURIComponent(typeName)}/history`)
+  const data = await request.get(`/al/api/v1/admin/types/${encodeURIComponent(typeName)}/history`, { _silentError: true })
   return data as unknown as { list: AlTypeHistoryRow[] }
 }
 
@@ -136,7 +136,7 @@ export async function listAlDataApi(
     value?: string
   },
 ): Promise<{ list: AlDataDoc[]; page_size: number; next_cursor: AlCursor | null }> {
-  const data = await request.get(`/al/api/v1/data/${encodeURIComponent(typeName)}`, { params })
+  const data = await request.get(`/al/api/v1/data/${encodeURIComponent(typeName)}`, { params, _silentError: true })
   return data as unknown as { list: AlDataDoc[]; page_size: number; next_cursor: AlCursor | null }
 }
 

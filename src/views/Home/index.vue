@@ -8,10 +8,12 @@
  * 待办=分派给我且未关闭（assigned+in_progress），已办=分派给我且已关闭（closed）
  */
 
+import { apiReadError } from '@/utils/apiError'
+import { usePermission } from '@/common/auth'
 import { formatDateTime } from '@/utils/datetime'
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElCard, ElCol, ElRow, ElTable, ElTableColumn, ElTag, ElEmpty } from 'element-plus'
+import { ElAlert, ElButton, ElCard, ElCol, ElRow, ElTable, ElTableColumn, ElTag, ElEmpty } from 'element-plus'
 import { listTicketsApi } from '@/api/ticket'
 import { useTableFit } from '@vea/hooks'
 
@@ -34,10 +36,10 @@ const STATUS_LABELS: Record<string, string> = {
 const PRIORITY_LABELS = ['', '紧急', '高', '中', '低']
 const PRIORITY_TYPES: Array<'primary' | 'success' | 'info' | 'warning' | 'danger'> = ['info', 'danger', 'warning', 'info', 'success']
 
-const stats = ref<Record<string, number>>({})
+const stats = ref<Record<string, number | null>>({})
 const recent = ref<TicketSummary[]>([])
-const myTodo = ref(0)
-const myDone = ref(0)
+const myTodo = ref<number | null>(null)
+const myDone = ref<number | null>(null)
 const loading = ref(true)
 
 const statusCardDefs = [
@@ -47,7 +49,27 @@ const statusCardDefs = [
   { key: 'closed', label: '已关闭', icon: '✅', color: '#67c23a' },
 ]
 
-onMounted(async () => {
+const { hasRoute } = usePermission()
+const statErrors = ref<Record<string, string>>({})
+const todoError = ref('')
+const doneError = ref('')
+const recentError = ref('')
+let homeSeq = 0
+async function loadHome() {
+  const seq = ++homeSeq
+  statErrors.value = {}
+  todoError.value = doneError.value = recentError.value = ''
+  stats.value = {}
+  myTodo.value = myDone.value = null
+  recent.value = []
+  // 列表 GET 绑定 ticket_list 页面；详情按钮权限不代表列表访问权。
+  if (!hasRoute('/tickets')) {
+    const message = '无权查看工单列表'
+    statErrors.value = Object.fromEntries(statusCardDefs.map(({ key }) => [key, message]))
+    todoError.value = doneError.value = recentError.value = message
+    loading.value = false
+    return
+  }
   loading.value = true
   try {
     // 并行拉状态统计（权宜：每状态一次 total——后端无聚合端点）
@@ -56,12 +78,14 @@ onMounted(async () => {
         listTicketsApi({ status: key, page: 1, page_size: 1 })
       )
     )
+    if (seq !== homeSeq) return
     statResults.forEach((result, i) => {
       if (result.status === 'fulfilled') {
         const data = result.value as { total?: number }
         stats.value[statusCardDefs[i].key] = data?.total ?? 0
       } else {
-        stats.value[statusCardDefs[i].key] = 0
+        stats.value[statusCardDefs[i].key] = null
+        statErrors.value[statusCardDefs[i].key] = apiReadError(result.reason)
       }
     })
     // 我的待办/已办（W4 P1-c：assignee=me——待办=assigned+in_progress，已办=closed）
@@ -71,23 +95,30 @@ onMounted(async () => {
         listTicketsApi({ status, assignee: 'me', page: 1, page_size: 1 })
       )
     )
+    if (seq !== homeSeq) return
     const meTotals = meResults.map((r) =>
-      r.status === 'fulfilled' ? ((r.value as { total?: number })?.total ?? 0) : 0
+      r.status === 'fulfilled' ? ((r.value as { total?: number })?.total ?? 0) : null
     )
-    myTodo.value = meTotals[0] + meTotals[1]
+    myTodo.value = meTotals[0] === null || meTotals[1] === null ? null : meTotals[0] + meTotals[1]
+    const todoFailure = meResults.slice(0, 2).find(r => r.status === 'rejected')
+    if (todoFailure?.status === 'rejected') todoError.value = apiReadError(todoFailure.reason)
+    if (meResults[2].status === 'rejected') doneError.value = apiReadError(meResults[2].reason)
     myDone.value = meTotals[2]
     // 最近工单
     const recentResult = await Promise.allSettled([
       listTicketsApi({ page: 1, page_size: 10 }),
     ])
+    if (seq !== homeSeq) return
+    if (recentResult[0].status === 'rejected') recentError.value = apiReadError(recentResult[0].reason)
     const recentData = recentResult[0].status === 'fulfilled' ? recentResult[0].value : null
     recent.value = ((recentData as { list?: TicketSummary[] })?.list ?? []).map((t) => ({
       ...t,
     }))
   } finally {
-    loading.value = false
+    if (seq === homeSeq) loading.value = false
   }
-})
+}
+onMounted(loadHome)
 
 function formatTime(iso?: string): string {
   if (!iso) return ''
@@ -111,7 +142,8 @@ function goDetail(id: number | string) {
 
 <template>
   <div class="fill-page p-4">
-    <div class="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
+    <div v-loading="loading" class="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
+    <el-button size="small" :loading="loading" @click="loadHome">刷新</el-button>
     <el-row :gutter="16" class="mb-4">
       <el-col v-for="card in statusCardDefs" :key="card.key" :span="6">
         <el-card shadow="hover" class="cursor-pointer home-stat-link" role="link" tabindex="0"
@@ -120,9 +152,10 @@ function goDetail(id: number | string) {
           <div class="flex items-center justify-between">
             <div>
               <div class="text-2xl font-bold" :style="{ color: card.color }">
-                {{ loading ? '—' : (stats[card.key] ?? 0) }}
+                {{ loading ? '—' : (stats[card.key] ?? '—') }}
               </div>
               <div class="text-sm text-gray-500 mt-1">{{ card.label }}</div>
+              <div v-if="statErrors[card.key]" role="status" class="text-xs text-[var(--el-color-danger)]">{{ statErrors[card.key] }}</div>
             </div>
             <span class="text-3xl">{{ card.icon }}</span>
           </div>
@@ -138,9 +171,10 @@ function goDetail(id: number | string) {
           <div class="flex items-center justify-between">
             <div>
               <div class="text-2xl font-bold" style="color: var(--el-color-danger)">
-                {{ loading ? '—' : myTodo }}
+                {{ loading ? '—' : (myTodo ?? '—') }}
               </div>
               <div class="text-sm text-gray-500 mt-1">我的待办（分派给我，已分派 / 进行中）</div>
+              <div v-if="todoError" role="status">{{ todoError }}</div>
             </div>
             <span class="text-3xl">📋</span>
           </div>
@@ -152,9 +186,10 @@ function goDetail(id: number | string) {
           <div class="flex items-center justify-between">
             <div>
               <div class="text-2xl font-bold" style="color: var(--el-color-success)">
-                {{ loading ? '—' : myDone }}
+                {{ loading ? '—' : (myDone ?? '—') }}
               </div>
               <div class="text-sm text-gray-500 mt-1">我的已办（分派给我，已关闭）</div>
+              <div v-if="doneError" role="status">{{ doneError }}</div>
             </div>
             <span class="text-3xl">✅</span>
           </div>
@@ -166,6 +201,7 @@ function goDetail(id: number | string) {
       <template #header>
         <span class="font-semibold">最近工单</span>
       </template>
+      <el-alert v-if="recentError" :title="recentError" type="error" :closable="false" />
       <el-table ref="homeTable" v-if="recent.length" :data="recent" stripe size="default" row-class-name="home-recent-row" @row-click="(row: { id: number | string }) => goDetail(row.id)">
         <el-table-column prop="id" label="ID" width="80" />
         <el-table-column prop="title" label="标题" min-width="200" show-overflow-tooltip />
@@ -185,7 +221,7 @@ function goDetail(id: number | string) {
           <template #default="{ row }">{{ formatTime(row.created_at) }}</template>
         </el-table-column>
       </el-table>
-      <el-empty v-else description="暂无工单" />
+      <el-empty v-else-if="!loading && !recentError" description="暂无工单" />
     </el-card>
     </div>
   </div>

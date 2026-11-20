@@ -10,9 +10,10 @@
  * 日期范围即时筛选、结果「结构化 / 原始 JSON」双视图（原始便于复制粘贴）。
  */
 import { formatDateTime, formatDateTimeShort } from '@/utils/datetime'
-import { computed, ref } from 'vue'
+import { apiReadError } from '@/utils/apiError'
+import { computed, nextTick, onDeactivated, onScopeDispose, ref } from 'vue'
 import {
-  ElButton, ElCard, ElDatePicker, ElDrawer, ElEmpty, ElInput, ElMessage, ElOption,
+  ElAlert, ElButton, ElCard, ElDatePicker, ElDrawer, ElEmpty, ElInput, ElMessage, ElOption,
   ElRadioButton, ElRadioGroup, ElSelect, ElTable, ElTableColumn, ElTag,
 ElPagination, ElTabPane, ElTabs,
 } from 'element-plus'
@@ -30,12 +31,22 @@ const intelType = ref('ip')
 const value = ref('')
 const loading = ref(false)
 const result = ref<unknown>(null)
+/** JSON null 也是成功结果，是否已查询不能由结果值推断。 */
+const hasResult = ref(false)
 const stale = ref(false)
 const fetchedAt = ref('')
 const expiresAt = ref('')
 const hitCount = ref(0)
 /** 最近一次成功查询的值（结果摘要行展示用——回填历史时与输入框可能不同步） */
 const lastValue = ref('')
+const lastType = ref('')
+const queriedAt = ref('')
+const queryError = ref('')
+const queryInput = ref<{ focus(): void }>()
+let querySeq = 0
+function pauseQuery() { querySeq++; loading.value = false }
+onDeactivated(pauseQuery)
+onScopeDispose(pauseQuery)
 /** 结果展示形态：结构化键值树 / 原始 JSON（复制粘贴友好） */
 const resultView = ref<'pretty' | 'raw'>('pretty')
 /** 页内双 Tab（2026-10-28 走查批）：查询页聚焦表单+结果；历史页独立承载分组/分页/筛选 */
@@ -91,11 +102,12 @@ function recordHistory(entry: IntelHistoryEntry) {
   persistHistory()
 }
 
-/** 历史（组/次）行点击或按钮 → 回填表单并发起查询（查看型列表行点击直达惯例） */
+/** 历史只回填当前表单；显式查询才向服务端重查，不展示历史快照。 */
 function rerun(row: { type: string; value: string }) {
   intelType.value = row.type
   value.value = row.value
-  query()
+  activeTab.value = 'query'
+  void nextTick(() => queryInput.value?.focus())
 }
 
 // ─── 查询次数统计（今日/本周/本月/累计 + 近 14 天逐日柱图）───
@@ -268,20 +280,29 @@ async function query() {
     ElMessage.warning('请输入查询值')
     return
   }
+  const type = intelType.value
+  const seq = ++querySeq
   loading.value = true
+  hasResult.value = false
+  result.value = null
+  queryError.value = ''
   try {
-    const data = await queryIntelApi(intelType.value, v)
+    const data = await queryIntelApi(type, v)
+    if (seq !== querySeq) return
     result.value = data.result
+    hasResult.value = true
     stale.value = data.stale
     fetchedAt.value = data.fetched_at
     expiresAt.value = data.expires_at ?? ''
     hitCount.value = data.hit_count ?? 0
+    lastType.value = type
     lastValue.value = v
-    recordHistory({ type: intelType.value, value: v, ts: Date.now(), stale: data.stale, hit_count: data.hit_count ?? 0 })
-  } catch {
-    // 错误 toast 由拦截器统一处理
+    queriedAt.value = new Date().toISOString()
+    recordHistory({ type, value: v, ts: Date.now(), stale: data.stale, hit_count: data.hit_count ?? 0 })
+  } catch (err) {
+    if (seq === querySeq) queryError.value = apiReadError(err, '查询失败，请重试')
   } finally {
-    loading.value = false
+    if (seq === querySeq) loading.value = false
   }
 }
 
@@ -329,15 +350,17 @@ function formatIsoMin(iso: string): string {
           <el-option label="URL" value="url" />
         </el-select>
         <el-input
-          v-model="value" :placeholder="`查询值（${TYPE_LABELS[intelType] ?? 'IP/域名/hash/url'}）`"
+          ref="queryInput" v-model="value" :placeholder="`查询值（${TYPE_LABELS[intelType] ?? 'IP/域名/hash/url'}）`"
           class="!w-[320px]" maxlength="200" data-testid="intel-value" @keyup.enter="query"
         />
         <el-button type="primary" :loading="loading" data-testid="intel-query" @click="query">查询</el-button>
       </div>
-      <template v-if="result">
+      <el-alert v-if="queryError" :title="queryError" type="error" :closable="false" />
+      <template v-if="hasResult">
         <div class="flex flex-wrap items-center gap-2 mb-2 text-xs text-gray-500">
-          <el-tag size="small">{{ TYPE_LABELS[intelType] ?? intelType }} · {{ lastValue }}</el-tag>
-          <el-tag v-if="stale" type="warning" size="small">陈旧缓存（上游配额耗尽降级）</el-tag>
+          <el-tag size="small">{{ TYPE_LABELS[lastType] ?? lastType }} · {{ lastValue }}</el-tag>
+          <el-tag v-if="stale" type="warning" size="small">过期缓存（本次返回最近缓存结果）</el-tag>
+          <span>本次查询：{{ formatDateTime(queriedAt) }}</span>
           <span>数据时间：{{ fetchedAt }}</span>
           <span v-if="hitCount > 0" class="text-gray-400">缓存命中 {{ hitCount }} 次</span>
           <span v-if="expiresAt" class="text-gray-400">缓存至 {{ formatIsoMin(expiresAt) }}（{{ ttlText(expiresAt) }}）</span>
@@ -357,7 +380,7 @@ function formatIsoMin(iso: string): string {
         </div>
         <pre v-else class="text-xs bg-gray-50 dark:bg-gray-800 p-3 rounded overflow-auto max-h-[360px]">{{ JSON.stringify(result, null, 2) }}</pre>
       </template>
-        <el-empty v-else description="输入查询值开始" :image-size="60" />
+        <el-empty v-else-if="!queryError && !loading" description="输入查询值开始" :image-size="60" />
         </el-tab-pane>
 
         <el-tab-pane label="查询历史" name="history" lazy>
@@ -436,7 +459,7 @@ function formatIsoMin(iso: string): string {
             </el-table-column>
             <el-table-column label="操作" width="80" fixed="right">
               <template #default="{ row }">
-                <el-button link type="primary" size="small" @click.stop="rerun(row as { type: string; value: string })">查询</el-button>
+                <el-button link type="primary" size="small" @click.stop="rerun(row as { type: string; value: string })">回填</el-button>
               </template>
             </el-table-column>
             <template #empty>

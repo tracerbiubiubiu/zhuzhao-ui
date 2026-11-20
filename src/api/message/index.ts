@@ -75,7 +75,7 @@ export interface MessageLogQuery {
 
 /** 模板列表（管理面拉全——配置量小，页面头注释豁免口径） */
 export async function listMessageTemplatesApi(params: { page: number; page_size: number }): Promise<{ list: MessageTemplateRow[] }> {
-  const data = await request.get('/api/v1/message-templates', { params })
+  const data = await request.get('/api/v1/message-templates', { params, _silentError: true })
   return { list: (data as unknown as { list?: MessageTemplateRow[] })?.list ?? [] }
 }
 
@@ -93,7 +93,7 @@ export async function deleteMessageTemplateApi(code: string): Promise<void> {
 
 /** 规则列表（upsert 面：同 biz_type+event_action 保存=改绑） */
 export async function listMessageRulesApi(): Promise<MessageRuleRow[]> {
-  const data = await request.get('/api/v1/message-rules')
+  const data = await request.get('/api/v1/message-rules', { _silentError: true })
   return (data as unknown as MessageRuleRow[]) ?? []
 }
 
@@ -107,6 +107,6 @@ export async function deleteMessageRuleApi(id: string): Promise<void> {
 
 /** 发送日志分页（排障三筛选：模板/状态/业务 ID） */
 export async function listMessageLogsApi(params: MessageLogQuery): Promise<{ list: Record<string, unknown>[]; total: number }> {
-  const data = await request.get('/api/v1/message-logs', { params })
+  const data = await request.get('/api/v1/message-logs', { params, _silentError: true })
   return data as unknown as { list: Record<string, unknown>[]; total: number }
 }

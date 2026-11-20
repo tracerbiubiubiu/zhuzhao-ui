@@ -89,15 +89,32 @@ test('S10/S11：详情评论/备注分层+关联判重+分派/关闭流+viewer �
     // ── 关联：UI 建 t1→t2 成功；重复提交 → 409 内联 el-alert ──
     // 2026-10-29 适配：关联入口改远程搜索下拉（keyword 支持 纯数字=工单 ID），选项名 `#<id> <标题>`
     const relationCard = page.locator('.el-card').filter({ hasText: '关联工单' })
-    const pickRelation = async () => {
-      // EP 2.14 select 空态 placeholder 为独立 span 点不中 → 点 .el-select 容器；
-      // 选项 teleport 到 body → 页面级 :visible 下拉定位（w5 同配方）
-      await relationCard.locator('.el-select').click()
+    const candidateSearch = (url: URL) => url.pathname === '/api/v1/tickets'
+      && url.searchParams.get('relation_source_id') === t1 && url.searchParams.get('keyword') === t2
+    const pickRelation = async (retry = false) => {
+      // EP select 的下拉 teleport 到 body。候选查找与写入分别断言。
+      if (retry) {
+        await page.route(candidateSearch, route => route.fulfill({
+          status: 503,
+          json: { code: 10008, message: '合成候选读取故障' },
+        }), { times: 1 })
+      }
+      const picker = relationCard.locator('.el-select')
+      await picker.click()
+      const searched = page.waitForRequest(req => req.method() === 'GET' && candidateSearch(new URL(req.url())))
       await page.keyboard.type(t2, { delay: 80 })
+      await searched
+      if (retry) {
+        await expect(relationCard.getByText('合成候选读取故障')).toBeVisible()
+        const retried = page.waitForResponse(res => candidateSearch(new URL(res.url())) && res.ok())
+        await relationCard.getByRole('button', { name: '重试搜索' }).click()
+        await retried
+        await picker.click()
+      }
       await page.locator('.el-select-dropdown:visible .el-select-dropdown__item').filter({ hasText: `#${t2} ` }).first().click()
       await relationCard.getByRole('button', { name: '建立关联' }).click()
     }
-    await pickRelation()
+    await pickRelation(true)
     await expect(relationCard.getByText(`关联 → #${t2}`)).toBeVisible()
     await pickRelation()
     await expect(relationCard.locator('.el-alert')).toBeVisible({ timeout: 10_000 }) // 判重 409 内联（勿纯 toast）
@@ -121,6 +138,8 @@ test('S10/S11：详情评论/备注分层+关联判重+分派/关闭流+viewer �
     await page.waitForURL(/#\/home/, { timeout: 30_000 })
     await page.goto(`/#/tickets/${t2}`)
     await page.reload()
+
+    await expect(relationCard.getByText(`被关联 ← #${t1}`)).toBeVisible({ timeout: 20_000 })
 
     const statusTag = page.locator('.el-card').first().locator('.el-tag').first()
     await expect(statusTag).toHaveText('待处理', { timeout: 20_000 })

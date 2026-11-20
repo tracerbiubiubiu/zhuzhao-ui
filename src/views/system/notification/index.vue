@@ -8,9 +8,10 @@
             <el-button v-permission="'notification:manage'" type="primary" size="small" data-testid="tpl-create" @click="openTplCreate">新建模板</el-button>
             <span class="text-xs text-gray-400 ml-2">占位符用双花括号包字段名（ticket.title / ticket.human_key / ticket.link）；种子模板（系统）只读</span>
           </div>
+          <el-alert v-if="tplError" :title="tplError" type="error" :closable="false" class="mb-2"><el-button size="small" @click="fetchTemplates">重试</el-button></el-alert>
           <el-table ref="tplTable" :data="templates" v-loading="tplLoading" size="small" border>
             <template #empty>
-              <el-empty description="暂无模板——新建后供规则引用" :image-size="60">
+              <el-empty v-if="!tplLoading && !tplError" description="暂无模板——新建后供规则引用" :image-size="60">
                 <el-button v-permission="'notification:manage'" type="primary" size="small" @click="openTplCreate">新建首个模板</el-button>
               </el-empty>
             </template>
@@ -39,9 +40,10 @@
             <el-button v-permission="'notification:manage'" type="primary" size="small" data-testid="rule-create" @click="openRuleCreate">新建规则</el-button>
             <span class="text-xs text-gray-400 ml-2">规则=开关与默认模板；notify 动作可在 params.template 逐次覆盖</span>
           </div>
+          <el-alert v-if="ruleError" :title="ruleError" type="error" :closable="false" class="mb-2"><el-button size="small" @click="fetchRules">重试</el-button></el-alert>
           <el-table ref="ruleTable" :data="rules" v-loading="ruleLoading" size="small" border>
             <template #empty>
-              <el-empty description="暂无规则——新建后按业务域路由通知" :image-size="60">
+              <el-empty v-if="!ruleLoading && !ruleError" description="暂无规则——新建后按业务域路由通知" :image-size="60">
                 <el-button v-permission="'notification:manage'" type="primary" size="small" @click="openRuleCreate">新建首个规则</el-button>
               </el-empty>
             </template>
@@ -73,10 +75,12 @@
               <el-option label="已发送" value="sent" />
               <el-option label="失败" value="failed" />
             </el-select>
-            <el-input v-model="logFilter.biz_id" placeholder="业务 ID（如工单号）" clearable size="small" class="!w-[160px]" data-testid="log-filter-bizid" @input="onLogFilterChange" />
+            <el-input v-model="logFilter.biz_id" placeholder="业务 ID（如 storage）" title="按业务标识精确查询，支持工单内部 ID、storage 等字符串；工单编号不是内部 ID" clearable size="small" class="!w-[160px]" data-testid="log-filter-bizid" @input="onLogFilterChange" />
             <el-button size="small" class="ml-auto !mr-0" @click="resetLogFilter">重置</el-button>
           </div>
+          <el-alert v-if="logError" :title="logError" type="error" :closable="false" class="mb-2"><el-button size="small" @click="fetchLogs">重试</el-button></el-alert>
           <el-table ref="logTable" :data="logs" v-loading="logLoading" size="small" border>
+            <template #empty><el-empty v-if="!logLoading && !logError" description="暂无匹配记录，或调整筛选条件" :image-size="60" /></template>
             <el-table-column prop="template_code" label="模板" width="200" />
             <el-table-column prop="biz_id" label="业务 ID" width="80" />
             <el-table-column prop="recipients" label="收件人" width="120" />
@@ -96,10 +100,10 @@
     </el-card>
 
     <!-- 模板编辑对话框（code 建后不可改；is_system 行不可入） -->
-    <el-dialog v-model="tplDialog.visible" :close-on-click-modal="false" :title="tplDialog.isCreate ? '新建消息模板' : `编辑模板 ${tplForm.code}`" width="640px">
-      <el-form label-width="90px" @submit.prevent>
+    <el-dialog :model-value="tplDialog.visible" :close-on-click-modal="false" :title="tplDialog.isCreate ? '新建消息模板' : `编辑模板 ${tplForm.code}`" width="640px" @update:model-value="setTplDialogVisible">
+      <el-form label-width="90px" :disabled="tplDialog.loading" @submit.prevent>
         <el-form-item label="标识" required>
-          <el-input v-model="tplForm.code" :disabled="!tplDialog.isCreate" placeholder="如 ticket_assigned_v2" maxlength="64" />
+          <el-input v-model="tplForm.code" :disabled="tplDialog.loading || !tplDialog.isCreate" placeholder="如 ticket_assigned_v2" maxlength="64" />
         </el-form-item>
         <el-form-item label="名称" required>
           <el-input v-model="tplForm.name" placeholder="模板名称" maxlength="128" />
@@ -127,28 +131,28 @@
       </el-form>
       <el-alert v-if="tplDialog.error" :title="tplDialog.error" type="error" show-icon :closable="false" />
       <template #footer>
-        <el-button @click="tplDialog.visible = false">取消</el-button>
+        <el-button @click="setTplDialogVisible(false)">取消</el-button>
         <el-button type="primary" :loading="tplDialog.loading" @click="submitTpl">{{ tplDialog.isCreate ? '创建' : '保存' }}</el-button>
       </template>
     </el-dialog>
 
     <!-- 规则编辑对话框（upsert：biz_type+event_action 唯一，同键保存=改绑模板/收件人） -->
-    <el-dialog v-model="ruleDialog.visible" :close-on-click-modal="false" :title="ruleDialog.isCreate ? '新建订阅规则' : `编辑规则 ${ruleForm.biz_type}:${ruleForm.event_action}`" width="560px">
-      <el-form label-width="100px" @submit.prevent>
+    <el-dialog :model-value="ruleDialog.visible" :close-on-click-modal="false" :title="ruleDialog.isCreate ? '新建订阅规则' : `编辑规则 ${ruleForm.biz_type}:${ruleForm.event_action}`" width="560px" @update:model-value="setRuleDialogVisible">
+      <el-form label-width="100px" :disabled="ruleDialog.loading" @submit.prevent>
         <el-form-item label="业务域" required>
-          <el-select v-model="ruleForm.biz_type" class="!w-full" :disabled="!ruleDialog.isCreate">
+          <el-select v-model="ruleForm.biz_type" class="!w-full" :disabled="ruleDialog.loading || !ruleDialog.isCreate" @change="changeRuleDomain">
             <el-option label="工单 ticket" value="ticket" />
             <el-option label="运维 ops" value="ops" />
           </el-select>
         </el-form-item>
         <el-form-item label="事件动作" required>
-          <el-select v-model="ruleForm.event_action" class="!w-full" filterable :disabled="!ruleDialog.isCreate" placeholder="选择事件">
-            <el-option v-for="e in EVENT_OPTIONS" :key="e.value" :label="`${e.value}（${e.label}）`" :value="e.value" />
+          <el-select v-model="ruleForm.event_action" class="!w-full" filterable :disabled="ruleDialog.loading || !ruleDialog.isCreate" placeholder="选择事件">
+            <el-option v-for="e in ruleEventOptions" :key="e.value" :label="`${e.value}（${e.label}）`" :value="e.value" />
           </el-select>
         </el-form-item>
         <el-form-item label="使用模板" required>
           <el-select v-model="ruleForm.template_code" class="!w-full" filterable placeholder="选择模板">
-            <el-option v-for="t in templates" :key="t.code" :label="`${t.code}（${t.name}）`" :value="t.code" :disabled="!t.enabled" />
+            <el-option v-for="t in ruleTemplateOptions" :key="t.code" :label="`${t.code}（${t.name}）`" :value="t.code" :disabled="!t.enabled" />
           </el-select>
         </el-form-item>
         <el-form-item label="收件人类型" required>
@@ -168,7 +172,7 @@
       </el-form>
       <el-alert v-if="ruleDialog.error" :title="ruleDialog.error" type="error" show-icon :closable="false" />
       <template #footer>
-        <el-button @click="ruleDialog.visible = false">取消</el-button>
+        <el-button @click="setRuleDialogVisible(false)">取消</el-button>
         <el-button type="primary" :loading="ruleDialog.loading" @click="submitRule">{{ ruleDialog.isCreate ? '创建' : '保存' }}</el-button>
       </template>
     </el-dialog>
@@ -182,8 +186,9 @@
  * 规则语义：biz_type+event_action 唯一（一事件一规则）——同键保存=改绑模板/收件人；规则=开关与默认模板，
  * notify 动作可在 params.template 逐次覆盖（000079 起 ticket.action_notify 有种子默认路由）。
  */
+import { apiReadError } from '@/utils/apiError'
 import { formatDateTime } from '@/utils/datetime'
-import { reactive, ref, onMounted } from 'vue'
+import { computed, reactive, ref, onMounted, onActivated, onDeactivated, onScopeDispose } from 'vue'
 import { useTableFit } from '@vea/hooks'
 import {
   ElAlert, ElButton, ElCard, ElDialog, ElForm, ElFormItem, ElInput,
@@ -230,10 +235,21 @@ const logLoading = ref(false)
 const logPage = ref(1)
 const logPageSize = 20
 const logTotal = ref(0)
+const tplError = ref('')
+const ruleError = ref('')
+const logError = ref('')
+let tplSeq = 0, ruleSeq = 0, logSeq = 0
 // 发送记录筛选（2026-10-28 批）：排障三件——模板/状态/业务 ID；变更即查 300ms 防抖+回首页
 const logFilter = reactive({ template_code: '', status: '', biz_id: '' })
+let logFilterPending = false
 let logFiltTimer: ReturnType<typeof setTimeout> | undefined
 function onLogFilterChange() {
+  logFilterPending = true
+  logSeq++
+  logs.value = []
+  logTotal.value = 0
+  logError.value = ''
+  logLoading.value = true
   clearTimeout(logFiltTimer)
   logFiltTimer = setTimeout(() => { logPage.value = 1; fetchLogs() }, 300)
 }
@@ -253,73 +269,130 @@ useTableFit(tplTable, () => templates.value)
 useTableFit(ruleTable, () => rules.value)
 useTableFit(logTable, () => logs.value)
 
+let readsPaused = false
+function pauseReads() {
+  readsPaused = true
+  setTplDialogVisible(false)
+  setRuleDialogVisible(false)
+  clearTimeout(logFiltTimer)
+  tplSeq++; ruleSeq++; logSeq++
+  tplLoading.value = ruleLoading.value = logLoading.value = false
+}
+onActivated(() => {
+  if (!readsPaused) return
+  readsPaused = false
+  if (logFilterPending) logPage.value = 1
+  void fetchTemplates(); void fetchRules(); void fetchLogs()
+})
+onDeactivated(pauseReads)
+onScopeDispose(pauseReads)
+
 async function fetchTemplates() {
+  const seq = ++tplSeq
   tplLoading.value = true
+  tplError.value = ''
+  templates.value = []
   try {
-    // page_size:100 拉全豁免（docs/design/frontend-ui.md 分页口径）：管理面配置数据量小且近乎不增长
-    templates.value = (await listMessageTemplatesApi({ page: 1, page_size: 100 })).list
-  } catch { /* 403=无权限 */ } finally { tplLoading.value = false }
+    const data = await listMessageTemplatesApi({ page: 1, page_size: 100 })
+    if (seq === tplSeq) templates.value = data.list
+  } catch (err) {
+    if (seq === tplSeq) tplError.value = apiReadError(err)
+  } finally { if (seq === tplSeq) tplLoading.value = false }
 }
 
 async function fetchRules() {
+  const seq = ++ruleSeq
   ruleLoading.value = true
+  ruleError.value = ''
+  rules.value = []
   try {
-    rules.value = await listMessageRulesApi()
-  } catch { /* 403=无权限 */ } finally { ruleLoading.value = false }
+    const data = await listMessageRulesApi()
+    if (seq === ruleSeq) rules.value = data
+  } catch (err) {
+    if (seq === ruleSeq) ruleError.value = apiReadError(err)
+  } finally { if (seq === ruleSeq) ruleLoading.value = false }
 }
 
 async function fetchLogs() {
+  logFilterPending = false
+  clearTimeout(logFiltTimer)
+  const seq = ++logSeq
   logLoading.value = true
+  logError.value = ''
+  logs.value = []
+  logTotal.value = 0
+  const params = {
+    page: logPage.value, page_size: logPageSize,
+    ...(logFilter.template_code ? { template_code: logFilter.template_code } : {}),
+    ...(logFilter.status ? { status: logFilter.status } : {}),
+    ...(logFilter.biz_id.trim() ? { biz_id: logFilter.biz_id.trim() } : {}),
+  }
   try {
-    const resp = await listMessageLogsApi({
-      page: logPage.value, page_size: logPageSize,
-      ...(logFilter.template_code ? { template_code: logFilter.template_code } : {}),
-      ...(logFilter.status ? { status: logFilter.status } : {}),
-      ...(logFilter.biz_id.trim() ? { biz_id: logFilter.biz_id.trim() } : {}),
-    })
+    const resp = await listMessageLogsApi(params)
+    if (seq !== logSeq) return
     logs.value = resp?.list ?? []
     logTotal.value = resp?.total ?? 0
-  } catch { /* 403=无权限 */ } finally { logLoading.value = false }
+  } catch (err) {
+    if (seq === logSeq) logError.value = apiReadError(err)
+  } finally { if (seq === logSeq) logLoading.value = false }
 }
 
 // ─── 模板编辑 ───
 const tplDialog = reactive({ visible: false, loading: false, error: '', isCreate: true })
 const tplForm = reactive<MessageTemplateRow>({ code: '', name: '', channel: 'uip', biz_type: 'ticket', subject: '', body: '', enabled: true })
+let tplEditSession = 0
+
+function setTplDialogVisible(visible: boolean) {
+  tplDialog.visible = visible
+  if (!visible) {
+    tplEditSession++
+    tplDialog.loading = false
+  }
+}
 
 function openTplCreate() {
+  tplEditSession++
+  tplDialog.loading = false
   Object.assign(tplForm, { code: '', name: '', channel: 'uip', biz_type: 'ticket', subject: '', body: '', enabled: true })
   tplDialog.error = ''
   tplDialog.isCreate = true
   tplDialog.visible = true
 }
 function openTplEdit(row: MessageTemplateRow) {
+  tplEditSession++
+  tplDialog.loading = false
   Object.assign(tplForm, row)
   tplDialog.error = ''
   tplDialog.isCreate = false
   tplDialog.visible = true
 }
 async function submitTpl() {
+  if (!tplDialog.visible || tplDialog.loading || readsPaused) return
   if (!tplForm.code || !tplForm.name || !tplForm.subject || !tplForm.body) {
     tplDialog.error = 'code/名称/主题/正文均必填'
     return
   }
   tplDialog.loading = true
   tplDialog.error = ''
+  const session = tplEditSession
+  const isCreate = tplDialog.isCreate
+  const isCurrent = () => session === tplEditSession && tplDialog.visible && !readsPaused
   try {
     // 同规则：model.ID 为 json:",string"——payload 不带 id（create 无、update 按 code 定位）
     const body = { ...tplForm }
     delete (body as Partial<MessageTemplateRow>).id
-    if (tplDialog.isCreate) {
+    if (isCreate) {
       await createMessageTemplateApi(body)
     } else {
       await updateMessageTemplateApi(body)
     }
-    tplDialog.visible = false
-    ElMessage.success(tplDialog.isCreate ? '模板已创建' : '模板已保存')
+    if (!isCurrent()) return
+    setTplDialogVisible(false)
+    ElMessage.success(isCreate ? '模板已创建' : '模板已保存')
     await fetchTemplates()
   } catch (e: unknown) {
-    tplDialog.error = (e as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '保存失败'
-  } finally { tplDialog.loading = false }
+    if (isCurrent()) tplDialog.error = (e as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '保存失败'
+  } finally { if (isCurrent()) tplDialog.loading = false }
 }
 async function onTplDelete(row: MessageTemplateRow) {
   try {
@@ -338,38 +411,69 @@ async function onTplDelete(row: MessageTemplateRow) {
 // ─── 规则编辑（upsert：同 biz_type+event_action 保存=改绑） ───
 const ruleDialog = reactive({ visible: false, loading: false, error: '', isCreate: true })
 const ruleForm = reactive<MessageRuleRow>({ id: '', biz_type: 'ticket', event_action: '', template_code: '', recipient_type: 'assignee', fixed_recipients: '', enabled: true })
+let ruleEditSession = 0
+
+function setRuleDialogVisible(visible: boolean) {
+  ruleDialog.visible = visible
+  if (!visible) {
+    ruleEditSession++
+    ruleDialog.loading = false
+  }
+}
+
+const ruleEventOptions = computed(() => EVENT_OPTIONS.filter(e =>
+  e.value.startsWith(`${ruleForm.biz_type}.`) || (!ruleDialog.isCreate && e.value === ruleForm.event_action),
+))
+const ruleTemplateOptions = computed(() => templates.value.filter(t =>
+  t.biz_type === ruleForm.biz_type || (!ruleDialog.isCreate && t.code === ruleForm.template_code),
+))
+
+function changeRuleDomain() {
+  ruleForm.event_action = ''
+  ruleForm.template_code = ''
+  ruleDialog.error = ''
+}
 
 function openRuleCreate() {
+  ruleEditSession++
+  ruleDialog.loading = false
   Object.assign(ruleForm, { id: '', biz_type: 'ticket', event_action: '', template_code: '', recipient_type: 'assignee', fixed_recipients: '', enabled: true, version: undefined })
   ruleDialog.error = ''
   ruleDialog.isCreate = true
   ruleDialog.visible = true
 }
 function openRuleEdit(row: MessageRuleRow) {
+  ruleEditSession++
+  ruleDialog.loading = false
   Object.assign(ruleForm, row)
   ruleDialog.error = ''
   ruleDialog.isCreate = false
   ruleDialog.visible = true
 }
 async function submitRule() {
+  if (!ruleDialog.visible || ruleDialog.loading || readsPaused) return
   if (!ruleForm.event_action || !ruleForm.template_code) {
     ruleDialog.error = '事件动作与模板必填'
     return
   }
   ruleDialog.loading = true
   ruleDialog.error = ''
+  const session = ruleEditSession
+  const isCreate = ruleDialog.isCreate
+  const isCurrent = () => session === ruleEditSession && ruleDialog.visible && !readsPaused
   try {
     // upsert 按 biz_type+event_action 定位（同键保存=改绑）——id 不参与；且 model.ID 为 json:",string"，
     // 空串会 ShouldBindJSON 失败落「参数错误」，故载荷剔 id
     const body: Omit<MessageRuleRow, 'id'> = { ...ruleForm }
     delete (body as Record<string, unknown>).id
     await upsertMessageRuleApi(body)
-    ruleDialog.visible = false
-    ElMessage.success(ruleDialog.isCreate ? '规则已创建' : '规则已保存')
+    if (!isCurrent()) return
+    setRuleDialogVisible(false)
+    ElMessage.success(isCreate ? '规则已创建' : '规则已保存')
     await fetchRules()
   } catch (e: unknown) {
-    ruleDialog.error = (e as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '保存失败'
-  } finally { ruleDialog.loading = false }
+    if (isCurrent()) ruleDialog.error = (e as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '保存失败'
+  } finally { if (isCurrent()) ruleDialog.loading = false }
 }
 async function onRuleDelete(row: MessageRuleRow) {
   try {

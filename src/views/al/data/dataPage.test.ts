@@ -1,14 +1,11 @@
-import { transformSync } from 'esbuild'
 import * as vue from 'vue'
-import { compileScript, parse } from 'vue/compiler-sfc'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { AlDataDoc, AlFieldDef, AlTypeDef } from '@/api/al'
-import { apiErrorBody } from '@/utils/apiError'
+import { preparePage, setupPage, httpError } from '@/test/sfcHarness'
 import * as cursorPager from './cursorPager'
 import source from './index.vue?raw'
 
-const script = compileScript(parse(source).descriptor, { id: 'al-data-test', genDefaultAs: 'dataPage' })
-const { code } = transformSync(script.content, { loader: 'ts', format: 'cjs' })
+preparePage(source)
 type Page = {
   detailVisible: vue.Ref<boolean>
   detailRow: vue.Ref<AlDataDoc | null>
@@ -21,6 +18,14 @@ type Page = {
   formVisible: vue.Ref<boolean>
   formSaving: vue.Ref<boolean>
   formError: vue.Ref<string>
+  schema: vue.Ref<AlFieldDef[]>
+  typesError: vue.Ref<string>
+  importReady: vue.Ref<boolean>
+  importText: vue.Ref<string>
+  importVisible: vue.Ref<boolean>
+  replaceConfirmed: vue.Ref<boolean>
+  openImport(): void
+  submitImport(): Promise<void>
   openEdit(row: AlDataDoc): void
   openCreate(): void
   dedupList(name: string): void
@@ -51,9 +56,6 @@ function row(data: Record<string, unknown> = {}): AlDataDoc {
     created_by: 'synthetic', updated_by: 'synthetic', created_at: '', updated_at: '',
   }
 }
-const scopes: vue.EffectScope[] = []
-afterEach(() => { for (const scope of scopes.splice(0)) scope.stop() })
-
 // 编译并执行真实页面 setup；仅替换网络、路由和渲染依赖，保留 Vue 状态与页面提交逻辑。
 async function setup(schema = fields) {
   const api = {
@@ -63,31 +65,90 @@ async function setup(schema = fields) {
     listAlDataApi: vi.fn().mockResolvedValue({ list: [], page_size: 20, next_cursor: null }),
     createAlDataApi: vi.fn().mockResolvedValue(row()),
     updateAlDataApi: vi.fn().mockResolvedValue(row()),
+    importAlDataApi: vi.fn().mockResolvedValue({ rows: 1, deleted: 1, max_id: '1' }),
   }
   const definition: AlTypeDef = { type_name: 'synthetic_edit', fields: schema, status: 'active', version: 1, created_at: '', updated_at: '' }
   const messages = { success: vi.fn(), info: vi.fn(), error: vi.fn(), warning: vi.fn() }
   const confirm = vi.fn().mockResolvedValue(undefined)
-  let deactivate = () => {}
-  let activate = () => {}
+  const typesQuery = { data: vue.ref<{ list: AlTypeDef[]; total: number } | undefined>({ list: [definition], total: 1 }), error: vue.ref<unknown>(null), isLoading: vue.ref(false) }
   const libs: Record<string, unknown> = {
-    vue: { ...vue, onDeactivated: (callback: () => void) => { deactivate = callback }, onActivated: (callback: () => void) => { activate = callback } },
     'element-plus': { ElMessage: messages, ElMessageBox: { confirm } },
     'vue-router': { useRouter: () => ({}) },
-    '@tanstack/vue-query': { useQuery: () => ({ data: vue.ref({ list: [definition], total: 1 }), isLoading: vue.ref(false) }) },
+    '@tanstack/vue-query': { useQuery: () => typesQuery },
     '@vea/hooks': { useTableFit() {} },
     '@/api/al': api,
-    '@/utils/apiError': { apiErrorBody },
     '@/utils/datetime': {},
     './cursorPager': cursorPager,
   }
-  const create = new Function('require', `${code}\nreturn dataPage.setup({}, { expose() {} })`) as (load: (name: string) => unknown) => Page
-  const scope = vue.effectScope()
-  const page = scope.run(() => create(name => libs[name]))!
-  scopes.push(scope)
+  const { page, lifecycle } = setupPage<Page>(source, libs)
   page.selectedType.value = 'synthetic_edit'
   await vue.nextTick()
-  return { page, api, messages, confirm, deactivate: () => deactivate(), activate: () => activate() }
+  return { page, api, messages, confirm, typesQuery, definition, deactivate: () => lifecycle.deactivate(), activate: () => lifecycle.activate() }
 }
+
+describe('AL 类型读取故障阻写并保留草稿', () => {
+  it.each([403, 503])('后台 %s 保留选择、schema 和编辑草稿；恢复以实际定义验证后再写入', async status => {
+    const { page, api, typesQuery, definition } = await setup()
+    page.openCreate()
+    page.formData.value.name = '创建中的草稿'
+    page.formData.value.note = '保留中的草稿'
+    typesQuery.error.value = httpError(status, '合成类型读取故障')
+    typesQuery.data.value = undefined
+    await vue.nextTick()
+    expect(page.selectedType.value).toBe('synthetic_edit')
+    expect(page.schema.value).toEqual(fields)
+    expect(page.formVisible.value).toBe(true)
+    expect(page.formData.value.note).toBe('保留中的草稿')
+    await page.submitForm()
+    expect(api.createAlDataApi).not.toHaveBeenCalled()
+
+    typesQuery.data.value = { list: [{ ...definition, version: 2, fields: [{ name: 'note', type: 'string', required: true }, { name: 'required_new', type: 'string', required: true }] }], total: 1 }
+    typesQuery.error.value = null
+    await vue.nextTick()
+    page.formData.value.required_new = ''
+    await page.submitForm()
+    expect(api.createAlDataApi).not.toHaveBeenCalled()
+    expect(page.formError.value).toContain('required_new')
+    page.formData.value.required_new = '恢复后的实际字段'
+    await page.submitForm()
+    expect(api.createAlDataApi).toHaveBeenCalledExactlyOnceWith('synthetic_edit', { note: '保留中的草稿', required_new: '恢复后的实际字段' })
+  })
+
+  it('编辑已打开时读取失败不发送空 patch，恢复后仅提交原草稿变化', async () => {
+    const { page, api, typesQuery } = await setup()
+    page.openEdit(row())
+    page.formData.value.note = '编辑中的草稿'
+    typesQuery.error.value = httpError(403)
+    await page.submitForm()
+    expect(api.updateAlDataApi).not.toHaveBeenCalled()
+    expect(page.formData.value.note).toBe('编辑中的草稿')
+    typesQuery.error.value = null
+    await page.submitForm()
+    expect(api.updateAlDataApi).toHaveBeenCalledExactlyOnceWith('synthetic_edit', '9007199254740993', { data: { note: '编辑中的草稿' }, version: 7 })
+  })
+
+  it('读取失败同时阻止创建和导入；恢复不清导入草稿', async () => {
+    const { page, api, typesQuery } = await setup()
+    page.openCreate()
+    page.formData.value.name = '创建草稿'
+    page.openImport()
+    page.importText.value = '[{"id":"1","data":{"name":"导入草稿"}}]'
+    page.replaceConfirmed.value = true
+    typesQuery.error.value = httpError(503)
+    await page.submitForm()
+    await page.submitImport()
+    expect(api.createAlDataApi).not.toHaveBeenCalled()
+    expect(api.importAlDataApi).not.toHaveBeenCalled()
+    expect(page.importReady.value).toBe(false)
+    expect(page.formData.value.name).toBe('创建草稿')
+    expect(page.importText.value).toContain('导入草稿')
+    typesQuery.error.value = null
+    await vue.nextTick()
+    expect(page.importReady.value).toBe(true)
+    await page.submitImport()
+    expect(api.importAlDataApi).toHaveBeenCalledExactlyOnceWith('synthetic_edit', '[{"id":"1","data":{"name":"导入草稿"}}]')
+  })
+})
 
 describe('AL 普通编辑保真（真实页面 setup）', () => {
   it('只改标量时只发该字段和原版本，特殊文本/整数数组及缺省值不进入 patch', async () => {
@@ -476,5 +537,29 @@ describe('AL 写入刷新与新详情会话隔离', () => {
     await work
     expect(page.detailVisible.value).toBe(true)
     expect(page.detailRow.value?.id).toBe(original.id)
+  })
+})
+
+
+describe('AL 类型定义失败阻止行状态写入', () => {
+  it.each(['onDelete', 'onRestore'] as const)('%s 类型读取已失败时不发起确认或写入', async action => {
+    const { page, api, typesQuery, confirm } = await setup()
+    typesQuery.error.value = httpError(503)
+    await page[action](row())
+    expect(confirm).not.toHaveBeenCalled()
+    expect(api.deleteAlDataApi).not.toHaveBeenCalled()
+    expect(api.restoreAlDataApi).not.toHaveBeenCalled()
+  })
+
+  it.each(['onDelete', 'onRestore'] as const)('%s 等待确认期间类型读取失败也阻止发送', async action => {
+    const { page, api, typesQuery, confirm } = await setup()
+    const confirmation = deferred<void>()
+    confirm.mockReturnValueOnce(confirmation.promise)
+    const pending = page[action](row())
+    typesQuery.error.value = httpError(403)
+    confirmation.resolve()
+    await pending
+    expect(api.deleteAlDataApi).not.toHaveBeenCalled()
+    expect(api.restoreAlDataApi).not.toHaveBeenCalled()
   })
 })

@@ -8,6 +8,7 @@
  * - owner/admin 控件：组内角色 member↔admin（SetMemberRole）、数据范围（SetMemberScope）、
  *   移除成员（RemoveMember——不可移除 owner）
  */
+import { apiReadError } from '@/utils/apiError'
 import { formatDateTime } from '@/utils/datetime'
 import { computed, onActivated, onDeactivated, onScopeDispose, ref } from 'vue'
 import { useTableFit } from '@vea/hooks'
@@ -31,26 +32,54 @@ const roster = createRosterSession({
   failure: (message) => ElMessage.error(message),
 })
 const { state, pageSize, canEdit } = roster
-onActivated(roster.resume)
-onDeactivated(roster.pause)
-onScopeDispose(roster.pause)
 
 // ─── 我的组织列表 ───
 const orgs = ref<MyOrgItem[]>([])
 const orgsLoading = ref(true)
+const orgsError = ref('')
+let orgsSeq = 0
 const selectedOrg = computed(() => orgs.value.find((o) => o.org_id === state.orgId))
 const readonlyMode = computed(() => state.status === 'readonly')
 
 async function loadOrgs() {
+  const seq = ++orgsSeq
+  orgsLoading.value = true
+  orgsError.value = ''
+  orgs.value = []
+  roster.pause()
   try {
-    orgs.value = await getMyOrgsApi()
-    const orgId = orgs.value[0]?.org_id
-    if (orgId) void roster.selectOrg(orgId)
+    const data = await getMyOrgsApi()
+    if (seq !== orgsSeq) return
+    orgs.value = data
+    // 同一组织重新获准读取时保留选中项和页码；只有组织已移除才回退。
+    const orgId = orgs.value.some(org => org.org_id === state.orgId)
+      ? state.orgId : orgs.value[0]?.org_id
+    if (orgId) {
+      if (orgId !== state.orgId) void roster.selectOrg(orgId)
+      void roster.resume()
+    }
+  } catch (err) {
+    if (seq === orgsSeq) orgsError.value = apiReadError(err, '组织加载失败，请重试')
   } finally {
-    orgsLoading.value = false
+    if (seq === orgsSeq) orgsLoading.value = false
   }
 }
 void loadOrgs()
+let orgsPaused = false
+function pauseOrgs() {
+  orgsPaused = true
+  orgsSeq++
+  orgsLoading.value = false
+  roster.pause()
+}
+onActivated(() => {
+  if (orgsPaused) {
+    orgsPaused = false
+    void loadOrgs()
+  } else void roster.resume()
+})
+onDeactivated(pauseOrgs)
+onScopeDispose(pauseOrgs)
 
 // ─── 委托操作（owner/admin）───
 const ROLE_LABELS: Record<string, string> = { owner: '负责人', admin: '管理员', member: '成员' }
@@ -115,7 +144,8 @@ useTableFit(rosterTable, () => state.rows)
     <el-card shadow="never" class="mb-4 !flex-none">
       <template #header><span class="font-semibold">我的组织</span></template>
       <div v-loading="orgsLoading">
-        <el-empty v-if="!orgsLoading && !orgs.length" description="你尚未加入任何组织" />
+        <el-alert v-if="orgsError" :title="orgsError" type="error" :closable="false"><el-button size="small" @click="loadOrgs">重试</el-button></el-alert>
+        <el-empty v-else-if="!orgsLoading && !orgs.length" description="你尚未加入任何组织" />
         <div v-else class="flex flex-wrap gap-3">
           <div
             v-for="org in orgs" :key="org.org_id"

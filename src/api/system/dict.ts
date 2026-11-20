@@ -101,8 +101,8 @@ export async function deleteDictItemApi(input: { id: string; version: number }):
 /** 消费面：按 type 拉取字典项（业务表单选项——登录可读）。默认仅启用项；
  * includeDisabled=true 含停用项（存量工单回显名称/编辑回显旧值——RR-HY-02，
  * 停用项由调用方标灰禁选）。类型停用时两种口径都返回空。 */
-export async function getDictItemsByCodeApi(code: string, includeDisabled = false): Promise<DictItemRow[]> {
+export async function getDictItemsByCodeApi(code: string, includeDisabled = false, config?: { _silentError?: boolean }): Promise<DictItemRow[]> {
   const q = includeDisabled ? '?include_disabled=true' : ''
-  const data = await request.get(`/api/v1/user/dicts/${encodeURIComponent(code)}/items${q}`)
+  const data = await request.get(`/api/v1/user/dicts/${encodeURIComponent(code)}/items${q}`, config)
   return ((data as unknown as { items?: DictItemRow[] })?.items ?? [])
 }

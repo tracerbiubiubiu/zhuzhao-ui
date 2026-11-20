@@ -8,10 +8,11 @@
  * 先渲染器后设计器——渲染器无需拖拽生成 schema）。
  *
  * - org_id 必填（CreateTicketRequest）：组织下拉双源——GET /user/orgs（自服务）优先，
- *   空（admin/未入组）则 GET /orgs（管理面）；双空/403 → 提示先入组织
+ *   成功空集则 GET /orgs（管理面）；双空提示入组，失败/无权独立显示
  * - 字段校验：required 前置 + validate_regex 客户端预检（03 S8：G2 400 挂表单项）
  * - assigned_to 拒收（W0 P0-5）——发起不传；「创建即分派」形态已随 W0 有意下线
  */
+import { apiReadError } from '@/utils/apiError'
 import { computed, reactive, ref, watch } from 'vue'
 import {
   ElButton, ElCard, ElDatePicker, ElForm, ElFormItem, ElInput, ElInputNumber,
@@ -194,24 +195,36 @@ const fieldRules = computed(() => {
 
 // ── B1-2 字典引用预载：field_options 单元素 "dict:<code>" → 拉启用项缓存（optionsOf 同步查） ──
 const dictCache = ref<Record<string, Array<{ value: string; label: string }>>>({})
-watch(
-  () => fields.value,
-  async (fs) => {
-    const codes = new Set<string>()
-    for (const f of fs ?? []) {
-      const raw = f.field_options
-      if (Array.isArray(raw) && raw.length === 1 && typeof raw[0] === 'string' && raw[0].startsWith('dict:')) {
-        codes.add(raw[0].slice(5))
-      }
+const dictErrors = ref<Record<string, string>>({})
+const dictLoading = ref<Record<string, boolean>>({})
+const dictPending = new Map<string, Promise<void>>()
+function dictCode(f: TicketTypeFieldDef): string {
+  const raw = f.field_options
+  return Array.isArray(raw) && raw.length === 1 && typeof raw[0] === 'string' && raw[0].startsWith('dict:') ? raw[0].slice(5) : ''
+}
+async function loadDictionary(code: string) {
+  if (!code || dictCache.value[code]) return
+  if (dictPending.has(code)) return dictPending.get(code)
+  dictLoading.value[code] = true
+  dictErrors.value[code] = ''
+  const pending = (async () => {
+    try {
+      const items = await getDictItemsByCodeApi(code, false, { _silentError: true })
+      dictCache.value[code] = (items ?? []).map(i => ({ value: i.code, label: i.label }))
+    } catch (err) {
+      dictErrors.value[code] = apiReadError(err, '字典加载失败，请重试')
+    } finally {
+      dictLoading.value[code] = false
+      dictPending.delete(code)
     }
-    for (const code of codes) {
-      if (dictCache.value[code]) continue
-      const items = (await getDictItemsByCodeApi(code).catch(() => [])) ?? []
-      dictCache.value[code] = items.map((i) => ({ value: i.code, label: i.label }))
-    }
-  },
-  { immediate: true },
-)
+  })()
+  dictPending.set(code, pending)
+  return pending
+}
+watch(() => fields.value, fs => {
+  const codes = new Set(fs.map(dictCode).filter(Boolean))
+  codes.forEach(code => { void loadDictionary(code) })
+}, { immediate: true })
 
 /** B1-3 formula 字段判定（field_meta.formula 非空——服务端求值 SSOT，前端禁编辑） */
 function isFormulaField(f: TicketTypeFieldDef): boolean {
@@ -238,28 +251,38 @@ function optionsOf(f: TicketTypeFieldDef): Array<{ value: string; label: string 
 // ─── 组织下拉（双源）───
 const orgOptions = ref<Array<{ value: string; label: string }>>([])
 const orgsLoading = ref(true)
-;(async () => {
+const orgsError = ref('')
+let orgsSeq = 0
+async function loadOrgs() {
+  const seq = ++orgsSeq
+  orgsLoading.value = true
+  orgsError.value = ''
+  orgOptions.value = []
   try {
-    const mine = await getMyOrgsApi().catch(() => [])
+    const mine = await getMyOrgsApi()
+    if (seq !== orgsSeq) return
     if (mine.length) {
-      orgOptions.value = mine.map((o) => ({ value: String(o.org_id), label: String(o.org_name ?? '') }))
+      orgOptions.value = mine.map(o => ({ value: String(o.org_id), label: String(o.org_name ?? '') }))
     } else {
-      // admin/未入组：管理面全量兜底（无 Casbin 者此处 403 → 空列表提示）
-      const all = await getOrgTreeApi({ _silentError: true }).catch(() => null)
+      const all = await getOrgTreeApi({ _silentError: true })
+      if (seq !== orgsSeq) return
       const flat: Array<{ value: string; label: string }> = []
-      const walk = (nodes: OrgTreeNode[] | undefined) => {
-        for (const n of nodes ?? []) {
+      const walk = (nodes: OrgTreeNode[]) => {
+        for (const n of nodes) {
           flat.push({ value: n.id, label: n.is_virtual ? `${n.name}（虚拟组）` : n.name })
-          walk(n.children)
+          walk(n.children ?? [])
         }
       }
       walk(all ?? [])
       orgOptions.value = flat
     }
+  } catch (err) {
+    if (seq === orgsSeq) orgsError.value = apiReadError(err, '组织加载失败，请重试')
   } finally {
-    orgsLoading.value = false
+    if (seq === orgsSeq) orgsLoading.value = false
   }
-})()
+}
+void loadOrgs()
 
 async function handleSubmit() {
   const seq = fieldsSeq
@@ -322,7 +345,8 @@ async function handleSubmit() {
           <el-select v-model="form.org_id" :loading="orgsLoading" filterable placeholder="选择组织" class="!w-full">
             <el-option v-for="o in orgOptions" :key="o.value" :label="o.label" :value="o.value" />
           </el-select>
-          <span v-if="!orgsLoading && !orgOptions.length" class="text-xs text-[var(--el-color-danger)]">
+          <el-alert v-if="orgsError" :title="orgsError" type="error" :closable="false"><el-button size="small" @click="loadOrgs">重试</el-button></el-alert>
+          <span v-if="!orgsLoading && !orgsError && !orgOptions.length" class="text-xs text-[var(--el-color-danger)]">
             无可选组织（未入组）——请联系管理员将你加入组织后再发起
           </span>
         </el-form-item>
@@ -364,13 +388,13 @@ async function handleSubmit() {
             />
             <el-select
               v-else-if="f.field_type === 'select'" v-model="(form.custom[f.field_key] as string | undefined)"
-              clearable class="!w-full"
+              clearable :loading="dictLoading[dictCode(f)]" class="!w-full"
             >
               <el-option v-for="o in optionsOf(f)" :key="o.value" :label="o.label" :value="o.value" />
             </el-select>
             <el-select
               v-else-if="f.field_type === 'multi_select'" v-model="form.custom[f.field_key] as string[] | undefined"
-              multiple clearable class="!w-full"
+              multiple clearable :loading="dictLoading[dictCode(f)]" class="!w-full"
             >
               <el-option v-for="o in optionsOf(f)" :key="o.value" :label="o.label" :value="o.value" />
             </el-select>
@@ -433,6 +457,9 @@ async function handleSubmit() {
             >
               <template #suffix><span class="text-xs text-blue-400">自动计算</span></template>
             </el-input>
+            <el-alert v-if="dictCode(f) && dictErrors[dictCode(f)]" :title="dictErrors[dictCode(f)]" type="error" :closable="false">
+              <el-button size="small" @click="loadDictionary(dictCode(f))">重试加载选项</el-button>
+            </el-alert>
           </el-form-item>
         </template>
 

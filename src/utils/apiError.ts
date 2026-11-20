@@ -25,3 +25,11 @@ export function isConflictCode(err: unknown): boolean {
   const code = apiErrorBody(err).code
   return code === 10006 || code === 100008
 }
+
+/** 读取失败的持续状态：无权与查无不冒充成功空集。 */
+export function apiReadError(err: unknown, fallback = '加载失败，请重试', notFound?: string): string {
+  const status = (err as { response?: { status?: number } })?.response?.status
+  if (status === 403) return '无权查看，请联系管理员'
+  if (status === 404 && notFound) return notFound
+  return apiErrorMessage(err, fallback)
+}
