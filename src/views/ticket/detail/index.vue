@@ -711,7 +711,7 @@ function onRelationInput(event: Event) {
       </div>
 
       <div v-if="userStore.hasPermission('ticket:relation')" class="border-t pt-3">
-        <div class="flex items-center gap-2" @input="onRelationInput">
+        <div class="flex items-center gap-2" @input="onRelationInput" @compositionend="onRelationInput">
           <!-- 候选由服务端按当前关联资格返回；提交仍会重新校验双端授权。 -->
           <el-select
             :model-value="relation.target" filterable remote clearable :disabled="relation.saving"
