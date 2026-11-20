@@ -295,7 +295,7 @@ describe('字典管理页面的读取与写入目标', () => {
     page.itemForm.label = '新选项'
     const create = page.submitItem()
     expect(api.createDictItemApi).toHaveBeenCalledWith({
-      type_code: 'a', code: 'new', label: '新选项', sort_order: 2,
+      type_code: 'a', type_id: typeA.id, code: 'new', label: '新选项', sort_order: 2,
     })
     page.selectType(page.types.value[1])
     await settle()
@@ -546,7 +546,7 @@ describe('字典管理页面的读取与写入目标', () => {
     expect(page.itemVisible.value).toBe(true)
     await page.submitItem()
     expect(api.createDictItemApi).toHaveBeenCalledExactlyOnceWith({
-      type_code: typeB.code, code: 'draft', label: '保留的 B 草稿', sort_order: 2,
+      type_code: typeB.code, type_id: typeB.id, code: 'draft', label: '保留的 B 草稿', sort_order: 2,
     })
   })
 
@@ -756,5 +756,57 @@ describe('字典管理页面的读取与写入目标', () => {
     expect(page.typeVisible.value).toBe(true)
     expect(page.typeForm.name).toBe('新类型草稿')
     expect(message.success).not.toHaveBeenCalled()
+  })
+})
+
+describe('字典项新建的冲突反馈', () => {
+  it.each([
+    { code: 10005, message: '该类型下 code 已存在' },
+    { code: 10005, message: '父类型已变化' },
+    { code: 10006, message: '并发写入冲突' },
+    { code: 10005, message: undefined },
+  ])('409 保留服务端原因和完整草稿：$message', async ({ code, message }) => {
+    const { page, api } = setup()
+    await settle()
+    page.openItemCreate()
+    const draft = { code: 'draft', label: '合成草稿', sort_order: 7, remark: '合成备注' }
+    Object.assign(page.itemForm, draft)
+    api.createDictItemApi.mockRejectedValueOnce({ response: { status: 409, data: { code, message } } })
+
+    await page.submitItem()
+
+    expect(api.createDictItemApi).toHaveBeenCalledExactlyOnceWith({ ...draft, type_code: typeA.code, type_id: typeA.id })
+    expect(page.itemVisible.value).toBe(true)
+    expect(page.itemForm).toMatchObject(draft)
+    expect(page.itemError.value).toContain(message ?? '创建冲突')
+    expect(page.itemError.value).toContain('草稿已保留')
+    expect(page.itemError.value).toContain('核对后重试')
+  })
+
+  it('编码重复后可用保留的草稿修改编码并重新创建', async () => {
+    const { page, api } = setup()
+    await settle()
+    page.openItemCreate()
+    Object.assign(page.itemForm, { code: 'duplicate', label: '合成草稿' })
+    api.createDictItemApi.mockRejectedValueOnce({ response: { status: 409, data: { code: 10005, message: '该类型下 code 已存在' } } })
+    await page.submitItem()
+    await settle()
+    page.itemForm.code = 'unique'
+    await page.submitItem()
+    expect(api.createDictItemApi).toHaveBeenCalledTimes(2)
+    expect(api.createDictItemApi).toHaveBeenLastCalledWith(expect.objectContaining({ code: 'unique', label: '合成草稿', type_id: typeA.id }))
+    expect(page.itemVisible.value).toBe(false)
+  })
+
+  it('非冲突失败保留服务端文案和草稿', async () => {
+    const { page, api } = setup()
+    await settle()
+    page.openItemCreate()
+    Object.assign(page.itemForm, { code: 'draft', label: '合成草稿' })
+    api.createDictItemApi.mockRejectedValueOnce({ response: { status: 400, data: { message: '编码格式不合法' } } })
+    await page.submitItem()
+    expect(page.itemError.value).toBe('编码格式不合法')
+    expect(page.itemVisible.value).toBe(true)
+    expect(page.itemForm).toMatchObject({ code: 'draft', label: '合成草稿' })
   })
 })

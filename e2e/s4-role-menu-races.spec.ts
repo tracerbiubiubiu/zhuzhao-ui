@@ -1,4 +1,4 @@
-/** 真实角色/菜单与写回；只在指定读取注入延迟/503，数据与其余请求仍走真实服务。 */
+/** 真实角色/菜单与写回；前两例读取注入延迟/503，冲突例无网络拦截。 */
 import { test, expect } from '@playwright/test'
 import { api, apiLogin, loadState, mustData, waitUserRateBudget } from './helpers'
 import { uiLogin } from './ui'
@@ -125,6 +125,65 @@ test('S4：关闭后重开同角色，迟到的真实旧读取不得覆盖新勾
   } finally {
     release.resolve()
     await page.unroute(path)
+    await f.cleanup()
+  }
+})
+
+test('S4：另一写方变更菜单后，真实 409 保留勾选草稿并回读新绑定', async ({ page }) => {
+  const f = await fixture('conflict')
+  let posts = 0
+  page.on('request', (request) => {
+    if (request.method() === 'POST' && new URL(request.url()).pathname === '/api/v1/roles/menus') posts++
+  })
+  try {
+    await waitUserRateBudget()
+    await uiLogin(page, f.state.admin.employeeNo, f.state.admin.password)
+    await page.goto('/#/system/role')
+    const row = page.locator('tr', { hasText: f.code })
+    await row.getByRole('button', { name: '分配菜单' }).click()
+    const dialog = page.locator('.el-dialog').filter({ hasText: '分配菜单' })
+    const save = dialog.getByRole('button', { name: '保存（整体替换）' })
+    await expect(save).toBeEnabled()
+    const userNode = dialog.locator('.el-tree-node__content').filter({ hasText: '用户管理' })
+    const roleNode = dialog.locator('.el-tree-node__content').filter({ hasText: '角色管理' })
+    await expect(userNode.locator('.el-checkbox.is-checked')).toBeVisible()
+    await expect(roleNode.locator('.el-checkbox.is-checked')).toHaveCount(0)
+    await roleNode.locator('.el-checkbox__inner').click()
+    await expect(dialog.locator('.el-checkbox.is-checked')).toHaveCount(2)
+
+    // fixture 的独立 API 会话提交新集合，浏览器仍持有原读取与两项勾选草稿。
+    await f.bind([f.role.id])
+    expect(await f.read()).toEqual([f.role.id])
+    const conflict = page.waitForResponse((response) =>
+      response.request().method() === 'POST' && new URL(response.url()).pathname === '/api/v1/roles/menus')
+    await save.click()
+    const response = await conflict
+    const sent = response.request().postDataJSON()
+    expect(sent.role_id).toBe(f.id)
+    expect(sent.original_menu_ids).toEqual([f.user.id])
+    expect([...sent.menu_ids].sort()).toEqual([f.user.id, f.role.id].sort())
+    expect(response.status()).toBe(409)
+    expect(await response.json()).toMatchObject({ code: 10006 })
+    await expect(dialog).toBeVisible()
+    await expect(dialog.getByText('菜单集合已变化，草稿已保留；请重新读取后核对再提交', { exact: true })).toBeVisible()
+    await expect(save).toBeDisabled()
+    await expect(userNode.locator('.el-checkbox.is-checked')).toBeVisible()
+    await expect(roleNode.locator('.el-checkbox.is-checked')).toBeVisible()
+    await expect(dialog.locator('.el-checkbox.is-checked')).toHaveCount(2)
+    expect(await f.read()).toEqual([f.role.id])
+    expect(posts).toBe(1)
+
+    const reloaded = page.waitForResponse((response) =>
+      response.request().method() === 'GET' && new URL(response.url()).pathname === `/api/v1/roles/${f.id}/menus`)
+    await dialog.getByRole('button', { name: '重新读取' }).click()
+    expect((await reloaded).status()).toBe(200)
+    await expect(save).toBeEnabled()
+    await expect(userNode.locator('.el-checkbox.is-checked')).toHaveCount(0)
+    await expect(roleNode.locator('.el-checkbox.is-checked')).toBeVisible()
+    await expect(dialog.locator('.el-checkbox.is-checked')).toHaveCount(1)
+    expect(await f.read()).toEqual([f.role.id])
+    expect(posts).toBe(1)
+  } finally {
     await f.cleanup()
   }
 })

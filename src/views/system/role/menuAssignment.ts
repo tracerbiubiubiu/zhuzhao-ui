@@ -28,7 +28,7 @@ interface MenuEditorDeps {
   readChecked: () => Array<string | number>
   /** 空集=清空全部菜单，二次确认；返回 false 表示取消保存 */
   confirmEmpty: (target: MenuTarget) => Promise<boolean>
-  save: (id: string, ids: string[]) => Promise<void>
+  save: (id: string, ids: string[], originalIds: string[]) => Promise<void>
   success: (target: MenuTarget) => void
 }
 
@@ -43,7 +43,7 @@ export function createMenuEditor(deps: MenuEditorDeps) {
   })
   let generation = 0
   let operation = 0
-  let snapshot: { generation: number; id: string; available: Set<string> } | null = null
+  let snapshot: { generation: number; id: string; available: Set<string>; original: string[] } | null = null
 
   const current = (seq: number, id: string) => state.visible && generation === seq && state.target?.id === id
   const editable = () => state.visible && state.ready && !state.loading && !state.saving
@@ -78,7 +78,7 @@ export function createMenuEditor(deps: MenuEditorDeps) {
       if (!current(seq, id)) return
       const checked = assignmentIds(deps.readChecked())
       if (checked.length !== ids.length || ids.some((menuId) => !checked.includes(menuId))) throw new Error('已有菜单未完整回填，请重新读取或联系管理员核查')
-      snapshot = { generation: seq, id, available }
+      snapshot = { generation: seq, id, available, original: [...ids] }
       state.ready = true
     } catch (err) {
       // 树已在 open 时清空，失败路径不会残留上一个角色的勾选
@@ -105,13 +105,19 @@ export function createMenuEditor(deps: MenuEditorDeps) {
       if (keys.some((id) => !snapshot!.available.has(id))) throw new Error('所选菜单不在当前菜单树中，请重新读取或联系管理员核查')
       if (keys.length === 0 && !await deps.confirmEmpty(target)) return
       if (!same()) return
-      await deps.save(target.id, keys.map(String))
+      await deps.save(target.id, keys.map(String), [...snapshot.original])
       if (same()) {
         deps.success(target)
         close()
       }
     } catch (err) {
-      if (same()) state.error = message(err)
+      if (same()) {
+        const response = (err as { response?: { status?: number } })?.response
+        if (response?.status === 409) {
+          state.ready = false
+          state.error = '菜单集合已变化，草稿已保留；请重新读取后核对再提交'
+        } else state.error = message(err)
+      }
     } finally {
       if (same()) state.saving = false
     }

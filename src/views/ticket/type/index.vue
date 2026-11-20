@@ -11,7 +11,7 @@
  *   validateTypeGraph 预检（A.3 双保险）+ **改图在途单告警（B2-3）**：被删/失去全部出边的
  *   状态上若有工单则弹确认（纯体验层，绕过亦被 AssertTransition 兜底）；
  *   编辑框说明与S3a保持一致：实际流转受权限/条件/校验器约束；审批节点仍属S3b
- * - 乐观锁：类型/模板 version 回传 CAS（可省略——管理页应带上），10006 → 关框刷新范式
+ * - 乐观锁：类型/模板 version 回传 CAS（可省略——管理页应带上），409 → 保留草稿并提示重新读取
  */
 import { computed, nextTick, onBeforeUnmount, onDeactivated, reactive, ref, watch } from 'vue'
 import { useTableFit } from '@vea/hooks'
@@ -106,14 +106,14 @@ function isCurrentTypeSession(session: number): boolean {
 }
 
 const typeForm = reactive({
-  code: '', name: '', description: '', is_active: true,
+  id: '', code: '', name: '', description: '', is_active: true,
   statesText: '', transitionsText: '', version: 0,
 })
 
 function openTypeCreate() {
   typeSession.value++
   Object.assign(typeDialog, { visible: true, isCreate: true, loading: false, error: '' })
-  Object.assign(typeForm, { code: '', name: '', description: '', is_active: true, statesText: '', transitionsText: '', version: 0 })
+  Object.assign(typeForm, { id: '', code: '', name: '', description: '', is_active: true, statesText: '', transitionsText: '', version: 0 })
   metaRows.value = []
   preservedMeta.value = {}
 }
@@ -122,7 +122,7 @@ function openTypeEdit(row: TicketTypeFullRow) {
   const session = ++typeSession.value
   Object.assign(typeDialog, { visible: true, isCreate: false, loading: false, error: '' })
   Object.assign(typeForm, {
-    code: row.code, name: row.name, description: row.description, is_active: row.is_active,
+    id: row.id, code: row.code, name: row.name, description: row.description, is_active: row.is_active,
     statesText: row.states ? JSON.stringify(row.states, null, 0) : '',
     transitionsText: row.transitions ? JSON.stringify(row.transitions, null, 0) : '',
     version: row.version,
@@ -293,7 +293,7 @@ function snapshotTypeGraph() {
       ...graph,
       // 透传元数据可能仍引用响应里的嵌套对象，保存草稿须独立。
       transition_meta: JSON.parse(JSON.stringify(transitionMeta)) as Record<string, unknown>,
-      version: typeForm.version,
+      id: typeForm.id, version: typeForm.version,
     },
     candidates: stuckStates(originalStates.value, graph.states, graph.transitions),
   }
@@ -328,9 +328,10 @@ async function submitType() {
   } catch (err: unknown) {
     if (!isCurrentTypeSession(session)) return
     const resp = (err as { response?: { data?: { code?: number; message?: string } } })?.response?.data
-    if (resp?.code === 10006) {
-      typeDialog.visible = false
-      ElMessage.warning('该类型已被他人修改，请刷新后重试')
+    if (resp?.code === 10006 || (err as { response?: { status?: number } })?.response?.status === 409) {
+      typeDialog.error = isCreate
+        ? `${resp?.message || '创建冲突'}；草稿已保留，请核对后重试`
+        : '类型已变化，草稿已保留；请先复制草稿，关闭弹窗后从列表重新打开「编辑」，核对最新配置后再提交'
       await queryClient.invalidateQueries({ queryKey: ['ticket', 'types'] })
     } else {
       typeDialog.error = resp?.message ?? '保存失败，请稍后重试'
@@ -341,6 +342,7 @@ async function submitType() {
 }
 
 async function onDeleteType(row: TicketTypeFullRow) {
+  const target = { id: row.id, code: row.code, version: row.version }
   try {
     await ElMessageBox.confirm(`确认删除类型「${row.name}」？已有工单的类型将被拒绝删除。`, '危险操作', {
       type: 'warning', confirmButtonText: '删除', confirmButtonClass: 'el-button--danger',
@@ -349,18 +351,25 @@ async function onDeleteType(row: TicketTypeFullRow) {
     return
   }
   try {
-    await deleteTicketTypeApi(row.code)
+    await deleteTicketTypeApi(target)
     ElMessage.success('已删除')
     await queryClient.invalidateQueries({ queryKey: ['ticket', 'types'] })
   } catch (err: unknown) {
-    ElMessage.error((err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '删除失败')
+    const data = (err as { response?: { data?: { code?: number; message?: string } } })?.response?.data
+    const message = data?.code === 10005
+      ? data.message || '该类型已被引用，不能删除'
+      : data?.code === 10006
+        ? '配置已变化，列表将自动刷新；请核对后再次确认删除'
+        : data?.message || '删除失败'
+    ElMessage.error(message)
+    await queryClient.invalidateQueries({ queryKey: ['ticket', 'types'] })
   }
 }
 
 // ─── 字段编辑器（全量替换——危险确认）───
 const fieldsDialog = reactive({
   visible: false, loading: false, ready: false, saving: false,
-  error: '', code: '', name: '', version: 0, mode: 'designer' as 'designer' | 'expert',
+  error: '', id: '', code: '', name: '', version: 0, mode: 'designer' as 'designer' | 'expert',
 })
 const fieldEditor = createDesignerState()
 const fieldRows = fieldEditor.fields
@@ -370,7 +379,7 @@ async function openFields(row: TicketTypeFullRow) {
   const session = ++fieldsSession
   Object.assign(fieldsDialog, {
     visible: true, loading: true, ready: false, saving: false, error: '',
-    code: row.code, name: row.name, version: 0,
+    id: row.id, code: row.code, name: row.name, version: 0,
   })
   fieldEditor.loadFromDefs([])
   try {
@@ -416,7 +425,7 @@ async function saveFields() {
   }
 
   const session = fieldsSession
-  const { code, name, version } = fieldsDialog
+  const { id, code, name, version } = fieldsDialog
   const fields = fieldEditor.serialize()
   fieldsDialog.saving = true
   fieldsDialog.error = ''
@@ -427,7 +436,7 @@ async function saveFields() {
     ).catch(() => false)
     if (!confirmed || session !== fieldsSession || !fieldsDialog.visible) return
 
-    await replaceTicketTypeFieldsApi({ code, fields, version })
+    await replaceTicketTypeFieldsApi({ id, code, fields, version })
     if (session !== fieldsSession || !fieldsDialog.visible) return
     ElMessage.success('字段已替换')
     fieldsDialog.visible = false
@@ -435,7 +444,9 @@ async function saveFields() {
   } catch (err: unknown) {
     if (session !== fieldsSession || !fieldsDialog.visible) return
     const resp = (err as { response?: { data?: { code?: number; message?: string } } })?.response?.data
-    fieldsDialog.error = resp?.code === 10006 ? '类型已被他人修改（版本冲突），请关闭后重开再改' : resp?.message ?? '保存失败'
+    fieldsDialog.error = (resp?.code === 10006 || (err as { response?: { status?: number } })?.response?.status === 409)
+      ? '类型已变化，草稿已保留；请先复制草稿，关闭弹窗后从列表重新打开「字段配置」，核对最新配置后再提交'
+      : resp?.message ?? '保存失败'
   } finally {
     if (session === fieldsSession) fieldsDialog.saving = false
   }
@@ -459,8 +470,13 @@ const orgTreeQuery = useQuery({ queryKey: ['system', 'orgs'], queryFn: () => get
 
 const tplDialog = reactive({ visible: false, isCreate: true, loading: false, error: '' })
 const tplFormRef = ref<FormInstance>()
+let tplSession = 0
+const currentTpl = (session: number) => session === tplSession && tplDialog.visible
+function closeTplDialog() { ++tplSession; tplDialog.visible = false; tplDialog.loading = false }
+onDeactivated(closeTplDialog)
+onBeforeUnmount(closeTplDialog)
 const tplForm = reactive({
-  code: '', name: '', type_code: '', default_priority: 3,
+  id: '', code: '', name: '', type_code: '', default_priority: 3,
   default_sla_minutes: undefined as number | undefined,
   default_fields_text: '', org_id: '', version: 0,
 })
@@ -473,14 +489,16 @@ const tplRules = computed(() => ({
 }))
 
 function openTplCreate() {
+  ++tplSession
   Object.assign(tplDialog, { visible: true, isCreate: true, loading: false, error: '' })
-  Object.assign(tplForm, { code: '', name: '', type_code: '', default_priority: 3, default_sla_minutes: undefined, default_fields_text: '', org_id: '', version: 0 })
+  Object.assign(tplForm, { id: '', code: '', name: '', type_code: '', default_priority: 3, default_sla_minutes: undefined, default_fields_text: '', org_id: '', version: 0 })
 }
 
 function openTplEdit(row: TicketTemplateRow) {
+  ++tplSession
   Object.assign(tplDialog, { visible: true, isCreate: false, loading: false, error: '' })
   Object.assign(tplForm, {
-    code: row.code, name: row.name, type_code: row.type_code,
+    id: row.id, code: row.code, name: row.name, type_code: row.type_code,
     default_priority: row.default_priority || 3,
     default_sla_minutes: row.default_sla_minutes ?? undefined,
     default_fields_text: row.default_fields ? JSON.stringify(row.default_fields) : '',
@@ -489,56 +507,63 @@ function openTplEdit(row: TicketTemplateRow) {
 }
 
 async function submitTpl() {
-  const valid = await tplFormRef.value?.validate().catch(() => false)
-  if (!valid) return
-  let defaultFields: unknown
-  if (tplForm.default_fields_text.trim()) {
-    try {
-      defaultFields = JSON.parse(tplForm.default_fields_text)
-    } catch {
-      tplDialog.error = 'default_fields 须为合法 JSON'
-      return
-    }
-  }
+  if (!tplDialog.visible || tplDialog.loading) return
+  const session = tplSession
+  const isCreate = tplDialog.isCreate
+  const draft = { ...tplForm }
   tplDialog.loading = true
   tplDialog.error = ''
   try {
-    if (tplDialog.isCreate) {
+    const valid = await tplFormRef.value?.validate().catch(() => false)
+    if (!valid || !currentTpl(session)) return
+    let defaultFields: unknown
+    if (draft.default_fields_text.trim()) {
+      try {
+        defaultFields = JSON.parse(draft.default_fields_text)
+      } catch {
+        tplDialog.error = 'default_fields 须为合法 JSON'
+        return
+      }
+    }
+    if (isCreate) {
       await createTicketTemplateApi({
-        code: tplForm.code, name: tplForm.name, type_code: tplForm.type_code,
-        default_priority: tplForm.default_priority,
+        code: draft.code, name: draft.name, type_code: draft.type_code,
+        default_priority: draft.default_priority,
         ...(defaultFields !== undefined ? { default_fields: defaultFields } : {}),
-        ...(tplForm.default_sla_minutes ? { default_sla_minutes: tplForm.default_sla_minutes } : {}),
-        org_id: tplForm.org_id,
+        ...(draft.default_sla_minutes ? { default_sla_minutes: draft.default_sla_minutes } : {}),
+        org_id: draft.org_id,
       })
-      ElMessage.success('模板已创建')
+      if (currentTpl(session)) ElMessage.success('模板已创建')
     } else {
       await updateTicketTemplateApi({
-        code: tplForm.code, name: tplForm.name,
-        default_priority: tplForm.default_priority,
+        id: draft.id, code: draft.code, name: draft.name,
+        default_priority: draft.default_priority,
         ...(defaultFields !== undefined ? { default_fields: defaultFields } : {}),
-        ...(tplForm.default_sla_minutes ? { default_sla_minutes: tplForm.default_sla_minutes } : {}),
-        version: tplForm.version,
+        ...(draft.default_sla_minutes ? { default_sla_minutes: draft.default_sla_minutes } : {}),
+        version: draft.version,
       })
-      ElMessage.success('模板已更新')
+      if (currentTpl(session)) ElMessage.success('模板已更新')
     }
-    tplDialog.visible = false
+    if (currentTpl(session)) tplDialog.visible = false
     await queryClient.invalidateQueries({ queryKey: ['ticket', 'templates'] })
   } catch (err: unknown) {
+    if (!currentTpl(session)) return
     const resp = (err as { response?: { data?: { code?: number; message?: string } } })?.response?.data
-    if (resp?.code === 10006) {
-      tplDialog.visible = false
-      ElMessage.warning('该模板已被他人修改，请刷新后重试')
+    if (resp?.code === 10006 || (err as { response?: { status?: number } })?.response?.status === 409) {
+      tplDialog.error = isCreate
+        ? `${resp?.message || '创建冲突'}；草稿已保留，请核对后重试`
+        : '模板已变化，草稿已保留；请先复制草稿，关闭弹窗后从列表重新打开「编辑」，核对最新配置后再提交'
       await queryClient.invalidateQueries({ queryKey: ['ticket', 'templates'] })
     } else {
       tplDialog.error = resp?.message ?? '保存失败，请稍后重试'
     }
   } finally {
-    tplDialog.loading = false
+    if (session === tplSession) tplDialog.loading = false
   }
 }
 
 async function onDeleteTpl(row: TicketTemplateRow) {
+  const target = { id: row.id, code: row.code, version: row.version }
   try {
     await ElMessageBox.confirm(`确认删除模板「${row.name}」？`, '危险操作', {
       type: 'warning', confirmButtonText: '删除', confirmButtonClass: 'el-button--danger',
@@ -547,11 +572,13 @@ async function onDeleteTpl(row: TicketTemplateRow) {
     return
   }
   try {
-    await deleteTicketTemplateApi(row.code)
+    await deleteTicketTemplateApi(target)
     ElMessage.success('已删除')
     await queryClient.invalidateQueries({ queryKey: ['ticket', 'templates'] })
   } catch (err: unknown) {
-    ElMessage.error((err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '删除失败')
+    const response = (err as { response?: { status?: number; data?: { message?: string } } })?.response
+    ElMessage.error(response?.status === 409 ? '配置已变化，列表将自动刷新；请核对后再次确认删除' : response?.data?.message ?? '删除失败')
+    await queryClient.invalidateQueries({ queryKey: ['ticket', 'templates'] })
   }
 }
 

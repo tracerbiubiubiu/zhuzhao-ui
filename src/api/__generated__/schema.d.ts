@@ -472,6 +472,129 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/dict-items": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 创建字典条目，可校验父类型身份 */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            /** @description 字典写入请求 */
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["github_com_tracerbiubiubiu_zhuzhao_internal_model.CreateDictItemRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["response.Response"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/dict-items/update": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 更新字典条目，可省略备注 */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            /** @description 字典写入请求 */
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["github_com_tracerbiubiubiu_zhuzhao_internal_model.UpdateDictItemRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["response.Response"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/dicts/update": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 更新字典类型，可省略备注 */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            /** @description 字典写入请求 */
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["github_com_tracerbiubiubiu_zhuzhao_internal_model.UpdateDictTypeRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["response.Response"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/files/{key}": {
         parameters: {
             query?: never;
@@ -2492,13 +2615,10 @@ export interface paths {
             parameters: {
                 query?: never;
                 header?: never;
-                path: {
-                    /** @description 模板编码 */
-                    code: string;
-                };
+                path?: never;
                 cookie?: never;
             };
-            requestBody?: never;
+            requestBody: components["requestBodies"]["github_com_tracerbiubiubiu_zhuzhao_internal_model.DeleteByCodeRequest"];
             responses: {
                 /** @description OK */
                 200: {
@@ -2531,10 +2651,7 @@ export interface paths {
             parameters: {
                 query?: never;
                 header?: never;
-                path: {
-                    /** @description 模板编码 */
-                    code: string;
-                };
+                path?: never;
                 cookie?: never;
             };
             /** @description 更新内容 */
@@ -2675,13 +2792,10 @@ export interface paths {
             parameters: {
                 query?: never;
                 header?: never;
-                path: {
-                    /** @description 类型编码 */
-                    code: string;
-                };
+                path?: never;
                 cookie?: never;
             };
-            requestBody?: never;
+            requestBody: components["requestBodies"]["github_com_tracerbiubiubiu_zhuzhao_internal_model.DeleteByCodeRequest"];
             responses: {
                 /** @description OK */
                 200: {
@@ -2714,10 +2828,7 @@ export interface paths {
             parameters: {
                 query?: never;
                 header?: never;
-                path: {
-                    /** @description 类型编码 */
-                    code: string;
-                };
+                path?: never;
                 cookie?: never;
             };
             /** @description 字段集 */
@@ -2758,10 +2869,7 @@ export interface paths {
             parameters: {
                 query?: never;
                 header?: never;
-                path: {
-                    /** @description 类型编码 */
-                    code: string;
-                };
+                path?: never;
                 cookie?: never;
             };
             /** @description 更新内容 */
@@ -4770,6 +4878,11 @@ export interface components {
         };
         "github_com_tracerbiubiubiu_zhuzhao_internal_model.AssignMenusRequest": {
             menu_ids: string[];
+            /**
+             * @description OriginalMenuIDs 是可选的原集合快照；空数组表示已读空集，省略/null 保留旧覆盖语义。
+             *     条件只比较当前集合，不追踪集合变更后又恢复原值的中间历史。
+             */
+            original_menu_ids?: string[];
             /** @example 0 */
             role_id: string;
         };
@@ -4822,6 +4935,17 @@ export interface components {
             content: string;
             /** @example 0 */
             ticket_id: string;
+        };
+        "github_com_tracerbiubiubiu_zhuzhao_internal_model.CreateDictItemRequest": {
+            code: string;
+            /** @description 缺省 true（建时即停用场景显式传 false） */
+            enabled?: boolean;
+            label: string;
+            remark?: string;
+            sort_order?: number;
+            type_code: string;
+            /** @example 0 */
+            type_id?: string;
         };
         "github_com_tracerbiubiubiu_zhuzhao_internal_model.CreateNoteRequest": {
             content: string;
@@ -4914,6 +5038,15 @@ export interface components {
             role_ids?: string[];
             user_domain?: string;
             username: string;
+        };
+        "github_com_tracerbiubiubiu_zhuzhao_internal_model.DeleteByCodeRequest": {
+            code: string;
+            /**
+             * @description ID 可选稳定身份；省略兼容旧编码调用，传入须命中原对象。
+             * @example 0
+             */
+            id?: string;
+            version?: number;
         };
         "github_com_tracerbiubiubiu_zhuzhao_internal_model.DeleteTicketRequest": {
             /** @example 0 */
@@ -5053,6 +5186,11 @@ export interface components {
             code: string;
             fields?: components["schemas"]["github_com_tracerbiubiubiu_zhuzhao_internal_model.TicketTypeFieldInput"][];
             /**
+             * @description ID 可选稳定身份；省略兼容旧编码调用，传入须命中原对象。
+             * @example 0
+             */
+            id?: string;
+            /**
              * @description Version 为可选客户端期望版本；缺省时使用旧字段预检前的父类型快照CAS。
              *     预检后配置改变返回409；非nil须>0，否则400。
              */
@@ -5149,6 +5287,23 @@ export interface components {
             /** @example 0 */
             id: string;
         };
+        "github_com_tracerbiubiubiu_zhuzhao_internal_model.UpdateDictItemRequest": {
+            enabled?: boolean;
+            /** @example 0 */
+            id: string;
+            label: string;
+            remark?: string;
+            sort_order?: number;
+            version: number;
+        };
+        "github_com_tracerbiubiubiu_zhuzhao_internal_model.UpdateDictTypeRequest": {
+            enabled?: boolean;
+            /** @example 0 */
+            id: string;
+            name: string;
+            remark?: string;
+            version: number;
+        };
         "github_com_tracerbiubiubiu_zhuzhao_internal_model.UpdatePasswordRequest": {
             /** @description 与登录时一致；空则使用 default */
             device_id?: string;
@@ -5213,6 +5368,11 @@ export interface components {
             default_fields?: number[];
             default_priority?: number;
             default_sla_minutes?: number;
+            /**
+             * @description ID 可选稳定身份；省略兼容旧编码调用，传入须命中原对象。
+             * @example 0
+             */
+            id?: string;
             name?: string;
             /**
              * @description Version 可选乐观锁：nil = 不做 CAS（保持旧 patch 行为）；非 nil = 命中
@@ -5224,6 +5384,11 @@ export interface components {
             /** @description W1（BK-18 整改）：code 从 path param 迁入 body（POST 风格，standards §3-2） */
             code: string;
             description?: string;
+            /**
+             * @description ID 可选稳定身份；省略兼容旧编码调用，传入须命中原对象。
+             * @example 0
+             */
+            id?: string;
             is_active?: boolean;
             name?: string;
             states?: number[];
@@ -5291,6 +5456,12 @@ export interface components {
     responses: never;
     parameters: never;
     requestBodies: {
+        /** @description 编码与可选稳定目标条件 */
+        "github_com_tracerbiubiubiu_zhuzhao_internal_model.DeleteByCodeRequest": {
+            content: {
+                "application/json": components["schemas"]["github_com_tracerbiubiubiu_zhuzhao_internal_model.DeleteByCodeRequest"];
+            };
+        };
         /** @description 组织与角色 */
         "github_com_tracerbiubiubiu_zhuzhao_internal_model.BindOrgRoleRequest": {
             content: {

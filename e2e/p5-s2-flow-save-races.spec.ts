@@ -44,7 +44,7 @@ test('P5-S2：旧影响查询和保存响应不得接管重开的类型编辑', 
     }
     await mustData(api(updatePath, { ...auth, method: 'POST', body: { code: codeA, ...graphA } }), '设置 A 的旧状态')
     await mustData(api(updatePath, { ...auth, method: 'POST', body: { code: codeB, transition_meta: metaB } }), '设置 B 的转换元数据')
-    const readTypes = () => mustData(api<{ types: Array<Graph & { code: string; name: string; version: number; transition_meta: unknown }> }>('/api/v1/ticket-types', auth), '回读工单类型')
+    const readTypes = () => mustData(api<{ types: Array<Graph & { id: string; code: string; name: string; version: number; transition_meta: unknown }> }>('/api/v1/ticket-types', auth), '回读工单类型')
     const before = (await readTypes()).types
     const beforeA = before.find(({ code }) => code === codeA)!
     const beforeB = before.find(({ code }) => code === codeB)!
@@ -126,7 +126,7 @@ test('P5-S2：旧影响查询和保存响应不得接管重开的类型编辑', 
     await flushResponse(page, await oldImpact)
     await expect(save).toBeDisabled()
     expect(writes).toEqual([{
-      code: codeB, name: newName, description, is_active: true, version: beforeB.version,
+      id: beforeB.id, code: codeB, name: newName, description, is_active: true, version: beforeB.version,
       ...graphB, transition_meta: metaB,
     }])
 
@@ -208,6 +208,104 @@ test('P5-S2：旧影响查询和保存响应不得接管重开的类型编辑', 
     releaseFailedImpact.resolve()
     for (const code of created) {
       await mustData(api('/api/v1/ticket-types/delete', { ...auth, method: 'POST', body: { code } }), '清理合成工单类型')
+    }
+  }
+})
+
+/** 无网络拦截：用另一真实 API 调用删除/同码重建，验证旧编辑快照被后端拒绝。 */
+test('P5-S2：类型同码重建后，真实 409 拒绝旧 id/version 并保留编辑草稿', async ({ page }) => {
+  const { admin } = loadState()
+  const suffix = Date.now().toString(36)
+  const login = await mustData(apiLogin(admin.employeeNo, admin.password, `flow-recreate-${suffix}`), '类型快照登录')
+  const auth = { token: login.access_token }
+  const code = `e2e_graph_recreate_${suffix}`
+  type TypeSnapshot = Graph & { id: string; code: string; name: string; description: string; version: number }
+  const readType = async () => {
+    const { types } = await mustData(api<{ types: TypeSnapshot[] }>('/api/v1/ticket-types', auth), '回读合成类型快照')
+    const row = types.find((type) => type.code === code)
+    expect(row).toBeTruthy()
+    return row!
+  }
+  let exists = false
+  try {
+    await mustData(api('/api/v1/ticket-types', {
+      ...auth, method: 'POST', body: { code, name: `合成旧类型 ${suffix}` },
+    }), '创建旧类型')
+    exists = true
+    const before = await readType()
+    expect(before.id).toMatch(/^[1-9]\d*$/)
+    expect(before.version).toBe(1)
+
+    await waitUserRateBudget()
+    await uiLogin(page, admin.employeeNo, admin.password)
+    await page.waitForURL(/#\/home/)
+    await page.goto('/#/tickets/types')
+    await page.getByPlaceholder('按名称/编码过滤').fill(code)
+    await page.getByRole('row').filter({ hasText: code }).getByRole('button', { name: '编辑', exact: true }).click()
+    const dialog = page.getByRole('dialog', { name: '编辑类型', exact: true })
+    await expect(dialog.getByTestId('fg-canvas').getByText('open', { exact: true })).toBeVisible()
+    const name = dialog.locator('input[maxlength="100"]')
+    await expect(name).toHaveValue(before.name)
+    await dialog.getByTestId('graph-mode').getByText('JSON 源码').click()
+    const states = dialog.getByPlaceholder('["open","assigned",...]', { exact: true })
+    const transitions = dialog.getByPlaceholder('{"open":["assigned","closed"],...}', { exact: true })
+    const description = dialog.locator('textarea').first()
+    const draftName = `合成旧类型草稿 ${suffix}`
+    const draftDescription = '同码重建冲突后仍须保留的合成草稿'
+    // 只增加节点与出边，不移除旧图状态/出边，避免触发无关的在途工单确认。
+    const draftGraph: Graph = {
+      states: [...before.states, 'draft_review'],
+      transitions: { ...before.transitions, open: [...before.transitions.open!, 'draft_review'], draft_review: ['closed'] },
+    }
+    await name.fill(draftName)
+    await description.fill(draftDescription)
+    await states.fill(JSON.stringify(draftGraph.states))
+    await transitions.fill(JSON.stringify(draftGraph.transitions))
+
+    await mustData(api('/api/v1/ticket-types/delete', {
+      ...auth, method: 'POST', body: { code, id: before.id, version: before.version },
+    }), '另一写方删除旧类型')
+    exists = false
+    await mustData(api('/api/v1/ticket-types', {
+      ...auth, method: 'POST', body: { code, name: `合成重建类型 ${suffix}`, description: '另一写方创建的新对象' },
+    }), '另一写方同码重建类型')
+    exists = true
+    const replacement = await readType()
+    expect(replacement.id).not.toBe(before.id)
+    // 两者 version 相同，确保冲突来自稳定 ID，不能仅靠版本号碰巧挡住覆盖。
+    expect(replacement.version).toBe(before.version)
+
+    const conflict = page.waitForResponse((response) =>
+      new URL(response.url()).pathname === updatePath && response.request().method() === 'POST'
+      && response.request().postDataJSON()?.code === code)
+    await dialog.getByRole('button', { name: '保存', exact: true }).click()
+    const response = await conflict
+    expect(response.request().postDataJSON()).toMatchObject({
+      id: before.id, code, version: before.version, name: draftName, description: draftDescription, ...draftGraph,
+    })
+    expect(response.status()).toBe(409)
+    expect(await response.json()).toMatchObject({ code: 10006 })
+    await flushResponse(page, response)
+    await expect(dialog).toBeVisible()
+    await expect(dialog.getByRole('alert').filter({ hasText: '草稿已保留' })).toBeVisible()
+    await expect(name).toHaveValue(draftName)
+    await expect(description).toHaveValue(draftDescription)
+    await expect(states).toHaveValue(JSON.stringify(draftGraph.states))
+    await expect(transitions).toHaveValue(JSON.stringify(draftGraph.transitions))
+    await expect(dialog.getByRole('button', { name: '保存', exact: true })).toBeEnabled()
+    expect(await readType()).toEqual(replacement)
+
+    // 冲突后的列表刷新只能更新列表；关闭旧草稿后，重开才显示新对象配置。
+    const row = page.getByRole('row').filter({ hasText: code })
+    await expect(row.getByText(replacement.name, { exact: true })).toBeVisible()
+    await dialog.getByRole('button', { name: '取消', exact: true }).click()
+    await expect(dialog).toBeHidden()
+    await row.getByRole('button', { name: '编辑', exact: true }).click()
+    await expect(name).toHaveValue(replacement.name)
+    await expect(description).toHaveValue(replacement.description)
+  } finally {
+    if (exists) {
+      await mustData(api('/api/v1/ticket-types/delete', { ...auth, method: 'POST', body: { code } }), '清理合成重建类型')
     }
   }
 })

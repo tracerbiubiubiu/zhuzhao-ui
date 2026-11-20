@@ -206,7 +206,7 @@ const menuEditor = createMenuEditor({
     }
   },
   // 发送侧 string（P3-6——el-tree 键形态无关，后端 Int64Slice 双兼容）
-  save: (id, ids) => assignRoleMenusApi(id, ids),
+  save: (id, ids, original) => assignRoleMenusApi(id, ids, original),
   success: (target) => {
     ElMessage.success(`已更新「${target.name}」的菜单（整体替换）`)
     tableRef.value?.refresh()
