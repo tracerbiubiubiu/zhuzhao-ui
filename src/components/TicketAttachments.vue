@@ -3,13 +3,14 @@
     <div class="attachments-header">
       <span>附件（{{ attachments.length }}）</span>
       <el-upload
+        v-if="canEdit"
         :show-file-list="false"
         :auto-upload="false"
         multiple
         accept="image/jpeg,image/png,image/webp,image/gif,application/pdf,text/plain,application/zip"
         @change="onUpload"
       >
-        <el-button size="small" :loading="uploading" :disabled="!canEdit">
+        <el-button size="small" :loading="uploading">
           上传附件
         </el-button>
       </el-upload>
@@ -62,7 +63,7 @@ import { formatDateTime } from '@/utils/datetime'
 
 const props = defineProps<{
   ticketId: string
-  canEdit: boolean // 是否显示上传/删除按钮（A.7 拍板：ticket 态存储端点=登录态+L2 零权限码，调用方传 true 常开）
+  canEdit: boolean // 调用方控制入口，存储端点仍校验当前授权。
 }>()
 
 const attachments = ref<AttachmentView[]>([])
@@ -102,7 +103,7 @@ async function refresh(): Promise<boolean | undefined> {
 }
 
 async function onUpload(file: UploadFile) {
-  if (!file.raw) return
+  if (!props.canEdit || !file.raw) return
   const ticketId = props.ticketId
   uploading.value = true
   try {
@@ -123,6 +124,7 @@ async function onUpload(file: UploadFile) {
 }
 
 async function onDelete(att: AttachmentView) {
+  if (!props.canEdit) return
   const ticketId = props.ticketId
   try {
     await ElMessageBox.confirm(`确定删除附件「${att.file_name}」？`, '删除附件', {
@@ -133,7 +135,7 @@ async function onDelete(att: AttachmentView) {
   } catch {
     return
   }
-  if (disposed || ticketId !== props.ticketId) return
+  if (disposed || !props.canEdit || ticketId !== props.ticketId) return
   deletingKey.value = att.object_key
   try {
     await deleteAttachment({ ticket_id: ticketId, object_key: att.object_key })

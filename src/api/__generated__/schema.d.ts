@@ -2778,6 +2778,117 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ticket-types/definitions/plan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 预览工单规则发布 */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            /** @description 草稿和当前发布版本 */
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["github_com_tracerbiubiubiu_zhuzhao_internal_model.TicketDefinitionPlanRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["response.Response"] & {
+                            data?: components["schemas"]["github_com_tracerbiubiubiu_zhuzhao_internal_model.TicketDefinitionPlan"];
+                        };
+                    };
+                };
+                /** @description Conflict */
+                409: {
+                    headers: {
+                        /** @description 计划冲突归因 */
+                        "X-Ticket-Definition-Reason"?: string;
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["response.Response"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ticket-types/definitions/publish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 显式发布工单规则 */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description 首次发布及重试使用的同一操作号 */
+                    "Idempotency-Key": string;
+                };
+                path?: never;
+                cookie?: never;
+            };
+            /** @description 发布计划与告警确认 */
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["github_com_tracerbiubiubiu_zhuzhao_internal_model.TicketDefinitionPublishRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["response.Response"] & {
+                            data?: components["schemas"]["github_com_tracerbiubiubiu_zhuzhao_internal_model.TicketDefinitionPublicationReceipt"];
+                        };
+                    };
+                };
+                /** @description Conflict */
+                409: {
+                    headers: {
+                        /** @description 发布冲突归因 */
+                        "X-Ticket-Definition-Reason"?: string;
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["response.Response"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/ticket-types/delete": {
         parameters: {
             query?: never;
@@ -2998,6 +3109,67 @@ export interface paths {
             };
             requestBody?: never;
             responses: never;
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ticket-types/{code}/published": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 读取建单用已发布表单 */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description 工单类型编码 */
+                    code: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["response.Response"] & {
+                            data?: components["schemas"]["github_com_tracerbiubiubiu_zhuzhao_internal_model.PublishedTicketForm"];
+                        };
+                    };
+                };
+                /** @description Not Found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["response.Response"];
+                    };
+                };
+                /** @description Service Unavailable */
+                503: {
+                    headers: {
+                        /** @description definition_unpublished 表示类型尚无发布版本 */
+                        "X-Ticket-Definition-Reason"?: string;
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["response.Response"];
+                    };
+                };
+            };
         };
         put?: never;
         post?: never;
@@ -3794,7 +3966,10 @@ export interface paths {
         post: {
             parameters: {
                 query?: never;
-                header?: never;
+                header?: {
+                    /** @description 版本化转换原操作号 */
+                    "Idempotency-Key"?: string;
+                };
                 path?: never;
                 cookie?: never;
             };
@@ -3890,6 +4065,47 @@ export interface paths {
                     };
                     content: {
                         "application/json": components["schemas"]["response.Response"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tickets/{id}/actions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 取得工单可执行动作及采集字段 */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description 工单 ID */
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["response.Response"] & {
+                            data?: components["schemas"]["github_com_tracerbiubiubiu_zhuzhao_internal_model.TicketActionList"];
+                        };
                     };
                 };
             };
@@ -5037,6 +5253,9 @@ export interface components {
              */
             attachments?: string[];
             custom_data?: Record<string, never>;
+            definition_hash?: string;
+            /** @description A preview pins the client's expected publication; legacy clients omit both. */
+            definition_version?: string;
             description?: string;
             /**
              * @description EscalationSupervisor 催办上级·人工指定（S10 B10-4——dd §31 基线档；可后续 Assign 改）
@@ -5202,6 +5421,40 @@ export interface components {
             object_key?: string;
             upload_url?: string;
         };
+        "github_com_tracerbiubiubiu_zhuzhao_internal_model.PublishedTicketForm": {
+            definition_ref?: components["schemas"]["github_com_tracerbiubiubiu_zhuzhao_internal_model.TicketDefinitionRef"];
+            fields?: components["schemas"]["github_com_tracerbiubiubiu_zhuzhao_internal_model.PublishedTicketFormField"][];
+            type?: components["schemas"]["github_com_tracerbiubiubiu_zhuzhao_internal_model.PublishedTicketFormType"];
+        };
+        "github_com_tracerbiubiubiu_zhuzhao_internal_model.PublishedTicketFormField": {
+            /** @example 0 */
+            field_id?: string;
+            field_key?: string;
+            field_label?: string;
+            field_meta?: components["schemas"]["github_com_tracerbiubiubiu_zhuzhao_internal_model.PublishedTicketFormFieldMeta"];
+            field_options?: number[];
+            field_type?: string;
+            required?: boolean;
+            sort_order?: number;
+            type_code?: string;
+            validate_regex?: string;
+        };
+        "github_com_tracerbiubiubiu_zhuzhao_internal_model.PublishedTicketFormFieldMeta": {
+            col_span?: number;
+            formula?: string;
+            group?: string;
+            visible_when?: string;
+        };
+        "github_com_tracerbiubiubiu_zhuzhao_internal_model.PublishedTicketFormType": {
+            code?: string;
+            default_sla_hours?: number;
+            description?: string;
+            has_custom_fields?: boolean;
+            is_active?: boolean;
+            name?: string;
+            states?: number[];
+            transitions?: number[];
+        };
         "github_com_tracerbiubiubiu_zhuzhao_internal_model.RefreshRequest": {
             refresh_token: string;
         };
@@ -5296,6 +5549,14 @@ export interface components {
             /** @description kv 行当前版本（回传 expected_version 用） */
             version?: number;
         };
+        "github_com_tracerbiubiubiu_zhuzhao_internal_model.TicketActionCollectField": {
+            key?: string;
+            required?: boolean;
+        };
+        "github_com_tracerbiubiubiu_zhuzhao_internal_model.TicketActionList": {
+            actions?: components["schemas"]["github_com_tracerbiubiubiu_zhuzhao_internal_model.TicketAvailableAction"][];
+            fields?: components["schemas"]["github_com_tracerbiubiubiu_zhuzhao_internal_model.PublishedTicketFormField"][];
+        };
         "github_com_tracerbiubiubiu_zhuzhao_internal_model.TicketAttachmentView": {
             created_at?: string;
             file_name?: string;
@@ -5309,6 +5570,66 @@ export interface components {
             ticket_id?: string;
             /** @example 0 */
             uploaded_by?: string;
+        };
+        "github_com_tracerbiubiubiu_zhuzhao_internal_model.TicketAvailableAction": {
+            action_id?: string;
+            collect_fields?: components["schemas"]["github_com_tracerbiubiubiu_zhuzhao_internal_model.TicketActionCollectField"][];
+            comment_required?: boolean;
+            definition_ref?: components["schemas"]["github_com_tracerbiubiubiu_zhuzhao_internal_model.TicketDefinitionRef"];
+            /** @example 0 */
+            expected_revision?: string;
+            label?: string;
+            to?: string;
+        };
+        "github_com_tracerbiubiubiu_zhuzhao_internal_model.TicketDefinitionPlan": {
+            canonical_hash?: string;
+            changed?: boolean;
+            current_definition_ref?: components["schemas"]["github_com_tracerbiubiubiu_zhuzhao_internal_model.TicketDefinitionRef"];
+            /** @example 0 */
+            draft_revision?: string;
+            /** @example 0 */
+            plan_id?: string;
+            reference_revisions?: {
+                [key: string]: components["schemas"]["github_com_tracerbiubiubiu_zhuzhao_internal_model.TicketDefinitionReferenceRevision"];
+            };
+            warnings?: components["schemas"]["github_com_tracerbiubiubiu_zhuzhao_internal_model.TicketDefinitionWarning"][];
+        };
+        "github_com_tracerbiubiubiu_zhuzhao_internal_model.TicketDefinitionPlanRequest": {
+            code: string;
+            expected_draft_revision: string;
+            expected_published_version?: string;
+        };
+        "github_com_tracerbiubiubiu_zhuzhao_internal_model.TicketDefinitionPublicationReceipt": {
+            changed?: boolean;
+            definition_ref?: components["schemas"]["github_com_tracerbiubiubiu_zhuzhao_internal_model.TicketDefinitionRef"];
+            /** @example 0 */
+            draft_revision?: string;
+            operation_id?: string;
+        };
+        "github_com_tracerbiubiubiu_zhuzhao_internal_model.TicketDefinitionPublishRequest": {
+            acknowledged_warning_ids?: string[];
+            canonical_hash: string;
+            code: string;
+            expected_draft_revision: string;
+            expected_published_version?: string;
+            plan_id: string;
+        };
+        "github_com_tracerbiubiubiu_zhuzhao_internal_model.TicketDefinitionRef": {
+            definition_hash?: string;
+            /** @example 0 */
+            definition_version?: string;
+            type_code?: string;
+        };
+        "github_com_tracerbiubiubiu_zhuzhao_internal_model.TicketDefinitionReferenceRevision": {
+            /** @example 0 */
+            id?: string;
+            /** @example 0 */
+            version?: string;
+        };
+        "github_com_tracerbiubiubiu_zhuzhao_internal_model.TicketDefinitionWarning": {
+            field_key?: string;
+            id?: string;
+            message?: string;
         };
         "github_com_tracerbiubiubiu_zhuzhao_internal_model.TicketTypeFieldInput": {
             field_key: string;
@@ -5324,6 +5645,10 @@ export interface components {
         };
         "github_com_tracerbiubiubiu_zhuzhao_internal_model.TransitionTicketRequest": {
             comment?: string;
+            custom_data_patch?: Record<string, never>;
+            definition_version?: string;
+            /** @description RawMessage preserves the distinction between omitted and explicitly null. */
+            expected_revision?: string;
             /** @example 0 */
             id: string;
             to: string;

@@ -6,7 +6,7 @@
  * （无 keyword=全量命中）竞争首个命中。
  */
 import { test, expect } from '@playwright/test'
-import { api, apiLogin, loadState, mustData } from './helpers'
+import { api, apiLogin, cleanupTicketType, loadState, mustData, publishTicketType } from './helpers'
 import { uiLogin } from './ui'
 
 test.setTimeout(150_000)
@@ -51,6 +51,7 @@ test('P5-S3a：规则页建规则 → 建单自动分派 → 停用不分派 →
     await expect(dlg).not.toBeVisible({ timeout: 10_000 })
     const ruleRow = page.locator('tr', { hasText: keyword })
     await expect(ruleRow).toBeVisible({ timeout: 10_000 })
+    await publishTicketType(h.token, typeCode)
 
     // ── 建单命中 → OnAfterCreate 自动分派给 admin，状态 assigned ──
     const mk = async (title: string) => {
@@ -106,6 +107,6 @@ test('P5-S3a：规则页建规则 → 建单自动分派 → 停用不分派 →
         await api('/api/v1/assignment-rules/delete', { ...h, method: 'POST', body: { id: r.id } }).catch(() => {})
       }
     }
-    await api('/api/v1/ticket-types/delete', { ...h, method: 'POST', body: { code: typeCode } }).catch(() => {})
+    await cleanupTicketType(h.token, typeCode)
   }
 })

@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test'
-import { api, apiLogin, loadState, mustData, tempTicketType } from './helpers'
+import { api, apiLogin, loadState, mustData, publishTicketType, tempTicketType } from './helpers'
 import { uiLogin } from './ui'
 
 async function chooseType(page: Page, code: string) {
@@ -22,6 +22,7 @@ test('S8d：草稿按账号/类型隔离，丢弃与提交均清理（B08-F01）
       await mustData(api('/api/v1/ticket-types/fields/replace', {
         ...h, method: 'POST', body: { code, fields: [{ field_key: 'detail', field_label: '详情草稿', field_type: 'richtext', sort_order: 1 }] },
       }), '草稿字段')
+      await publishTicketType(h.token, code)
     }
     await uiLogin(page, state.admin.employeeNo, state.admin.password)
     let editor = await chooseType(page, a.code)

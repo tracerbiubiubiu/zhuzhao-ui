@@ -12,8 +12,8 @@
  * - 字段校验：required 前置 + validate_regex 客户端预检（03 S8：G2 400 挂表单项）
  * - assigned_to 拒收（W0 P0-5）——发起不传；「创建即分派」形态已随 W0 有意下线
  */
-import { apiReadError } from '@/utils/apiError'
-import { computed, reactive, ref, watch } from 'vue'
+import { apiErrorMessage, apiReadError } from '@/utils/apiError'
+import { computed, onActivated, onDeactivated, onUnmounted, reactive, ref, watch } from 'vue'
 import {
   ElButton, ElCard, ElDatePicker, ElForm, ElFormItem, ElInput, ElInputNumber,
   ElMessage, ElOption, ElRadio, ElRadioGroup, ElRate, ElSelect, ElTag,
@@ -22,10 +22,11 @@ import {
 import type { FormInstance, FormRules } from 'element-plus'
 import { useRouter } from 'vue-router'
 import { useQuery } from '@tanstack/vue-query'
+import { listTicketTypesApi } from '@/api/ticket'
 import {
-  createTicketApi, getTicketTypeFieldsApi, listTicketTypesApi,
-  type TicketTypeFieldDef,
-} from '@/api/ticket'
+  createTicketFromDefinitionApi, getPublishedTicketDefinitionApi,
+  type PublishedTicketDefinition, type PublishedTicketField,
+} from '@/api/ticket/publishedDefinition'
 import { uploadAndConfirm } from '@/api/storage'
 import { getMyOrgsApi } from '@/api/org/selfService'
 import { getOrgTreeApi, type OrgTreeNode } from '@/api/system/org'
@@ -34,6 +35,7 @@ import UserPicker from '@/components/UserPicker/index.vue'
 import RichtextField from '@/components/RichtextField.vue'
 import { richtextDraftKey } from '@/components/useRichtextDraft'
 import { useUserStore } from '@/store/modules/user'
+import { getSessionGeneration } from '@/common/auth/tokenStorage'
 
 defineOptions({ name: 'TicketCreate' })
 
@@ -43,6 +45,9 @@ const richtextRefs = ref<InstanceType<typeof RichtextField>[]>([])
 const userStore = useUserStore()
 const loading = ref(false)
 const errorMsg = ref('')
+const createdTicketId = ref('')
+let active = true
+let disposed = false
 
 const form = reactive({
   type_code: '',
@@ -60,37 +65,84 @@ const rules: FormRules = {
   org_id: [{ required: true, message: '请选择归属组织', trigger: 'change' }],
 }
 
-// ─── 类型与字段定义 ───
+// ─── 类型目录及已发布定义 ───
 const typesQuery = useQuery({ queryKey: ['ticket', 'types'], queryFn: listTicketTypesApi })
-const fields = ref<TicketTypeFieldDef[]>([])
-const loadedType = ref('')
+const definition = ref<PublishedTicketDefinition>()
+const nextDefinition = ref<PublishedTicketDefinition>()
+const definitionLoading = ref(false)
+const definitionStale = ref(false)
+const fieldsPreviewOpen = ref(false)
+const fields = computed(() => definition.value?.fields ?? [])
 const fieldsError = ref('')
-const fieldsReady = computed(() => !!loadedType.value && loadedType.value === form.type_code)
-let fieldsSeq = 0 // 快速切换类型时弃置过期响应（后到的旧 schema 不得覆盖新选中类型）
+const fieldsReady = computed(() => definition.value?.type.code === form.type_code
+  && !definitionLoading.value && !definitionStale.value && !fieldsError.value && !nextDefinition.value)
+let fieldsSeq = 0
 
-async function loadTypeFields(code: string) {
+async function loadPublishedDefinition(code: string) {
   const seq = ++fieldsSeq
-  fields.value = []
-  loadedType.value = ''
+  const previous = definition.value?.type.code === code ? definition.value : undefined
+  nextDefinition.value = undefined
   fieldsError.value = ''
-  form.custom = {}
+  errorMsg.value = ''
+  definitionStale.value = false
+  definitionLoading.value = !!code
+  if (!previous) {
+    definition.value = undefined
+    fieldsPreviewOpen.value = false
+    form.custom = {}
+    fileErrors.value = {}
+  }
   fileUploading.value = {}
-  fileErrors.value = {}
   if (!code) return
   try {
-    const next = await getTicketTypeFieldsApi(code)
+    const next = await getPublishedTicketDefinitionApi(code)
     if (seq !== fieldsSeq) return
-    fields.value = next
-    loadedType.value = code
-  } catch {
-    if (seq === fieldsSeq) fieldsError.value = '字段配置加载失败，请重试'
+    if (previous && Object.keys(form.custom).length && (
+      previous.definition_ref.definition_version !== next.definition_ref.definition_version
+      || previous.definition_ref.definition_hash !== next.definition_ref.definition_hash
+    )) {
+      nextDefinition.value = next
+    } else {
+      definition.value = next
+    }
+  } catch (err) {
+    if (seq === fieldsSeq) {
+      fieldsError.value = apiReadError(err, '已发布规则加载失败，请重试', '该类型的已发布规则当前不可用')
+    }
+  } finally {
+    if (seq === fieldsSeq) definitionLoading.value = false
   }
 }
 
-watch(() => form.type_code, loadTypeFields, { flush: 'sync' })
+function confirmNewDefinition() {
+  if (!nextDefinition.value || definitionLoading.value || loading.value) return
+  richtextRefs.value.forEach(editor => editor.clearDraft())
+  form.custom = {}
+  fileErrors.value = {}
+  definition.value = nextDefinition.value
+  nextDefinition.value = undefined
+  formRef.value?.clearValidate()
+}
+
+watch(() => form.type_code, loadPublishedDefinition, { flush: 'sync' })
+onActivated(() => {
+  active = true
+  if (form.type_code && !loading.value && !definitionLoading.value && !hasPendingUpload.value) {
+    void loadPublishedDefinition(form.type_code)
+  }
+})
+onDeactivated(() => { active = false })
+onUnmounted(() => { active = false; disposed = true; fieldsSeq++ })
+
+function draftKeyFor(fieldKey: string) {
+  const ref = definition.value?.definition_ref
+  if (!ref) return undefined
+  const scope = JSON.stringify(['create', ref.type_code, ref.definition_version, ref.definition_hash])
+  return richtextDraftKey(userStore.profile?.id, scope, fieldKey)
+}
 
 // ── B1-6 批3：条件显隐（渲染端 watch 联动——服务端 G2 提交时兜底断言） ──
-function isVisibleField(f: TicketTypeFieldDef): boolean {
+function isVisibleField(f: PublishedTicketField): boolean {
   const vw = (f.field_meta as { visible_when?: string } | null | undefined)?.visible_when
   if (!vw) return true
   try {
@@ -121,26 +173,27 @@ const visibleFields = computed(() => fields.value.filter((f) => isVisibleField(f
 // ── B1-6 批3 file：上传字段（presign→PUT→confirm 三步直传→object_key 入 custom_data） ──
 const fileUploading = ref<Record<string, boolean>>({})
 const fileErrors = ref<Record<string, string>>({})
+const hasPendingUpload = computed(() => Object.values(fileUploading.value).some(Boolean))
 
-function fileKeys(f: TicketTypeFieldDef): string[] {
+function fileKeys(f: PublishedTicketField): string[] {
   return ((form.custom as Record<string, unknown>)[f.field_key] as string[] | undefined) ?? []
 }
 
-function setFileKeys(f: TicketTypeFieldDef, keys: string[]) {
+function setFileKeys(f: PublishedTicketField, keys: string[]) {
   ;(form.custom as Record<string, unknown>)[f.field_key] = keys.length ? keys : undefined
 }
 
-function mimeAllowed(f: TicketTypeFieldDef, file: File): boolean {
+function mimeAllowed(f: PublishedTicketField, file: File): boolean {
   const raw = f.field_options
   if (!Array.isArray(raw) || raw.length === 0) return true
   return raw.some((m) => typeof m === 'string' && file.type === m)
 }
 
-async function handleFileUpload(f: TicketTypeFieldDef, event: Event) {
+async function handleFileUpload(f: PublishedTicketField, event: Event) {
   const input = event.target as HTMLInputElement
   const file = input.files?.[0]
   input.value = ''
-  if (!file || !fieldsReady.value) return
+  if (!file || !fieldsReady.value || loading.value || fileUploading.value[f.field_key]) return
   const seq = fieldsSeq
   fileErrors.value[f.field_key] = ''
   if (!mimeAllowed(f, file)) {
@@ -158,7 +211,8 @@ async function handleFileUpload(f: TicketTypeFieldDef, event: Event) {
   }
 }
 
-function removeFileKey(f: TicketTypeFieldDef, key: string) {
+function removeFileKey(f: PublishedTicketField, key: string) {
+  if (!fieldsReady.value || loading.value) return
   setFileKeys(f, fileKeys(f).filter((k) => k !== key))
 }
 
@@ -198,7 +252,7 @@ const dictCache = ref<Record<string, Array<{ value: string; label: string }>>>({
 const dictErrors = ref<Record<string, string>>({})
 const dictLoading = ref<Record<string, boolean>>({})
 const dictPending = new Map<string, Promise<void>>()
-function dictCode(f: TicketTypeFieldDef): string {
+function dictCode(f: PublishedTicketField): string {
   const raw = f.field_options
   return Array.isArray(raw) && raw.length === 1 && typeof raw[0] === 'string' && raw[0].startsWith('dict:') ? raw[0].slice(5) : ''
 }
@@ -221,18 +275,19 @@ async function loadDictionary(code: string) {
   dictPending.set(code, pending)
   return pending
 }
-watch(() => fields.value, fs => {
+watch([fields, definitionLoading], ([fs, reading]) => {
+  if (reading) return
   const codes = new Set(fs.map(dictCode).filter(Boolean))
   codes.forEach(code => { void loadDictionary(code) })
 }, { immediate: true })
 
 /** B1-3 formula 字段判定（field_meta.formula 非空——服务端求值 SSOT，前端禁编辑） */
-function isFormulaField(f: TicketTypeFieldDef): boolean {
+function isFormulaField(f: PublishedTicketField): boolean {
   return !!(f as { field_meta?: { formula?: string } | null }).field_meta?.formula
 }
 
 /** select 选项归一（字符串数组 / {value,label} 数组 / dict:<code> 引用——B1-2 三形态） */
-function optionsOf(f: TicketTypeFieldDef): Array<{ value: string; label: string }> {
+function optionsOf(f: PublishedTicketField): Array<{ value: string; label: string }> {
   const raw = f.field_options
   if (Array.isArray(raw)) {
     // 挂字典引用：展开启用项（缓存未到时暂空——watch immediate 补齐后响应式刷新）
@@ -285,31 +340,46 @@ async function loadOrgs() {
 void loadOrgs()
 
 async function handleSubmit() {
+  if (!active || loading.value || hasPendingUpload.value || (form.type_code && !fieldsReady.value)) return
   const seq = fieldsSeq
-  const valid = await formRef.value?.validate().catch(() => false)
-  if (!valid || seq !== fieldsSeq || !fieldsReady.value) return
+  const generation = getSessionGeneration()
+  const isCurrent = () => !disposed && seq === fieldsSeq && generation === getSessionGeneration()
   loading.value = true
   errorMsg.value = ''
   try {
-    const { id } = await createTicketApi({
+    const valid = await formRef.value?.validate().catch(() => false)
+    const snapshot = definition.value
+    if (!valid || !active || !isCurrent() || !snapshot || !fieldsReady.value || hasPendingUpload.value) return
+    const customData = { ...form.custom }
+    const { id } = await createTicketFromDefinitionApi({
       type_code: form.type_code,
       title: form.title,
       org_id: form.org_id,
       priority: form.priority,
       description: form.description || undefined,
-      custom_data: Object.keys(form.custom).length ? form.custom : undefined,
+      custom_data: Object.keys(customData).length ? customData : undefined,
       ...(form.escalationSupervisor ? { escalation_supervisor_id: form.escalationSupervisor } : {}),
-    })
+    }, snapshot.definition_ref)
+    if (!isCurrent()) return
     richtextRefs.value.forEach((editor) => editor.clearDraft())
     // 发起页在 keep-alive 中存活；成功后复原表单，返回发起页不能继承已提交内容。
     Object.assign(form, { type_code: '', title: '', description: '', priority: 3, org_id: '', custom: {}, escalationSupervisor: '' })
-    fields.value = []
     formRef.value?.clearValidate()
-    ElMessage.success('工单已提交')
-    router.push(`/tickets/${id}`)
+    if (active) {
+      ElMessage.success('工单已提交')
+      void router.push(`/tickets/${id}`)
+    } else {
+      createdTicketId.value = id
+    }
   } catch (err: unknown) {
-    const resp = (err as { response?: { data?: { message?: string } } })?.response?.data
-    errorMsg.value = resp?.message ?? '提交失败，请稍后重试'
+    if (!isCurrent()) return
+    const status = (err as { response?: { status?: number } })?.response?.status
+    if (status === 409) {
+      definitionStale.value = true
+      errorMsg.value = `${apiErrorMessage(err, '提交发生冲突')}。请刷新已发布定义并核对字段后再提交。`
+    } else {
+      errorMsg.value = apiErrorMessage(err, '提交失败，请稍后重试')
+    }
   } finally {
     loading.value = false
   }
@@ -321,15 +391,56 @@ async function handleSubmit() {
     <div class="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
     <el-card shadow="never">
       <el-alert v-if="errorMsg" :title="errorMsg" type="error" show-icon class="mb-4" :closable="false" />
-      <el-form ref="formRef" :model="form" :rules="rules" label-width="100px">
+      <el-alert v-if="createdTicketId" title="工单已提交" type="success" show-icon class="mb-4" @close="createdTicketId = ''">
+        <el-button link type="primary" @click="router.push(`/tickets/${createdTicketId}`)">查看已提交工单</el-button>
+      </el-alert>
+      <el-form ref="formRef" :model="form" :rules="rules" label-width="100px" :disabled="loading" :inert="loading">
         <el-form-item label="工单类型" prop="type_code">
-          <el-select v-model="form.type_code" :disabled="loading" placeholder="选择类型" class="!w-full">
-            <el-option v-for="t in typesQuery.data.value ?? []" :key="t.code" :label="t.name" :value="t.code" />
+          <el-select v-model="form.type_code" :loading="typesQuery.isFetching.value" placeholder="选择类型" class="!w-full">
+            <el-option
+              v-for="t in typesQuery.data.value ?? []"
+              :key="t.code" :label="definition?.type.code === t.code ? definition.type.name : t.name" :value="t.code"
+            />
           </el-select>
         </el-form-item>
-        <el-alert v-if="fieldsError" :title="fieldsError" type="error" show-icon :closable="false" class="mb-4">
-          <el-button size="small" @click="loadTypeFields(form.type_code)">重试</el-button>
+        <el-alert
+          v-if="typesQuery.error.value"
+          :title="apiReadError(typesQuery.error.value, '工单类型加载失败，请重试')"
+          type="error" show-icon :closable="false" class="mb-4"
+        >
+          <el-button size="small" @click="typesQuery.refetch()">重试加载类型</el-button>
         </el-alert>
+        <p v-if="definitionLoading" class="mb-4" role="status">正在读取已发布定义</p>
+        <el-alert v-if="fieldsError" :title="fieldsError" type="error" show-icon :closable="false" class="mb-4">
+          <el-button size="small" @click="loadPublishedDefinition(form.type_code)">重试读取已发布定义</el-button>
+        </el-alert>
+        <el-button
+          v-if="definitionStale" size="small" class="mb-4" @click="loadPublishedDefinition(form.type_code)"
+        >刷新已发布定义</el-button>
+        <el-alert
+          v-if="nextDefinition"
+          :title="`已发布版本已变更为 ${nextDefinition.definition_ref.definition_version}`"
+          type="warning" show-icon :closable="false" class="mb-4"
+        >
+          <p>切换版本会清空当前自定义字段。请先留存需要的内容，再按新版本核对填写。</p>
+          <el-button size="small" @click="confirmNewDefinition">切换到新版本</el-button>
+        </el-alert>
+        <div v-if="definition" class="mb-4">
+          <div>{{ definition.type.name }} · {{ fieldsReady ? '已发布版本' : '已读取版本' }} {{ definition.definition_ref.definition_version }}</div>
+          <div class="text-xs [overflow-wrap:anywhere]">定义摘要 {{ definition.definition_ref.definition_hash }}</div>
+          <p v-if="definition.type.description">{{ definition.type.description }}</p>
+          <details class="mt-1" @toggle="fieldsPreviewOpen = ($event.target as HTMLDetailsElement).open">
+            <summary class="cursor-pointer">核对字段定义</summary>
+            <template v-if="fieldsPreviewOpen">
+              <p v-if="!fields.length">此版本无自定义字段</p>
+              <ul v-else class="pl-5">
+                <li v-for="f in fields" :key="f.field_key">
+                  {{ f.field_label }}（{{ f.field_key }}{{ f.required ? '，必填' : '' }}）
+                </li>
+              </ul>
+            </template>
+          </details>
+        </div>
         <el-form-item label="标题" prop="title">
           <el-input v-model="form.title" maxlength="200" show-word-limit placeholder="一句话描述问题或请求" />
         </el-form-item>
@@ -352,12 +463,12 @@ async function handleSubmit() {
         </el-form-item>
 
         <!-- 动态自定义字段（七类型渲染器；类型切换时重置） -->
-        <template v-for="f in visibleFields" :key="form.type_code + ':' + f.field_key">
+        <template v-for="f in visibleFields" :key="`${form.type_code}:${definition?.definition_ref.definition_version}:${f.field_key}`">
           <!-- tips=说明块无值：脱离 label 列整行呈现（此前 label/内容双显同文案） -->
           <div v-if="f.field_type === 'tips'" class="text-xs text-gray-400 -mt-1 mb-3">
             {{ f.field_label }}
           </div>
-          <el-form-item v-else :label="f.field_label" :prop="`custom.${f.field_key}`" :rules="fieldRules[f.field_key]">
+          <el-form-item v-else :label="f.field_label" :prop="['custom', f.field_key]" :rules="fieldRules[f.field_key]">
             <el-input
               v-if="f.field_type === 'input' && !isFormulaField(f)" v-model="(form.custom[f.field_key] as string | undefined)"
               :placeholder="f.required ? '必填' : ''"
@@ -419,12 +530,14 @@ async function handleSubmit() {
               <input
                 type="file"
                 :data-field-key="f.field_key"
+                :disabled="!fieldsReady || loading"
                 class="hidden"
                 @change="handleFileUpload(f, $event)"
               />
               <el-button
                 size="small"
                 :loading="fileUploading[f.field_key]"
+                :disabled="!fieldsReady"
                 @click="(($event?.target as HTMLElement)?.closest('.file-upload-field')?.querySelector('input[type=file]') as HTMLInputElement | null)?.click()"
               >
                 选择文件
@@ -434,7 +547,7 @@ async function handleSubmit() {
                   v-for="k in fileKeys(f)"
                   :key="k"
                   size="small"
-                  closable
+                  :closable="fieldsReady && !loading"
                   @close="removeFileKey(f, k)"
                 >{{ shortName(k) }}</el-tag>
               </div>
@@ -447,7 +560,7 @@ async function handleSubmit() {
               ref="richtextRefs"
               :model-value="(form.custom[f.field_key] as string | undefined) ?? ''"
               :placeholder="f.required ? '必填' : ''"
-              :draft-key="richtextDraftKey(userStore.profile?.id, form.type_code, f.field_key)"
+              :draft-key="draftKeyFor(f.field_key)"
               @update:model-value="(v: string) => { form.custom[f.field_key] = v }"
             />
             <el-input
@@ -472,7 +585,7 @@ async function handleSubmit() {
           <span class="text-xs text-gray-400 ml-2">可选：工单超时催办时通知的上级（不填则只催处理人）</span>
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" :loading="loading" :disabled="!!form.type_code && !fieldsReady" @click="handleSubmit">提交工单</el-button>
+          <el-button type="primary" :loading="loading" :disabled="hasPendingUpload || (!!form.type_code && !fieldsReady)" @click="handleSubmit">提交工单</el-button>
           <el-button @click="router.back()">取消</el-button>
         </el-form-item>
       </el-form>

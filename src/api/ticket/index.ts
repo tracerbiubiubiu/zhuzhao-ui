@@ -9,6 +9,7 @@
 import type { AxiosRequestConfig } from 'axios'
 import request from '@vea/request'
 import type { components, paths } from '@/api/__generated__/schema'
+import type { TransitionInstanceInput } from './instanceActions'
 
 /** 工单行（= model.Ticket 的 JSON 投影；assigned_to 可空——创建即未分派；
  * created_by_name/assignee_name 为 W4 后端回填字段（03 S9——real_name 优先/空回退
@@ -67,8 +68,8 @@ export async function listTicketsApi(
 }
 
 /** 工单详情（静态路由 /tickets/:id 消费——W4 详情批扩评论/备注/流转） */
-export async function getTicketApi(id: string): Promise<TicketRow> {
-  const data = await request.get(`/api/v1/tickets/${id}`)
+export async function getTicketApi(id: string, config?: Pick<AxiosRequestConfig, '_silentError'>): Promise<TicketRow> {
+  const data = await request.get(`/api/v1/tickets/${id}`, config)
   return data as unknown as TicketRow
 }
 
@@ -227,10 +228,13 @@ export interface TicketTypeFieldDef {
   sort_order: number
 }
 
-export async function getTicketTypeFieldsApi(typeCode: string): Promise<TicketTypeFieldDef[]> {
+export async function getTicketTypeFieldsApi(typeCode: string, config?: Pick<AxiosRequestConfig, '_silentError'>): Promise<TicketTypeFieldDef[]> {
   // 响应为 {fields:[...]} 包装（gin.H——与 types 端点同款）
-  const data = await request.get(`/api/v1/ticket-types/${typeCode}/fields`)
-  return ((data as unknown as { fields?: TicketTypeFieldDef[] })?.fields ?? [])
+  const data = await request.get(`/api/v1/ticket-types/${typeCode}/fields`, config)
+  const fields = (data as unknown as { fields?: TicketTypeFieldDef[] | null })?.fields
+  if (fields === null) return []
+  if (!Array.isArray(fields)) throw new Error('工单字段响应不完整，请重试')
+  return fields
 }
 
 type GeneratedCreateTicketInput = components['schemas']['github_com_tracerbiubiubiu_zhuzhao_internal_model.CreateTicketRequest']
@@ -337,15 +341,24 @@ export async function removeTicketTagApi(input: { ticket_id: string; tag: string
 }
 
 /** 统一转换执行（S3a B3-1——POST /tickets/transition；condition/validator 服务端判） */
-export async function transitionTicketApi(input: { id: string; to: string; comment?: string }): Promise<TicketRow> {
-  const data = await request.post('/api/v1/tickets/transition', input, { _silentError: true })
+export async function transitionTicketApi(input: TransitionInstanceInput, operationId?: string): Promise<TicketRow> {
+  const data = await request.post('/api/v1/tickets/transition', input, {
+    _silentError: true,
+    ...(operationId ? { headers: { 'Idempotency-Key': operationId } } : {}),
+  })
   return data as unknown as TicketRow
 }
 
 /** 当前用户可执行的转换列表（S3a B3-1——Jira condition 语义按用户过滤；前端按钮渲染依据） */
-export async function listAvailableTransitionsApi(id: string): Promise<string[]> {
-  const data = await request.get(`/api/v1/tickets/${id}/transitions/available`)
-  return ((data as unknown as { transitions?: string[] })?.transitions ?? [])
+export async function listAvailableTransitionsApi(id: string, config?: Pick<AxiosRequestConfig, '_silentError'>): Promise<string[]> {
+  const data = await request.get(`/api/v1/tickets/${id}/transitions/available`, config)
+  const transitions = (data as unknown as { transitions?: string[] | null })?.transitions
+  // 旧接口在流程没有出边时序列化 Go nil slice 为 null。
+  if (transitions === null) return []
+  if (!Array.isArray(transitions) || !transitions.every(to => typeof to === 'string' && to.trim())) {
+    throw new Error('可用转换响应不完整，请刷新工单')
+  }
+  return transitions
 }
 
 /** 分派规则行（S3a B3-2——自动分派管理面） */

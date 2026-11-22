@@ -21,7 +21,7 @@ test('CF12：画布删除保留态与JSON缺失明确阻保存，自定义态可
     await dialog.getByTestId('fg-canvas').getByText('assigned', { exact: true }).click()
     await dialog.getByTestId('fg-delete-selected').click()
     await expect(dialog.getByTestId('fg-errors')).toContainText('states 必须保留内置状态 "assigned"')
-    await dialog.getByRole('button', { name: '保存', exact: true }).click()
+    await dialog.getByRole('button', { name: '保存草稿', exact: true }).click()
     await expect(dialog).toBeVisible()
     expect(writes).toBe(0)
     await dialog.getByRole('button', { name: '取消', exact: true }).click()
@@ -32,7 +32,7 @@ test('CF12：画布删除保留态与JSON缺失明确阻保存，自定义态可
     for (const missing of ['open', 'assigned', 'closed']) {
       await states.fill(JSON.stringify(['open', 'assigned', 'closed'].filter((name) => name !== missing)))
       await transitions.fill('{}')
-      await dialog.getByRole('button', { name: '保存', exact: true }).click()
+      await dialog.getByRole('button', { name: '保存草稿', exact: true }).click()
       await expect(dialog).toContainText(`states 必须保留内置状态 "${missing}"`)
       expect(writes).toBe(0)
     }
@@ -40,7 +40,7 @@ test('CF12：画布删除保留态与JSON缺失明确阻保存，自定义态可
     const customTransitions = { open: ['assigned', 'security_review'], assigned: ['closed'], security_review: ['closed'], closed: ['open'] }
     await states.fill(JSON.stringify(customStates))
     await transitions.fill(JSON.stringify(customTransitions))
-    await dialog.getByRole('button', { name: '保存', exact: true }).click()
+    await dialog.getByRole('button', { name: '保存草稿', exact: true }).click()
     await expect(dialog).not.toBeVisible()
     expect(writes).toBe(1)
     const { types } = await mustData(api<{ types: Array<{ code: string; states: string[]; transitions: unknown }> }>('/api/v1/ticket-types', h), 'types readback')

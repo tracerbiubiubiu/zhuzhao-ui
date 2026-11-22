@@ -2,8 +2,7 @@
 /**
  * 工单详情（P4-W4 详情批——评论/备注/关联/流转，03 S10/S11）
  *
- * - 处理动作=分派/取消分派/关闭/编辑/删除（S11：in_progress/pending_verify/rejected
- *   经 API 不可达，勿做流转 UI；closed 后编辑/分派/关闭隐藏——后端 409+90004 兜底）
+ * - 转换按本工单绑定规则和当前权限读取。缺失原流程规则时只显示可读取信息。
  * - 评论/备注「全部展示+条数上限提示」（后端无分页，01 §8-W4 勿假设 page/total）；
  *   内部备注分层渲染（可见性由服务端过滤，viewer 只见公开评论——S10）
  * - 关联正反向渲染按 source 判方向；判重 409/自关联 400 内联呈现（勿纯 toast）
@@ -24,11 +23,14 @@ import { useQuery, useQueryClient } from '@tanstack/vue-query'
 import {
   addTicketCCApi, assignTicketApi, closeTicketApi, createTicketCommentApi, createTicketNoteApi,
   createTicketRelationApi, deleteTicketApi, getTicketApi, getTicketCommentsApi,
-  getTicketRelationsApi, listAvailableTransitionsApi, listTicketCCApi, listTicketTagsApi,
+  getTicketRelationsApi, listTicketCCApi, listTicketTagsApi,
   listTicketTypesApi, listTicketRelationCandidatesApi, addTicketTagsApi, removeTicketCCApi, removeTicketTagApi,
-  transitionTicketApi, STATUS_LABEL, updateTicketApi, type TagRow, type TicketCCRow,
+  STATUS_LABEL, updateTicketApi, type TagRow, type TicketCCRow,
 } from '@/api/ticket'
+import { getInstanceActionsApi, normalizeTicketDefinition, transitionInstanceApi, type InstanceAction } from '@/api/ticket/instanceActions'
+import { newTicketOperationKey } from '@/api/ticket/operationKey'
 import { useUserStoreWithOut } from '@/store/modules/user'
+import { getSessionGeneration } from '@/common/auth/tokenStorage'
 import UserNameText from '@/components/UserNameText/index.vue'
 import { getTicketTypeFieldsApi, type TicketTypeFieldDef , renderRichtextApi } from '@/api/ticket'
 import { getDictItemsByCodeApi } from '@/api/system/dict'
@@ -36,6 +38,8 @@ import UserPicker from '@/components/UserPicker/index.vue'
 import TicketAttachments from '@/components/TicketAttachments.vue'
 import { createRelationSession } from './relationSession'
 import { useRenderedRichtext } from './useRenderedRichtext'
+import TransitionActionDialog from './TransitionActionDialog.vue'
+import { createTransitionSubmission } from './transitionSubmission'
 
 // keep-alive 契约：name=静态路由名（参数路由——同工单不同 ID 依赖 :key 路由 fullPath 分实例）
 defineOptions({ name: 'TicketDetail' })
@@ -48,13 +52,15 @@ const userStore = useUserStoreWithOut()
 // AppView 按 fullPath 缓存实例。路由参数由 RouterView 传入，缓存页不跟随全局 route 换单。
 const ticketId = toRef(props, 'ticketId')
 const active = ref(true)
-onActivated(() => { active.value = true })
 onDeactivated(() => { active.value = false })
 const canQueryTicket = computed(() => active.value && !!ticketId.value && ticketId.value !== 'new')
 
 const ticketQuery = useQuery({
-  queryKey: computed(() => ['ticket', 'detail', ticketId.value]),
-  queryFn: () => getTicketApi(ticketId.value),
+  queryKey: computed(() => ['ticket', 'detail', ticketId.value] as const),
+  queryFn: async ({ queryKey }) => {
+    const row = await getTicketApi(queryKey[2], { _silentError: true })
+    return { row, definition: normalizeTicketDefinition(row) }
+  },
   enabled: canQueryTicket,
 })
 const commentsQuery = useQuery({
@@ -79,20 +85,38 @@ const tagsQuery = useQuery({
 })
 const typesQuery = useQuery({ queryKey: ['ticket', 'types'], queryFn: listTicketTypesApi })
 
-const ticket = computed(() => ticketQuery.data.value)
+const ticket = computed(() => ticketQuery.isSuccess.value ? ticketQuery.data.value?.row : undefined)
+const ticketDefinition = computed(() => ticketQuery.isSuccess.value ? ticketQuery.data.value?.definition : undefined)
+const canWriteTicket = computed(() => canQueryTicket.value && !!ticket.value && ticketDefinition.value?.resolution !== 'degraded')
 const typeLabel = computed(
   () => typesQuery.data.value?.find((t) => t.code === ticket.value?.type_code)?.name ?? ticket.value?.type_code ?? '—',
 )
 const isClosed = computed(() => ticket.value?.status === 'closed')
 
-// B1-5 自定义字段 schema + 回显（01 号 §3.5——"填了看不见"痛点收口件）
+// 仅旧响应缺少全部版本元数据时，兼容读取原有类型字段接口。
 const typeFieldsQuery = useQuery({
   queryKey: computed(() => ['ticket', 'typeFields', ticket.value?.type_code ?? ''] as const),
-  queryFn: ({ queryKey }) => getTicketTypeFieldsApi(queryKey[2]),
-  enabled: computed(() => canQueryTicket.value && !!ticket.value?.type_code),
+  queryFn: ({ queryKey }) => getTicketTypeFieldsApi(queryKey[2], { _silentError: true }),
+  enabled: computed(() => canQueryTicket.value && !!ticket.value?.type_code && ticketDefinition.value?.resolution === 'legacy'),
   staleTime: 60_000,
 })
-const customFields = computed(() => typeFieldsQuery.data.value ?? [])
+
+const actionsQuery = useQuery({
+  queryKey: computed(() => ['ticket', 'transitions', ticketId.value, ticket.value?.status, ticketDefinition.value] as const),
+  queryFn: ({ queryKey }) => {
+    if (!queryKey[4]) throw new Error('请先刷新工单详情')
+    return getInstanceActionsApi(queryKey[2], queryKey[4])
+  },
+  enabled: computed(() => canWriteTicket.value && (!isClosed.value || ticketDefinition.value?.resolution === 'exact')),
+  retry: false,
+})
+
+const customFields = computed(() => {
+  if (ticketDefinition.value?.resolution === 'exact') {
+    return actionsQuery.data.value?.fields ?? ticketDefinition.value.fields ?? []
+  }
+  return ticketDefinition.value?.resolution === 'legacy' ? typeFieldsQuery.data.value ?? [] : []
+})
 
 const customValue = (key: string): unknown => {
   const cd = (ticket.value?.custom_data ?? {}) as Record<string, unknown>
@@ -116,29 +140,112 @@ const formatCustomValue = (f: TicketTypeFieldDef): string => {
   return String(v)
 }
 
-// ─── S3a B3-1 统一转换（available 按用户过滤——condition 语义；叠加 Close/Assign 既有按钮）───
-const availableTransitionsQuery = useQuery({
-  queryKey: computed(() => ['ticket', 'transitions', ticketId.value, ticket.value?.status] as const),
-  queryFn: ({ queryKey }) => listAvailableTransitionsApi(queryKey[2]),
-  enabled: computed(() => canQueryTicket.value && !!ticket.value && !isClosed.value),
-  retry: false,
+const availableActions = computed(() => actionsQuery.isSuccess.value ? actionsQuery.data.value?.actions ?? [] : [])
+const selectedAction = ref<InstanceAction | null>(null)
+let selectedSession: number | undefined
+const actionDialog = computed(() => {
+  const action = selectedAction.value
+  return action && (action.fields.length || action.commentRequired) ? action : null
 })
-const availableTransitions = computed(() =>
-  availableTransitionsQuery.isError.value ? [] : (availableTransitionsQuery.data.value ?? []),
-)
-const transitionLoading = ref(false)
+const transition = createTransitionSubmission({
+  send: transitionInstanceApi,
+  newKey: newTicketOperationKey,
+})
+const transitionRefreshing = ref(false)
+const transitionNotice = ref('')
+const attachments = ref<InstanceType<typeof TicketAttachments>>()
+let attachmentsNeedRefresh = false
+onActivated(() => {
+  active.value = true
+  if (!attachmentsNeedRefresh) return
+  attachmentsNeedRefresh = false
+  void attachments.value?.refresh()
+})
+const canUseOtherWrites = computed(() => canWriteTicket.value && !transition.state.busy && !transitionRefreshing.value
+  && transition.state.phase !== 'unknown' && transition.state.phase !== 'refresh')
+const canUseLegacyClose = computed(() => canUseOtherWrites.value && ticketDefinition.value?.resolution === 'legacy')
+const selectedActionCurrent = computed(() => {
+  const selected = selectedAction.value
+  return availableActions.value.some(action => action.id === selected?.id && action.to === selected.to
+    && action.expectedRevision === selected.expectedRevision && action.definitionVersion === selected.definitionVersion)
+})
+const transitionNeedsRefresh = computed(() => transition.state.phase === 'refresh'
+  || (!!selectedAction.value && !selectedActionCurrent.value && transition.state.phase !== 'unknown'))
 
-async function doTransition(to: string) {
-  transitionLoading.value = true
+function clearSelectedAction() {
+  selectedAction.value = null
+  selectedSession = undefined
+  transitionNotice.value = ''
+  transition.reset()
+}
+
+watch(ticketId, () => {
+  attachmentsNeedRefresh = false
+  clearSelectedAction()
+}, { flush: 'sync' })
+onBeforeUnmount(clearSelectedAction)
+
+async function refreshTransitionState() {
+  if (!canQueryTicket.value || transitionRefreshing.value) return
+  transitionRefreshing.value = true
+  const source = ticketId.value
   try {
-    await transitionTicketApi({ id: ticketId.value, to })
-    ElMessage.success(`已转换到 ${STATUS_LABEL[to] ?? to}`)
-    await queryClient.invalidateQueries({ queryKey: ['ticket'] })
-  } catch (err: unknown) {
-    const resp = (err as { response?: { data?: { message?: string } } })?.response?.data
-    ElMessage.error(resp?.message ?? '转换失败（可能不满足前置条件）')
+    await refreshAll(source)
+    if (!actionDialog.value && transition.state.phase === 'refresh'
+      && ticketId.value === source && ticketQuery.isSuccess.value && !actionsQuery.isError.value) {
+      const message = transition.state.message
+      clearSelectedAction()
+      transitionNotice.value = message
+    }
   } finally {
-    transitionLoading.value = false
+    transitionRefreshing.value = false
+  }
+}
+
+function openTransition(action: InstanceAction) {
+  if (!canWriteTicket.value || transitionRefreshing.value || transition.state.busy
+    || transition.state.phase === 'unknown' || transition.state.phase === 'refresh') return
+  clearSelectedAction()
+  selectedSession = getSessionGeneration()
+  selectedAction.value = action
+  if (!actionDialog.value) void submitTransition()
+}
+
+function dismissTransition() {
+  if (active.value && !transition.state.busy && transition.state.phase !== 'unknown') clearSelectedAction()
+}
+
+async function submitTransition(evidence?: { custom_data_patch: Record<string, unknown>; comment?: string }) {
+  const action = selectedAction.value
+  if (!action || !canWriteTicket.value || transitionRefreshing.value || transition.state.busy || transitionNeedsRefresh.value) return
+  const source = ticketId.value
+  const generation = getSessionGeneration()
+  if (selectedSession !== generation) {
+    clearSelectedAction()
+    return
+  }
+  const accepted = transition.state.phase === 'unknown'
+    ? await transition.retry()
+    : await transition.submit({
+      id: source, to: action.to,
+      ...(action.expectedRevision !== undefined ? { expected_revision: action.expectedRevision, definition_version: action.definitionVersion } : {}),
+      ...evidence,
+    })
+  if (ticketId.value !== source || selectedAction.value !== action) return
+  if (generation !== getSessionGeneration()) {
+    clearSelectedAction()
+    return
+  }
+  if (accepted) {
+    clearSelectedAction()
+    if (active.value) ElMessage.success(`已转换到 ${STATUS_LABEL[action.to] ?? action.to}`)
+    attachmentsNeedRefresh = !active.value
+    await Promise.all([
+      active.value ? refreshTransitionState() : refreshAll(source),
+      active.value ? attachments.value?.refresh() : undefined,
+    ])
+  } else if (transition.state.phase === 'refresh') {
+    await refreshTransitionState()
   }
 }
 
@@ -152,6 +259,7 @@ async function refreshTags() {
 }
 
 async function addTag() {
+  if (!canUseOtherWrites.value) return
   const v = tagInput.value.trim()
   if (!v) return
   tagSaving.value = true
@@ -168,6 +276,7 @@ async function addTag() {
 }
 
 async function removeTag(row: TagRow) {
+  if (!canUseOtherWrites.value) return
   try {
     await removeTicketTagApi({ ticket_id: ticketId.value, tag: row.tag })
     await refreshTags()
@@ -189,6 +298,7 @@ async function refreshCC() {
 }
 
 async function doAddCC(userIds: string[]) {
+  if (!canUseOtherWrites.value) return
   ccSaving.value = true
   try {
     await addTicketCCApi({ ticket_id: ticketId.value, user_ids: userIds })
@@ -220,6 +330,7 @@ function addSelfCC() {
 }
 
 async function removeCC(cc: TicketCCRow) {
+  if (!canUseOtherWrites.value) return
   try {
     await removeTicketCCApi({ ticket_id: ticketId.value, user_id: cc.user_id })
     ElMessage.success('已移除')
@@ -287,12 +398,12 @@ function formatTime(iso?: string): string {
 }
 
 /** 动作后统一失效（close/assign/update 无有效响应体——S10 靠失效刷新，勿依赖返回值） */
-async function refreshAll() {
+async function refreshAll(source = ticketId.value) {
+  await queryClient.invalidateQueries({ queryKey: ['ticket', 'detail', source] })
   await Promise.all([
-    queryClient.invalidateQueries({ queryKey: ['ticket', 'detail', ticketId.value] }),
-    queryClient.invalidateQueries({ queryKey: ['ticket', 'comments', ticketId.value] }),
-    queryClient.invalidateQueries({ queryKey: ['ticket', 'relations', ticketId.value] }),
-    queryClient.invalidateQueries({ queryKey: ['ticket', 'transitions', ticketId.value] }),
+    queryClient.invalidateQueries({ queryKey: ['ticket', 'comments', source] }),
+    queryClient.invalidateQueries({ queryKey: ['ticket', 'relations', source] }),
+    queryClient.invalidateQueries({ queryKey: ['ticket', 'transitions', source] }),
   ])
 }
 
@@ -309,7 +420,7 @@ const editFormRef = ref<FormInstance>()
 const editForm = reactive({ title: '', description: '', priority: 3 })
 
 function openEdit() {
-  if (!ticket.value) return
+  if (!canUseOtherWrites.value || !ticket.value) return
   Object.assign(editForm, {
     title: ticket.value.title,
     description: ticket.value.description,
@@ -320,12 +431,14 @@ function openEdit() {
 }
 
 async function submitEdit() {
+  if (!canUseOtherWrites.value) return
+  const source = ticketId.value
   const valid = await editFormRef.value?.validate().catch(() => false)
-  if (!valid) return
+  if (!valid || !canUseOtherWrites.value || ticketId.value !== source) return
   editLoading.value = true
   editError.value = ''
   try {
-    await updateTicketApi(ticketId.value, {
+    await updateTicketApi(source, {
       title: editForm.title,
       description: editForm.description || undefined,
       priority: editForm.priority,
@@ -347,6 +460,7 @@ const assignError = ref('')
 const assignForm = reactive({ userId: '', escalationSupervisor: '' })
 
 function openAssign() {
+  if (!canUseOtherWrites.value) return
   assignForm.userId = ''
   assignForm.escalationSupervisor = ''
   assignError.value = ''
@@ -354,6 +468,7 @@ function openAssign() {
 }
 
 async function submitAssign() {
+  if (!canUseOtherWrites.value) return
   const uid = assignForm.userId.trim()
   if (!/^\d+$/.test(uid)) {
     assignError.value = '请填写数字用户 ID'
@@ -374,13 +489,16 @@ async function submitAssign() {
 }
 
 async function unassign() {
+  if (!canUseOtherWrites.value) return
+  const source = ticketId.value
   try {
     await ElMessageBox.confirm('取消分派后工单将回到「待处理」，确认？', '取消分派', { type: 'warning' })
   } catch {
     return
   }
+  if (!canUseOtherWrites.value || ticketId.value !== source) return
   try {
-    await assignTicketApi(ticketId.value, null)
+    await assignTicketApi(source, null)
     ElMessage.success('已取消分派')
     await refreshAll()
   } catch (err: unknown) {
@@ -395,12 +513,14 @@ const closeError = ref('')
 const closeForm = reactive({ comment: '' })
 
 function openClose() {
+  if (!canUseLegacyClose.value) return
   closeForm.comment = ''
   closeError.value = ''
   closeVisible.value = true
 }
 
 async function submitClose() {
+  if (!canUseLegacyClose.value) return
   closeLoading.value = true
   closeError.value = ''
   try {
@@ -417,6 +537,8 @@ async function submitClose() {
 
 // ─── 删除（ticket:delete——软删，回列表）───
 async function onDelete() {
+  if (!canUseOtherWrites.value) return
+  const source = ticketId.value
   try {
     await ElMessageBox.confirm(`确认删除工单 #${ticketId.value}？删除后列表不再展示。`, '危险操作', {
       type: 'warning', confirmButtonText: '删除', confirmButtonClass: 'el-button--danger',
@@ -424,8 +546,9 @@ async function onDelete() {
   } catch {
     return
   }
+  if (!canUseOtherWrites.value || ticketId.value !== source) return
   try {
-    await deleteTicketApi(ticketId.value)
+    await deleteTicketApi(source)
     ElMessage.success('已删除')
     router.push('/tickets')
   } catch (err: unknown) {
@@ -441,6 +564,7 @@ const composerError = ref('')
 const COMMENT_DISPLAY_LIMIT = 200
 
 async function submitComposer() {
+  if (!canUseOtherWrites.value) return
   const content = composer.content.trim()
   if (!content) {
     composerError.value = '请输入内容'
@@ -474,7 +598,7 @@ function openInTab(id: string) {
 }
 const relationSession = createRelationSession({
   source: () => ticketId.value,
-  active: () => active.value,
+  active: () => canUseOtherWrites.value,
   lookup: listTicketRelationCandidatesApi,
   save: createTicketRelationApi,
   refresh: (source, target) => Promise.all([
@@ -484,7 +608,7 @@ const relationSession = createRelationSession({
   saved: target => ElMessage.success(`已关联 #${target}`),
 })
 const relation = relationSession.state
-watch([ticketId, active], relationSession.reset, { flush: 'sync' })
+watch([ticketId, canUseOtherWrites], relationSession.reset, { flush: 'sync' })
 onBeforeUnmount(relationSession.reset)
 
 function onRelationInput(event: Event) {
@@ -500,7 +624,14 @@ function onRelationInput(event: Event) {
 
 <template>
   <div class="fill-page p-4" v-loading="ticketQuery.isLoading.value">
-    <div class="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
+    <el-alert
+      v-if="ticketQuery.isError.value"
+      :title="apiReadError(ticketQuery.error.value, '工单详情加载失败，请重试', '当前工单不可用')"
+      type="error" show-icon :closable="false"
+    >
+      <el-button size="small" :loading="ticketQuery.isFetching.value" @click="ticketQuery.refetch()">重试读取</el-button>
+    </el-alert>
+    <div v-if="ticket" class="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
     <el-card shadow="never" class="mb-4">
       <template #header>
         <div class="flex items-center gap-3 flex-wrap">
@@ -512,6 +643,9 @@ function onRelationInput(event: Event) {
       </template>
       <el-descriptions :column="3" border>
         <el-descriptions-item label="类型">{{ typeLabel }}</el-descriptions-item>
+        <el-descriptions-item v-if="ticketDefinition && 'reference' in ticketDefinition && ticketDefinition.reference" label="规则版本">
+          {{ ticketDefinition.reference.definition_version }}
+        </el-descriptions-item>
         <el-descriptions-item label="优先级">{{ ticket?.priority ?? '—' }}</el-descriptions-item>
         <el-descriptions-item label="SLA 截止">
           <span :class="ticket?.sla_due_at && ticket.status !== 'closed' ? 'text-[var(--el-color-danger)]' : ''">
@@ -528,27 +662,44 @@ function onRelationInput(event: Event) {
         </el-descriptions-item>
       </el-descriptions>
 
-      <!-- 处理动作（S11：仅分派/取消/关闭/更新/删除——三态经 API 不可达不做流转；
-           closed 后编辑/分派/关闭隐藏，后端 409 兜底） -->
-      <div class="mt-4 flex gap-2 flex-wrap">
-        <!-- S3a B3-1：condition 过滤后的可执行转换（后端语义+前端按钮一一对应） -->
-        <template v-if="!isClosed && availableTransitions.length">
+      <el-alert
+        v-if="ticketDefinition?.resolution === 'degraded'" title="只能查看，原流程规则缺失"
+        type="warning" show-icon :closable="false" class="mt-4"
+      />
+      <el-alert
+        v-if="actionsQuery.isError.value && canWriteTicket"
+        :title="apiReadError(actionsQuery.error.value, '可用动作加载失败，请刷新工单', '当前工单不可用')"
+        type="error" show-icon :closable="false" class="mt-4"
+      >
+        <el-button size="small" :loading="transitionRefreshing" @click="refreshTransitionState">刷新工单</el-button>
+      </el-alert>
+      <el-alert v-if="transitionNotice" :title="transitionNotice" class="mt-4" type="warning" show-icon @close="transitionNotice = ''" />
+      <el-alert
+        v-if="transition.state.message && (!actionDialog || !canWriteTicket)" :title="transition.state.message"
+        type="error" show-icon :closable="false" class="mt-4"
+      >
+        <el-button v-if="transition.state.phase === 'unknown'" size="small" :loading="transition.state.busy" :disabled="!canWriteTicket" @click="submitTransition()">原操作重试</el-button>
+        <el-button v-if="transition.state.phase === 'refresh'" size="small" :loading="transitionRefreshing" @click="refreshTransitionState">刷新工单</el-button>
+      </el-alert>
+      <div v-if="canWriteTicket" class="mt-4 flex gap-2 flex-wrap">
+        <template v-if="!isClosed">
         <el-button
-          v-for="to in availableTransitions"
-          :key="to"
+          v-for="action in availableActions"
+          :key="action.id"
           type="primary"
           plain
           size="small"
-          :loading="transitionLoading"
-          :data-testid="`btn-transition-${to}`"
-          @click="doTransition(to)"
-        >→ {{ STATUS_LABEL[to] ?? to }}</el-button>
+          :loading="transition.state.busy && selectedAction?.id === action.id"
+          :disabled="transition.state.busy || transitionRefreshing || transition.state.phase === 'unknown' || transition.state.phase === 'refresh'"
+          :data-testid="`btn-transition-${action.to}`"
+          @click="openTransition(action)"
+        >{{ action.title }}</el-button>
         </template>
-        <el-button v-permission="'ticket:update'" v-if="!isClosed" @click="openEdit">编辑</el-button>
-        <el-button v-permission="'ticket:assign'" v-if="!isClosed" type="primary" @click="openAssign">分派</el-button>
-        <el-button v-permission="'ticket:assign'" v-if="!isClosed && ticket?.assigned_to" @click="unassign">取消分派</el-button>
-        <el-button v-permission="'ticket:close'" v-if="!isClosed" type="warning" @click="openClose">关闭</el-button>
-        <el-button v-permission="'ticket:delete'" type="danger" plain @click="onDelete">删除</el-button>
+        <el-button v-permission="'ticket:update'" v-if="!isClosed" :disabled="!canUseOtherWrites" @click="openEdit">编辑</el-button>
+        <el-button v-permission="'ticket:assign'" v-if="!isClosed" :disabled="!canUseOtherWrites" type="primary" @click="openAssign">分派</el-button>
+        <el-button v-permission="'ticket:assign'" v-if="!isClosed && ticket.assigned_to" :disabled="!canUseOtherWrites" @click="unassign">取消分派</el-button>
+        <el-button v-permission="'ticket:close'" v-if="!isClosed && canUseLegacyClose" type="warning" @click="openClose">关闭</el-button>
+        <el-button v-permission="'ticket:delete'" :disabled="!canUseOtherWrites" type="danger" plain @click="onDelete">删除</el-button>
       </div>
     </el-card>
 
@@ -558,6 +709,13 @@ function onRelationInput(event: Event) {
     </el-card>
 
     <!-- B1-5 自定义字段回显（01 号 §3.5——"填了看不见"痛点收口件） -->
+    <el-alert
+      v-if="ticketDefinition?.resolution === 'legacy' && typeFieldsQuery.isError.value"
+      :title="apiReadError(typeFieldsQuery.error.value, '工单字段加载失败，请重试')"
+      type="error" show-icon :closable="false" class="mb-4"
+    >
+      <el-button size="small" @click="typeFieldsQuery.refetch()">重试读取</el-button>
+    </el-alert>
     <el-card v-if="customFields.length" shadow="hover" class="mb-4">
       <template #header><span class="font-semibold">自定义字段</span></template>
       <template v-for="(message, code) in dictErrors" :key="code">
@@ -599,7 +757,7 @@ function onRelationInput(event: Event) {
     <!-- B5-3 工单附件区（05 号 §5——列表/上传/删除/下载，代理端点稳定 URL） -->
     <el-card shadow="hover" class="mb-4">
       <template #header><span class="font-semibold">附件</span></template>
-      <TicketAttachments :ticket-id="ticketId" :can-edit="true" />
+      <TicketAttachments ref="attachments" :ticket-id="ticketId" :can-edit="canUseOtherWrites" />
     </el-card>
 
     <!-- S10 B10-1 抄送人区（抄送即可见——被抄送人收通知并可见此单；摘他人无权由后端 403 兜底） -->
@@ -607,7 +765,7 @@ function onRelationInput(event: Event) {
       <template #header>
         <div class="flex items-center justify-between flex-wrap gap-2">
           <span class="font-semibold">抄送（{{ ccRows.length }}）</span>
-          <div class="flex items-center gap-2">
+          <div v-if="canUseOtherWrites" class="flex items-center gap-2">
             <el-button size="small" :loading="ccSaving" data-testid="cc-self" @click="addSelfCC">抄送我</el-button>
             <UserPicker v-model="ccForm.userId" :context="{ purpose: 'cc', ticketId }" :active="active" class="!w-[220px]" />
             <el-button size="small" type="primary" plain :disabled="!ccForm.userId" :loading="ccSaving" data-testid="cc-add" @click="addCC">添加抄送</el-button>
@@ -618,12 +776,15 @@ function onRelationInput(event: Event) {
         <el-tag
           v-for="cc in ccRows"
           :key="cc.user_id"
-          closable
+          :closable="canUseOtherWrites"
           :data-testid="`cc-row-${cc.user_id}`"
           @close="removeCC(cc)"
         >{{ ccLabel(cc) }}</el-tag>
       </div>
-      <span v-else class="text-xs text-gray-400">暂无抄送人</span>
+      <el-alert v-if="ccQuery.isError.value" :title="apiReadError(ccQuery.error.value, '抄送列表加载失败，请重试')" type="error" show-icon :closable="false">
+        <el-button size="small" @click="ccQuery.refetch()">重试读取</el-button>
+      </el-alert>
+      <span v-else-if="ccQuery.isSuccess.value && !ccRows.length" class="text-xs text-gray-400">暂无抄送人</span>
     </el-card>
 
     <!-- S10 B10-2 标签（默认共享——挂载人留痕；摘他人挂的由后端 update 权兜底） -->
@@ -631,7 +792,7 @@ function onRelationInput(event: Event) {
       <template #header>
         <div class="flex items-center justify-between flex-wrap gap-2">
           <span class="font-semibold">标签</span>
-          <div class="flex items-center gap-2">
+          <div v-if="canUseOtherWrites" class="flex items-center gap-2">
             <el-input
               v-model="tagInput" placeholder="输入标签回车添加" maxlength="50" class="!w-[200px]"
               data-testid="tag-input" @keyup.enter="addTag"
@@ -644,12 +805,15 @@ function onRelationInput(event: Event) {
         <el-tag
           v-for="row in tagRows"
           :key="row.tag"
-          closable
+          :closable="canUseOtherWrites"
           :data-testid="`tag-${row.tag}`"
           @close="removeTag(row)"
         >{{ row.tag }}</el-tag>
       </div>
-      <span v-else class="text-xs text-gray-400">暂无标签</span>
+      <el-alert v-if="tagsQuery.isError.value" :title="apiReadError(tagsQuery.error.value, '标签加载失败，请重试')" type="error" show-icon :closable="false">
+        <el-button size="small" @click="tagsQuery.refetch()">重试读取</el-button>
+      </el-alert>
+      <span v-else-if="tagsQuery.isSuccess.value && !tagRows.length" class="text-xs text-gray-400">暂无标签</span>
     </el-card>
 
     <!-- 评论/备注（S10 分层：is_internal 标内部备注；可见性由服务端过滤） -->
@@ -657,7 +821,7 @@ function onRelationInput(event: Event) {
       <template #header>
         <div class="flex items-center justify-between">
           <span class="font-semibold">评论与备注</span>
-          <span class="text-xs text-gray-400">
+          <span v-if="commentsQuery.isSuccess.value" class="text-xs text-gray-400">
             共 {{ commentsQuery.data.value?.length ?? 0 }} 条（全部加载——接口无分页{{ (commentsQuery.data.value?.length ?? 0) >= COMMENT_DISPLAY_LIMIT ? '，超长历史请联系管理员' : '' }}）
           </span>
         </div>
@@ -672,10 +836,13 @@ function onRelationInput(event: Event) {
           </div>
           <div class="text-sm whitespace-pre-wrap">{{ c.content }}</div>
         </div>
-        <el-empty v-if="!commentsQuery.isLoading.value && !commentsQuery.data.value?.length" description="暂无评论" :image-size="60" />
+        <el-alert v-if="commentsQuery.isError.value" :title="apiReadError(commentsQuery.error.value, '评论与备注加载失败，请重试')" type="error" show-icon :closable="false">
+          <el-button size="small" @click="commentsQuery.refetch()">重试读取</el-button>
+        </el-alert>
+        <el-empty v-else-if="commentsQuery.isSuccess.value && !commentsQuery.data.value?.length" description="暂无评论" :image-size="60" />
       </div>
 
-      <div v-if="userStore.hasAny('ticket:comment', 'ticket:note')" class="border-t pt-3">
+      <div v-if="canUseOtherWrites && userStore.hasAny('ticket:comment', 'ticket:note')" class="border-t pt-3">
         <el-input
           v-model="composer.content" type="textarea" :rows="2"
           :placeholder="composer.internal ? '内部备注内容（仅创建人/处理人/admin 可见）' : '公开评论内容'"
@@ -710,7 +877,7 @@ function onRelationInput(event: Event) {
         <el-empty v-else-if="relationsQuery.isSuccess.value && !relationsQuery.data.value?.length" description="暂无关联" :image-size="60" />
       </div>
 
-      <div v-if="userStore.hasPermission('ticket:relation')" class="border-t pt-3">
+      <div v-if="canUseOtherWrites && userStore.hasPermission('ticket:relation')" class="border-t pt-3">
         <div class="flex items-center gap-2" @input="onRelationInput" @compositionend="onRelationInput">
           <!-- 候选由服务端按当前关联资格返回；提交仍会重新校验双端授权。 -->
           <el-select
@@ -742,7 +909,19 @@ function onRelationInput(event: Event) {
 
     <!-- 编辑对话框 -->
     </div>
-    <el-dialog v-model="editVisible" :close-on-click-modal="false" title="编辑工单" width="520px">
+    <TransitionActionDialog
+      v-if="actionDialog"
+      :model-value="canWriteTicket"
+      :action="actionDialog"
+      :submitting="transition.state.busy || transitionRefreshing"
+      :failure="transition.state.message"
+      :retry-only="transition.state.phase === 'unknown'"
+      :refresh-required="transitionNeedsRefresh"
+      @update:model-value="visible => { if (!visible) dismissTransition() }"
+      @confirm="submitTransition"
+      @refresh="refreshTransitionState"
+    />
+    <el-dialog v-if="canUseOtherWrites" v-model="editVisible" :close-on-click-modal="false" title="编辑工单" width="520px">
       <el-form ref="editFormRef" :model="editForm" label-width="80px">
         <el-form-item label="标题" required>
           <el-input v-model="editForm.title" maxlength="200" show-word-limit />
@@ -767,7 +946,7 @@ function onRelationInput(event: Event) {
     </el-dialog>
 
     <!-- 分派对话框 -->
-    <el-dialog v-model="assignVisible" :close-on-click-modal="false" title="分派工单" width="420px">
+    <el-dialog v-if="canUseOtherWrites" v-model="assignVisible" :close-on-click-modal="false" title="分派工单" width="420px">
       <el-form label-width="80px" @submit.prevent>
         <el-form-item label="处理人">
           <UserPicker v-model="assignForm.userId" :context="{ purpose: 'assign', ticketId }" :active="active && assignVisible" />
@@ -786,7 +965,7 @@ function onRelationInput(event: Event) {
     </el-dialog>
 
     <!-- 关闭对话框（可选关闭说明） -->
-    <el-dialog v-model="closeVisible" :close-on-click-modal="false" title="关闭工单" width="460px">
+    <el-dialog v-if="canUseLegacyClose" v-model="closeVisible" :close-on-click-modal="false" title="关闭工单" width="460px">
       <el-input v-model="closeForm.comment" type="textarea" :rows="3" placeholder="关闭说明（可选）" />
       <el-alert v-if="closeError" :title="closeError" type="error" show-icon class="mt-2" :closable="false" />
       <template #footer>
