@@ -13,13 +13,25 @@ import type { FormInstance, FormRules } from 'element-plus'
 import { useRouter, useRoute } from 'vue-router'
 import { useUserStore } from '@/store/modules/user'
 import { isSafeRedirect } from '@/router/sessionError'
+import { getDeviceId, getSessionGeneration } from '@/common/auth/tokenStorage'
+import { createPasswordSubmission } from './passwordSubmission'
 
 const router = useRouter()
 const route = useRoute()
 const userStore = useUserStore()
 const formRef = ref<FormInstance>()
-const loading = ref(false)
-const errorMsg = ref('')
+const submission = createPasswordSubmission({
+  // 首登可能没有profile；固定同一设备范围，不能因后来加载profile而遗失待核查K。
+  // 自助核查契约冻结前，未核实操作保守阻止同设备的新改密。
+  scope: getDeviceId(),
+  storage: { getItem: (key) => sessionStorage.getItem(key), setItem: (key, value) => sessionStorage.setItem(key, value) },
+  generation: getSessionGeneration,
+  newKey: () => crypto.randomUUID(),
+  change: (oldPassword, newPassword, key) => userStore.changePassword(oldPassword, newPassword, key),
+})
+const submissionState = submission.state
+const validating = ref(false)
+const loading = computed(() => validating.value || submissionState.busy)
 
 const form = reactive({
   oldPassword: '',
@@ -46,25 +58,24 @@ const rules: FormRules = {
 }
 
 const canSubmit = computed(() =>
-  form.oldPassword && form.newPassword && form.confirmPassword && !loading.value
+  form.oldPassword && form.newPassword && form.confirmPassword && !loading.value && !submission.blocked()
 )
 
 async function handleSubmit() {
-  const valid = await formRef.value?.validate().catch(() => false)
-  if (!valid) return
-  loading.value = true
-  errorMsg.value = ''
+  if (!canSubmit.value) return
+  validating.value = true
+  const generation = getSessionGeneration()
   try {
-    await userStore.changePassword(form.oldPassword, form.newPassword)
+    const valid = await formRef.value?.validate().catch(() => false)
+    if (!valid || generation !== getSessionGeneration()) return
+    if (!await submission.submit(form.oldPassword, form.newPassword)) return
     // 改密成功 → 回跳原目标（TokenPair 已轮换+mustChangePassword 已清）。
     // 19 项线 P3-9：redirect 回跳（站内校验拒 //——与 SessionError 共用 isSafeRedirect）；
     // 无 redirect（自愿改密入口）落首页
     router.push(isSafeRedirect(route.query.redirect) ? route.query.redirect : '/')
-  } catch (err: unknown) {
-    const resp = (err as { response?: { data?: { message?: string } } })?.response?.data
-    errorMsg.value = resp?.message ?? '修改密码失败，请稍后重试'
   } finally {
-    loading.value = false
+    validating.value = false
+    if (submissionState.operationId) Object.assign(form, { oldPassword: '', newPassword: '', confirmPassword: '' })
   }
 }
 </script>
@@ -78,7 +89,8 @@ async function handleSubmit() {
           <p class="text-sm text-gray-500 mt-1">首次登录须修改初始密码后才能进入系统</p>
         </div>
       </template>
-      <el-alert v-if="errorMsg" :title="errorMsg" type="error" show-icon class="mb-4" :closable="false" />
+      <el-alert v-if="submissionState.message" :title="submissionState.message" type="error" show-icon class="mb-4" :closable="false" />
+      <p v-if="submissionState.operationId" class="text-sm break-all mb-4">原操作号：{{ submissionState.operationId }}</p>
       <el-form ref="formRef" :model="form" :rules="rules" label-position="top" size="large">
         <el-form-item label="当前密码" prop="oldPassword">
           <!-- 同 LoginForm #7：字符串 prefix-icon 未注册不渲染——#prefix 插槽 + 全局 Icon -->

@@ -12,7 +12,7 @@
 import axios, { type AxiosInstance, type AxiosError, type InternalAxiosRequestConfig } from 'axios'
 import { getAccessToken, getRefreshToken, setTokens, clearTokens, getSessionGeneration, SessionChangedError, type TokenPair } from '@/common/auth/tokenStorage'
 import { useUserStoreWithOut } from '@/store/modules/user'
-import { TOKEN_EXPIRED, TOKEN_INVALID, REFRESH_FATAL_CODES } from '@/common/constants/errorBehavior'
+import { TOKEN_EXPIRED, TOKEN_INVALID, ACCOUNT_DISABLED, REFRESH_FATAL_CODES } from '@/common/constants/errorBehavior'
 import { notifyError } from '../errorToast'
 
 // ─── Request-ID（req- + 32 位小写 hex）───
@@ -93,7 +93,8 @@ export async function refreshAccessToken(): Promise<RefreshResult> {
     }
     // 其余 4xx：以终态码族为准
     const code = (response.data as { code?: number } | undefined)?.code
-    return { token: null, terminal: isFatalRefreshCode(code) }
+    const disabled = response.status === 403 && code === ACCOUNT_DISABLED
+    return { token: null, terminal: disabled || isFatalRefreshCode(code) }
   }
 }
 
@@ -150,6 +151,13 @@ service.interceptors.response.use(
     }
     if (generation !== getSessionGeneration()) return Promise.reject(new SessionChangedError())
     const bizCode = body?.code
+
+    // C05：当前 generation 的明确停用事实，与无效 AT 共用完整会话拆除。
+    if (status === 403 && bizCode === ACCOUNT_DISABLED
+      && (error.config as RetryableConfig | undefined)?._sessionGeneration === generation) {
+      _clearPiniaAndRedirect()
+      return Promise.reject(error)
+    }
 
     // 403+20007 强制改密（errorBehavior 接线——跳改密页不清会话）
     if (status === 403 && bizCode === 20007) {

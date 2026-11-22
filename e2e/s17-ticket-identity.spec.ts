@@ -59,7 +59,9 @@ test('S17：建单/分派催办上级与抄送保持大ID精确字符串', async
   } finally {
     if (ticketId) await mustData(api('/api/v1/tickets/delete', { ...h, method: 'POST', body: { id: ticketId } }), 'S17清理工单')
     await tt.cleanup()
-    // 消息规则可为合成收件人生成inbox，先清其专属行再移除账号，防FK残留。
-    psql(`DELETE FROM notifications WHERE recipient_id=${userId}; DELETE FROM users WHERE id=${userId} AND employee_no='${employeeNo}'`)
+    // C05 retains account projection receipts. Use the normal soft delete so that
+    // this fixture exits through the same lifecycle as other synthetic accounts.
+    psql(`DELETE FROM notifications WHERE recipient_id=${userId}`)
+    await mustData(api('/api/v1/users/delete', { ...h, method: 'POST', body: { user_id: userId } }), 'S17清理合成账号')
   }
 })

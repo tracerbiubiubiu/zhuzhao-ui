@@ -37,12 +37,12 @@ export async function logoutApi(): Promise<void> {
   })
 }
 
-export async function updatePasswordApi(oldPassword: string, newPassword: string): Promise<TokenPair> {
+export async function updatePasswordApi(oldPassword: string, newPassword: string, operationId?: string): Promise<TokenPair> {
   // _silentError：错误由改密表单内联展示（errorMsg），不走全局 toast
   const data = await request.post('/api/v1/auth/password/update', {
     old_password: oldPassword,
     new_password: newPassword,
     device_id: getDeviceId(),
-  }, { _silentError: true })
+  }, { _silentError: true, ...(operationId ? { headers: { 'X-Operation-ID': operationId } } : {}) })
   return data as unknown as TokenPair
 }
