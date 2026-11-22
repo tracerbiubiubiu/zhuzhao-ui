@@ -4622,6 +4622,47 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/users/status/result": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 按原操作号核查账号安全操作结果（停用/删除/重置/自助改密） */
+        get: {
+            parameters: {
+                query: {
+                    /** @description 原操作号（X-Operation-ID） */
+                    operation_id: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description 原操作回执及对应代际的投影状态 */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["response.Response"] & {
+                            data?: components["schemas"]["github_com_tracerbiubiubiu_zhuzhao_internal_service.UserOperationResultView"];
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/users/update": {
         parameters: {
             query?: never;
@@ -5441,6 +5482,19 @@ export interface components {
             /** @description 可选：调用方幂等键 */
             task_id?: string;
             timeout_secs?: number;
+        };
+        "github_com_tracerbiubiubiu_zhuzhao_internal_service.UserOperationResultView": {
+            account_status?: number;
+            command?: string;
+            created_at?: string;
+            operation_id?: string;
+            projection_pending?: boolean;
+            projection_state?: string;
+            /** @example 0 */
+            session_epoch?: string;
+            status?: string;
+            target_user_id?: string;
+            updated_at?: string;
         };
         "internal_handler.DeleteAttachmentInput": {
             object_key: string;

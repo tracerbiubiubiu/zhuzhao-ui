@@ -16,6 +16,9 @@ import { formatDateTime } from '@/utils/datetime'
 import { computed, nextTick, onDeactivated, onScopeDispose, reactive, ref } from 'vue'
 import { assignmentIds } from '@/api/system/assignmentPayload'
 import { createOrgsEditor, createRolesEditor } from './assignmentEditors'
+import { createStatusOperation } from './statusOperation'
+import { getSessionGeneration } from '@/common/auth/tokenStorage'
+import { useUserStore } from '@/store/modules/user'
 import {
   ElAlert, ElButton, ElCard, ElDialog, ElDropdown, ElDropdownItem, ElDropdownMenu,
   ElForm, ElFormItem, ElInput, ElMessage, ElMessageBox, ElOption, ElSelect, ElTag, ElTree,
@@ -30,7 +33,7 @@ import type { ProTableColumn } from '@/components/ProTable/types'
 import { listRolesApi } from '@/api/system/role'
 import {
   createUserApi, deleteUserApi, getUserOrgsApi, getUserRoleIdsApi, listUsersApi, resetUserPasswordApi,
-  setUserOrgsApi, setUserRolesApi, updateUserApi, updateUserStatusApi, type UserRow,
+  setUserOrgsApi, setUserRolesApi, updateUserApi, updateUserStatusApi, getUserStatusResultApi, type UserRow,
 } from '@/api/system/user'
 
 // keep-alive 契约：name=动态路由名（tagsView.cachedViews 存路由名，include 按组件名匹配）
@@ -188,16 +191,53 @@ async function submitEdit() {
 }
 
 // ─── 状态启停 ───
+const statusOperation = createStatusOperation({
+  principalId: useUserStore().profile?.id ?? '',
+  // 延迟访问：浏览器禁用存储时由控制器停止写入，不能先发请求再补操作号。
+  storage: { getItem: (key) => sessionStorage.getItem(key), setItem: (key, value) => sessionStorage.setItem(key, value) },
+  generation: getSessionGeneration,
+  hasPermission: () => hasPerm('user:status'),
+  newKey: () => crypto.randomUUID(),
+  write: updateUserStatusApi,
+  read: getUserStatusResultApi,
+})
+const statusState = statusOperation.state
+const statusResultVisible = ref(false)
+const statusQueryKey = ref(statusState.operation?.operationId ?? '')
+const statusPreparing = ref(false)
+const statusUnresolved = computed(() => !!statusState.operation && !['completed', 'superseded', 'rejected'].includes(statusState.operation.phase))
+const statusSummary = computed(() => {
+  switch (statusState.operation?.phase) {
+    case 'unknown': return '结果待核查：响应丢失或服务故障不能证明是否提交，请按原操作号查询，勿重复启停。'
+    case 'submitted': return '状态操作提交成功；当前响应未包含同步结果，请按原操作号查询。'
+    case 'pending': return '状态操作已提交，会话同步待恢复。请保留原操作号，待受权恢复并确认同步完成后再另行启用。'
+    case 'completed': return '原状态操作已提交，会话同步已完成。此回执不代表目标账号此后的当前状态。'
+    case 'superseded': return '原状态操作已提交，后续账号变更已取代其会话同步。请刷新查看当前状态。'
+    case 'rejected': return '本次操作被明确拒绝，未执行本次状态变更。请核对输入和当前权限。'
+    default: return '输入首次提交前保留的操作号，按当前权限查询原结果。查询失败或暂未查到不代表原操作没有提交。'
+  }
+})
+function openStatusResult() {
+  statusQueryKey.value = statusState.operation?.operationId ?? ''
+  statusResultVisible.value = true
+}
 async function toggleStatus(row: UserRow) {
+  if (statusPreparing.value || statusOperation.blocked() || !hasPerm('user:status')) return
+  statusPreparing.value = true
+  const generation = getSessionGeneration()
   const target = row.status === 1 ? '禁用' : '启用'
   try {
     await ElMessageBox.confirm(`确认${target}用户「${row.username}」？`, '提示', { type: 'warning' })
+    if (generation !== getSessionGeneration() || !hasPerm('user:status')) return
+    const pending = statusOperation.submit(row.id, row.status === 1 ? 0 : 1)
+    openStatusResult()
+    await pending
+    if (generation === getSessionGeneration()) tableRef.value?.refresh()
   } catch {
-    return
+    // 取消确认不产生安全写。
+  } finally {
+    statusPreparing.value = false
   }
-  await updateUserStatusApi(row.id, (row.status === 1 ? 0 : 1) as 0 | 1)
-  ElMessage.success(`已${target}`)
-  tableRef.value?.refresh()
 }
 
 // ─── 重置密码 ───
@@ -358,6 +398,7 @@ async function onDelete(row: UserRow) {
         <template #toolbar>
           <div>
             <el-button v-permission="'user:create'" type="primary" @click="openCreate">新建用户</el-button>
+            <el-button v-permission="'user:status'" @click="openStatusResult">启停操作结果</el-button>
           </div>
           <div />
         </template>
@@ -372,7 +413,7 @@ async function onDelete(row: UserRow) {
 
         <template #actions="{ row }">
           <el-button v-permission="'user:update'" link type="primary" size="small" @click="openEdit(row)">编辑</el-button>
-          <el-button v-permission="'user:status'" link :type="row.status === 1 ? 'warning' : 'success'" size="small" @click="toggleStatus(row)">
+          <el-button v-permission="'user:status'" link :type="row.status === 1 ? 'warning' : 'success'" size="small" :disabled="statusPreparing || statusOperation.blocked()" @click="toggleStatus(row)">
             {{ row.status === 1 ? '禁用' : '启用' }}
           </el-button>
           <el-dropdown
@@ -393,6 +434,20 @@ async function onDelete(row: UserRow) {
         </template>
       </ProTable>
     </el-card>
+
+    <el-dialog v-model="statusResultVisible" :close-on-click-modal="false" title="启停操作结果" width="480px">
+      <el-alert :title="statusState.busy ? '正在处理原操作，请勿重复启停' : statusSummary" type="info" show-icon :closable="false" />
+      <el-form label-position="top" class="mt-4" @submit.prevent="statusOperation.query(statusQueryKey)">
+        <el-form-item label="原操作号">
+          <el-input v-model="statusQueryKey" :disabled="statusState.busy || statusUnresolved" placeholder="首次提交前保留的操作号" />
+        </el-form-item>
+        <p v-if="statusState.operation" class="text-sm break-all mb-4">已保留：{{ statusState.operation.operationId }}</p>
+        <p v-if="statusState.result" class="text-sm mb-4">原操作状态：{{ statusState.result.status === 0 ? '禁用' : '启用' }}</p>
+        <el-alert v-if="statusState.error" :title="statusState.error" type="error" show-icon :closable="false" />
+        <el-button v-permission="'user:status'" class="mt-4" :loading="statusState.busy" :disabled="!statusQueryKey.trim()" @click="statusOperation.query(statusQueryKey)">查询原结果</el-button>
+      </el-form>
+      <template #footer><el-button @click="statusResultVisible = false">关闭</el-button></template>
+    </el-dialog>
 
     <!-- 新建/编辑 -->
     <el-dialog v-model="editVisible" :close-on-click-modal="false" :title="editIsCreate ? '新建用户' : '编辑用户'" width="480px">

@@ -16,6 +16,8 @@ export const ERROR_BEHAVIOR = {
 /** 401 分码（01 §3.3）：20002 过期→刷新 / 20003 无效→跳登录 */
 export const TOKEN_EXPIRED = 20002
 export const TOKEN_INVALID = 20003
+/** 仅 HTTP 403 搭配此码证明账号已停用；依赖故障不得终结会话。 */
+export const ACCOUNT_DISABLED = 30003
 
 /** 刷新失败码族（终态——清 session 跳登录） */
 export const REFRESH_FATAL_CODES = [20004, 20014, 20015]

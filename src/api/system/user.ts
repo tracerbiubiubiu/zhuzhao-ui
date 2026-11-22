@@ -55,8 +55,36 @@ export async function updateUserApi(input: UpdateUserInput): Promise<void> {
   await request.post('/api/v1/users/update', input, { _silentError: true })
 }
 
-export async function updateUserStatusApi(userId: string, status: 0 | 1): Promise<void> {
-  await request.post('/api/v1/users/status', { user_id: userId, status })
+export async function updateUserStatusApi(userId: string, status: 0 | 1, operationId: string): Promise<null> {
+  const input: Schemas['github_com_tracerbiubiubiu_zhuzhao_internal_model.UpdateUserStatusRequest'] = { user_id: userId, status }
+  const data = await request.post('/api/v1/users/status', input, {
+    headers: { 'X-Operation-ID': operationId }, _silentError: true,
+  }) as unknown
+  if (data !== null) throw new Error('状态操作结果待核查，请保留原操作号')
+  return null
+}
+
+/** C05 状态操作的界面模型，原始回执结构由 Swagger 生成。 */
+export interface UserStatusResult {
+  operation_id: string
+  status: 0 | 1
+  epoch: string
+  projection_state: 'pending' | 'completed' | 'superseded'
+}
+
+export async function getUserStatusResultApi(operationId: string): Promise<UserStatusResult> {
+  const data = await request.get('/api/v1/users/status/result', {
+    params: { operation_id: operationId }, _silentError: true,
+  }) as unknown
+  const row = data as Schemas['github_com_tracerbiubiubiu_zhuzhao_internal_service.UserOperationResultView'] | null
+  const epoch = row?.session_epoch
+  const projectionState = row?.projection_state
+  if (!row || row.operation_id !== operationId || row.status !== 'completed' || (row.account_status !== 0 && row.account_status !== 1)
+    || typeof epoch !== 'string' || !/^[1-9]\d*$/.test(epoch)
+    || (projectionState !== 'pending' && projectionState !== 'completed' && projectionState !== 'superseded')) {
+    throw new Error('操作回执格式或操作号不匹配，请保留原操作号并联系受权管理员核查')
+  }
+  return { operation_id: operationId, status: row.account_status, epoch, projection_state: projectionState }
 }
 
 export async function resetUserPasswordApi(userId: string, password: string): Promise<void> {

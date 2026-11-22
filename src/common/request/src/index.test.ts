@@ -148,6 +148,14 @@ describe('refreshAccessToken —— 终态语义', () => {
     expect(await refreshAccessToken()).toEqual({ token: null, terminal: false })
   })
 
+  it('刷新确认停用时终止会话，暂时故障仍可重试', async () => {
+    setTokens({ access_token: 'old', refresh_token: 'RT' })
+    h.post.mockRejectedValueOnce({ response: { status: 403, data: { code: 30003 } } })
+    expect(await refreshAccessToken()).toEqual({ token: null, terminal: true })
+    h.post.mockRejectedValueOnce({ response: { status: 503, data: { code: 30003 } } })
+    expect(await refreshAccessToken()).toEqual({ token: null, terminal: false })
+  })
+
   it('无 RT → 终态', async () => {
     clearTokens()
     expect(await refreshAccessToken()).toEqual({ token: null, terminal: true })
@@ -270,6 +278,44 @@ describe('响应拦截器 401 分支', () => {
     expect(usePermissionStore().isAddRouters).toBe(false)
   })
 
+  it('403/30003 明确停用 → 同终态401彻底拆除当前会话，不刷新、不重复提示', async () => {
+    seedSession()
+    const config = h.handlers.req!({ headers: {}, url: '/api/v1/user/profile' })
+    const error = { config, response: { status: 403, data: { code: 30003 } } }
+    await expect(h.handlers.err!(error)).rejects.toBe(error)
+    expect(getAccessToken()).toBeNull()
+    expect(usePermissionStore().isAddRouters).toBe(false)
+    expect(usePermissionStore().routers).toEqual([])
+    expect(useTagsViewStore().visitedViews).toEqual([])
+    expect(useUserStoreWithOut().rawMenus).toEqual([])
+    expect(useUserStoreWithOut().profile).toBeNull()
+    expect(useUserStoreWithOut().sessionLoaded).toBe(false)
+    expect(routerMock.resetRouter).toHaveBeenCalled()
+    expect(fakeWindow.location.hash).toContain('/login')
+    expect(h.post).not.toHaveBeenCalled()
+    expect(notifyError).not.toHaveBeenCalled()
+  })
+
+  it.each([[403, 30001], [503, 10008], [503, 30003]])('普通拒绝或投影故障 %i/%i 保留会话', async (status, code) => {
+    seedSession()
+    const error = makeError(status, code)
+    await expect(h.handlers.err!(error)).rejects.toBe(error)
+    expect(getAccessToken()).toBe('old')
+    expect(usePermissionStore().isAddRouters).toBe(true)
+    expect(useUserStoreWithOut().rawMenus).toHaveLength(1)
+    expect(useTagsViewStore().visitedViews).toHaveLength(1)
+    expect(routerMock.resetRouter).not.toHaveBeenCalled()
+    expect(fakeWindow.location.hash).toBe('#/home')
+  })
+
+  it('403/30003没有原请求generation时不能证明属于当前会话', async () => {
+    seedSession()
+    const error = makeError(403, 30003)
+    await expect(h.handlers.err!(error)).rejects.toBe(error)
+    expect(getAccessToken()).toBe('old')
+    expect(routerMock.resetRouter).not.toHaveBeenCalled()
+  })
+
   it('blob 错误体（导出类端点）→ 解析信封 code，20002 正常走静默刷新+重放', async () => {
     seedSession()
     h.post.mockResolvedValue({ data: { code: 0, data: { access_token: 'new', refresh_token: 'RT2' } } })
@@ -350,7 +396,7 @@ describe('B08 audit: stale async responses crossing sessions', () => {
     expect(getAccessToken()).toBe('B-new')
   })
 
-  it.each([[401, 20003], [403, 20007], [503, 10008]])('旧会话错误 %i/%i 不清新会话、不跳页、不弹 toast', async (status, code) => {
+  it.each([[401, 20003], [403, 30003], [403, 20007], [503, 10008]])('旧会话错误 %i/%i 不清新会话、不跳页、不弹 toast', async (status, code) => {
     seedSession()
     const config = h.handlers.req!({ headers: {}, url: '/old' })
     useUserStoreWithOut().resetState()
@@ -360,6 +406,23 @@ describe('B08 audit: stale async responses crossing sessions', () => {
     expect(getAccessToken()).toBe('B-login')
     expect(fakeWindow.location.hash).toBe('#/home')
     expect(notifyError).not.toHaveBeenCalled()
+  })
+
+  it('解析停用 Blob 期间切换会话，旧结果不得清后来会话', async () => {
+    seedSession()
+    const config = h.handlers.req!({ headers: {}, responseType: 'blob' })
+    const blob = new Blob([])
+    let finish!: (value: string) => void
+    vi.spyOn(blob, 'text').mockImplementation(() => new Promise(resolve => { finish = resolve }))
+    const pending = h.handlers.err!({ config, response: { status: 403, data: blob } })
+    useUserStoreWithOut().resetState()
+    setTokens({ access_token: 'B-login', refresh_token: 'B-RT' })
+    routerMock.resetRouter.mockClear()
+    finish(JSON.stringify({ code: 30003 }))
+    await expect(pending).rejects.toBeInstanceOf(SessionChangedError)
+    expect(getAccessToken()).toBe('B-login')
+    expect(routerMock.resetRouter).not.toHaveBeenCalled()
+    expect(fakeWindow.location.hash).toBe('#/home')
   })
 
   it('旧成功响应拒绝交给页面，当前成功响应照常解包；刷新同会话不误弃请求', () => {
@@ -393,6 +456,16 @@ describe('B08 audit: stale async responses crossing sessions', () => {
     finishPassword({ access_token: 'B-password-late', refresh_token: 'B-password-RT' })
     await expect(password).rejects.toBeInstanceOf(SessionChangedError)
     expect(getAccessToken()).toBe('C-login')
+  })
+
+  it('自助改密透传预存原K；没有TokenPair的响应不能冒充改密完成', async () => {
+    seedSession()
+    h.service.post = vi.fn().mockResolvedValue({ operation_id: 'synthetic-K', projection_state: 'pending' })
+    await expect(useUserStoreWithOut().changePassword('synthetic-old', 'synthetic-new', 'synthetic-K')).rejects.toThrow('待核查')
+    expect(h.service.post).toHaveBeenCalledWith('/api/v1/auth/password/update', expect.objectContaining({ old_password: 'synthetic-old', new_password: 'synthetic-new' }), {
+      _silentError: true, headers: { 'X-Operation-ID': 'synthetic-K' },
+    })
+    expect(getAccessToken()).toBe('old')
   })
 
   it('两个登录交错，较早登录晚到不得覆盖较新登录', async () => {

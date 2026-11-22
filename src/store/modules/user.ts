@@ -119,10 +119,15 @@ export const useUserStore = defineStore('user', {
     },
 
     /** 改密（成功=TokenPair 轮换——整体替换+清 mustChangePassword） */
-    async changePassword(oldPassword: string, newPassword: string) {
+    async changePassword(oldPassword: string, newPassword: string, operationId?: string) {
       const generation = getSessionGeneration()
-      const pair: TokenPair = await updatePasswordApi(oldPassword, newPassword)
+      const pair: TokenPair = await updatePasswordApi(oldPassword, newPassword, operationId)
       if (generation !== getSessionGeneration()) throw new SessionChangedError()
+      // C05 已提交专用 wire 尚待冻结；未知响应不能当TokenPair或伪造提交事实。
+      if (!pair || typeof pair.access_token !== 'string' || !pair.access_token
+        || typeof pair.refresh_token !== 'string' || !pair.refresh_token) {
+        throw new Error('改密结果待核查，请保留原操作号，勿重复提交')
+      }
       setTokens(pair)
       this.mustChangePassword = false
       if (this.profile) this.profile.must_change_password = false
