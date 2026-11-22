@@ -9,7 +9,11 @@ import * as designer from '@/components/FormDesigner/useDesigner'
 import * as schema from '@/components/FormDesigner/schemaAdapter'
 import * as fieldTypes from '@/components/FormDesigner/types'
 import * as meta from './transitionMeta'
+import * as publication from './definitionPublication'
+import { definitionPublicationPermission, readDraftRevision, readPublicationBaseline } from '@/api/ticket/definitionPublication'
 import source from './index.vue?raw'
+
+vi.mock('@vea/request', () => ({ default: {} }))
 
 const script = compileScript(parse(source).descriptor, { id: 'stable-target', genDefaultAs: 'page' })
 const { code } = transformSync(script.content, { loader: 'ts', format: 'cjs' })
@@ -27,11 +31,19 @@ function fixture() {
   const confirm = vi.fn(async () => 'confirm')
   const message = { success: vi.fn(), error: vi.fn(), warning: vi.fn() }
   const invalidateQueries = vi.fn()
+  const publicationApi = {
+    definitionPublicationPermission, readDraftRevision, readPublicationBaseline,
+    listPublicationDraftsApi: vi.fn(), planDefinitionPublicationApi: vi.fn(), publishDefinitionApi: vi.fn(),
+  }
   const libs: Record<string, unknown> = {
     vue: { ...vue, onDeactivated: () => {}, onBeforeUnmount: () => {} }, '@vea/hooks': { useTableFit: () => {} },
     '@/utils/int64': { compareInt64Desc: () => 0 },
     'element-plus': { ElMessage: message, ElMessageBox: { confirm } },
     '@tanstack/vue-query': { useQueryClient: () => ({ invalidateQueries }), useQuery: () => ({ data: vue.ref([]) }) },
+    '@/common/auth': { usePermission: () => ({ hasPerm: () => true }) },
+    '@/common/auth/tokenStorage': { getSessionGeneration: () => 1 },
+    '@/api/ticket/definitionPublication': publicationApi, './definitionPublication': publication,
+    '@/api/ticket/operationKey': { newTicketOperationKey: () => 'operation-1' },
     '@/api/ticket': api, '@/api/system/org': { getOrgTreeApi: vi.fn(async () => []) },
     '@/components/FormDesigner/index.vue': {}, '@/components/FlowGraphDesigner/index.vue': {},
     '@/components/FormDesigner/useDesigner': designer, '@/components/FormDesigner/schemaAdapter': schema,
@@ -43,17 +55,21 @@ function fixture() {
   const page = scope.run(() => new Function('require', `${code}\nreturn page.setup({}, { expose() {} })`)((name: string) => libs[name]))
   page.typeFormRef.value = { validate: async () => true }
   page.tplFormRef.value = { validate: async () => true }
-  return { page, api, confirm, message, invalidateQueries }
+  return { page, api, confirm, message, invalidateQueries, publicationApi }
 }
 const conflict = { response: { status: 409, data: { code: 10006, message: '配置已变化' } } }
 describe('配置稳定目标的产品请求路径', () => {
   it('状态图、字段和模板保存均携所读对象 ID', async () => {
-    const { page, api } = fixture()
+    const { page, api, message, publicationApi } = fixture()
     page.openTypeEdit(type); page.graphMode.value = 'json'
     await page.submitType()
     expect(api.updateTicketTypeApi).toHaveBeenCalledWith(expect.objectContaining({ id: type.id, code: type.code, version: 1 }))
+    expect(message.success).toHaveBeenLastCalledWith('类型草稿已保存')
     await page.openFields(type); await page.saveFields()
     expect(api.replaceTicketTypeFieldsApi).toHaveBeenCalledWith(expect.objectContaining({ id: type.id, code: type.code, version: 1 }))
+    expect(message.success).toHaveBeenLastCalledWith('字段草稿已保存')
+    expect(publicationApi.planDefinitionPublicationApi).not.toHaveBeenCalled()
+    expect(publicationApi.publishDefinitionApi).not.toHaveBeenCalled()
     page.openTplEdit(template); await page.submitTpl()
     expect(api.updateTicketTemplateApi).toHaveBeenCalledWith(expect.objectContaining({ id: template.id, code: template.code, version: 1 }))
   })

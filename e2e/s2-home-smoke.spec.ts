@@ -1,5 +1,6 @@
+import { randomUUID } from 'node:crypto'
 import { expect, test } from '@playwright/test'
-import { api, apiLogin, loadState, tempTicketType, waitUserRateBudget } from './helpers'
+import { api, apiLogin, loadState, mustData, publishTicketType, tempTicketType, waitUserRateBudget } from './helpers'
 import { uiLogin } from './ui'
 import { setDarkTheme } from './appearance'
 import { primaryButtonStates } from './buttonContrast'
@@ -31,6 +32,14 @@ test('S2 工作台冒烟：admin 登录 → 菜单渲染 → 状态卡与最近�
       },
     })
     expect(graph.env!.code).toBe(0)
+    const definition = await publishTicketType(h.token, tt.code)
+    const transition = async (id: string, to: string) => {
+      const { revision } = await mustData(api<{ revision: string }>(`/api/v1/tickets/${id}`, h), 'S2 读工单修订')
+      await mustData(api('/api/v1/tickets/transition', {
+        ...h, method: 'POST', headers: { 'Idempotency-Key': randomUUID() },
+        body: { id, to, expected_revision: revision, definition_version: definition.definition_version, custom_data_patch: {} },
+      }), `S2 推进至 ${to}`)
+    }
     const created = await api('/api/v1/tickets', {
       ...h, method: 'POST',
       body: { type_code: tt.code, title: `S2 冒烟单据_${suffix}`, org_id: orgId },
@@ -47,10 +56,10 @@ test('S2 工作台冒烟：admin 登录 → 菜单渲染 → 状态卡与最近�
       handled.push(id)
       expect((await api('/api/v1/tickets/assign', { ...h, method: 'POST', body: { id, assigned_to: mine } })).env!.code).toBe(0)
       if (status === 'closed') {
-        expect((await api('/api/v1/tickets/transition', { ...h, method: 'POST', body: { id, to: 'in_progress' } })).env!.code).toBe(0)
-        expect((await api('/api/v1/tickets/close', { ...h, method: 'POST', body: { id } })).env!.code).toBe(0)
+        await transition(id, 'in_progress')
+        await transition(id, 'closed')
       } else if (status === 'review_custom') {
-        expect((await api('/api/v1/tickets/transition', { ...h, method: 'POST', body: { id, to: 'review_custom' } })).env!.code).toBe(0)
+        await transition(id, 'review_custom')
       }
     }
 

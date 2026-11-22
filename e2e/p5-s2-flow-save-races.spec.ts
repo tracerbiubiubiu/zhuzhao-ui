@@ -87,7 +87,7 @@ test('P5-S2：旧影响查询和保存响应不得接管重开的类型编辑', 
     }, { times: 1 })
 
     const dialog = page.getByRole('dialog', { name: '编辑类型', exact: true })
-    const save = dialog.getByRole('button', { name: '保存', exact: true })
+    const save = dialog.getByRole('button', { name: '保存草稿', exact: true })
     const cancel = dialog.getByRole('button', { name: '取消', exact: true })
     const titleField = dialog.locator('input[maxlength="100"]')
     const open = async (code: string) => {
@@ -141,7 +141,7 @@ test('P5-S2：旧影响查询和保存响应不得接管重开的类型编辑', 
     await expect(dialog).toBeVisible()
     await expect(titleField).toHaveValue(codeA)
     await expect(save).toBeEnabled()
-    await expect(page.getByText('类型已更新', { exact: true })).toHaveCount(0)
+    await expect(page.getByText('类型草稿已保存', { exact: true })).toHaveCount(0)
 
     const after = (await readTypes()).types
     expect(after.find(({ code }) => code === codeA)).toEqual(beforeA)
@@ -278,7 +278,7 @@ test('P5-S2：类型同码重建后，真实 409 拒绝旧 id/version 并保留�
     const conflict = page.waitForResponse((response) =>
       new URL(response.url()).pathname === updatePath && response.request().method() === 'POST'
       && response.request().postDataJSON()?.code === code)
-    await dialog.getByRole('button', { name: '保存', exact: true }).click()
+    await dialog.getByRole('button', { name: '保存草稿', exact: true }).click()
     const response = await conflict
     expect(response.request().postDataJSON()).toMatchObject({
       id: before.id, code, version: before.version, name: draftName, description: draftDescription, ...draftGraph,
@@ -292,7 +292,7 @@ test('P5-S2：类型同码重建后，真实 409 拒绝旧 id/version 并保留�
     await expect(description).toHaveValue(draftDescription)
     await expect(states).toHaveValue(JSON.stringify(draftGraph.states))
     await expect(transitions).toHaveValue(JSON.stringify(draftGraph.transitions))
-    await expect(dialog.getByRole('button', { name: '保存', exact: true })).toBeEnabled()
+    await expect(dialog.getByRole('button', { name: '保存草稿', exact: true })).toBeEnabled()
     expect(await readType()).toEqual(replacement)
 
     // 冲突后的列表刷新只能更新列表；关闭旧草稿后，重开才显示新对象配置。

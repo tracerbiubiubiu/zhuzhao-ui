@@ -1,6 +1,6 @@
 /** F3 real-stack contract: ordinary ticket writer can pick without GET /users. */
 import { test, expect } from '@playwright/test'
-import { api, apiLogin, loadState, mustData, tempTicketType, waitUserRateBudget } from './helpers'
+import { api, apiLogin, loadState, mustData, publishTicketType, tempTicketType, waitUserRateBudget } from './helpers'
 import { uiLogin } from './ui'
 
 test('F3：普通工单办理者选人不授用户管理读', async ({ page }) => {
@@ -18,6 +18,7 @@ test('F3：普通工单办理者选人不授用户管理读', async ({ page }) =
   const targetName = `接单${suffix}`
   let password = 'F3Initial#20261117'
   try {
+    await publishTicketType(h.token, tt.code)
     roleId = (await mustData(api<{ id: string }>('/api/v1/roles', { ...h, method: 'POST', body: { code: `f3_${suffix}`, name: `F3 ${suffix}`, priority: 50 } }), 'role')).id
     type Menu = { id: string; code: string; children?: Menu[] }
     const menus = await mustData(api<Menu[]>('/api/v1/menus', h), 'menus')

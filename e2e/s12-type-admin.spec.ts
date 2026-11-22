@@ -28,7 +28,7 @@ test('S12：类型/字段/模板三件套全流程 + admin 专属边界', async 
   const typeDialog = page.locator('.el-dialog').filter({ hasText: '新建类型' })
   await typeDialog.getByRole('textbox').nth(0).fill(typeCode)
   await typeDialog.getByRole('textbox').nth(1).fill(`S12类型_${suffix}`)
-  await typeDialog.getByRole('button', { name: '保存' }).click()
+  await typeDialog.getByRole('button', { name: '保存草稿', exact: true }).click()
   const typeRow = page.locator('tr', { hasText: typeCode })
   await expect(typeRow).toBeVisible({ timeout: 10_000 })
 
@@ -50,7 +50,7 @@ test('S12：类型/字段/模板三件套全流程 + admin 专属边界', async 
   await optionsInput.press('Tab')
   await expect(optionsInput).toHaveValue('email,phone')
   await row.getByPlaceholder('可选', { exact: true }).fill('(?i)^(email|phone)$')
-  await fieldsDialog.getByRole('button', { name: '保存（整体替换）' }).click()
+  await fieldsDialog.getByRole('button', { name: '保存草稿（整体替换）', exact: true }).click()
   // S12/S23 硬要求：全量替换前必现危险确认弹窗
   const confirmBox = page.locator('.el-message-box').filter({ hasText: '全量替换' })
   await expect(confirmBox).toBeVisible()
@@ -68,7 +68,7 @@ test('S12：类型/字段/模板三件套全流程 + admin 专属边界', async 
   await typeRow.getByRole('button', { name: '编辑' }).click()
   const editDialog = page.locator('.el-dialog').filter({ hasText: '编辑类型' })
   await editDialog.getByRole('textbox').nth(2).fill(`S12类型_${suffix}（已编辑）`)
-  await editDialog.getByRole('button', { name: '保存' }).click()
+  await editDialog.getByRole('button', { name: '保存草稿', exact: true }).click()
   await expect(editDialog).not.toBeVisible({ timeout: 10_000 })
   await expect(typeRow).toContainText(`S12类型_${suffix}（已编辑）`, { timeout: 10_000 })
 

@@ -1,5 +1,5 @@
 import { test, expect, type Locator, type Page } from '@playwright/test'
-import { api, apiLogin, loadState, mustData, pgAvailable, psql, tempTicketType } from './helpers'
+import { api, apiLogin, loadState, mustData, pgAvailable, psql, publishTicketType, tempTicketType } from './helpers'
 import { uiLogin } from './ui'
 
 async function pickUser(page: Page, field: Locator, employeeNo: string) {
@@ -23,8 +23,11 @@ test('S17：建单/分派催办上级与抄送保持大ID精确字符串', async
   const h = { token: login.access_token }
   const tt = await tempTicketType(h, 's17_id')
   let ticketId: string | undefined
-  psql(`INSERT INTO users(id,username,employee_no,password,status) VALUES(${userId},'s17_${suffix}','${employeeNo}','synthetic-no-login',1)`)
+  let userCreated = false
   try {
+    await publishTicketType(h.token, tt.code)
+    psql(`INSERT INTO users(id,username,employee_no,password,status) VALUES(${userId},'s17_${suffix}','${employeeNo}','synthetic-no-login',1)`)
+    userCreated = true
     await uiLogin(page, state.admin.employeeNo, state.admin.password)
     await page.goto('/#/tickets/new')
     await page.locator('.el-form-item').filter({ hasText: '工单类型' }).locator('.el-select').click()
@@ -61,7 +64,9 @@ test('S17：建单/分派催办上级与抄送保持大ID精确字符串', async
     await tt.cleanup()
     // C05 retains account projection receipts. Use the normal soft delete so that
     // this fixture exits through the same lifecycle as other synthetic accounts.
-    psql(`DELETE FROM notifications WHERE recipient_id=${userId}`)
-    await mustData(api('/api/v1/users/delete', { ...h, method: 'POST', body: { user_id: userId } }), 'S17清理合成账号')
+    if (userCreated) {
+      psql(`DELETE FROM notifications WHERE recipient_id=${userId}`)
+      await mustData(api('/api/v1/users/delete', { ...h, method: 'POST', body: { user_id: userId } }), 'S17清理合成账号')
+    }
   }
 })

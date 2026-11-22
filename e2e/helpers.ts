@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { execSync } from 'node:child_process'
+import { randomUUID } from 'node:crypto'
 
 // 本仓 "type": "module"（ESM）——无 __dirname，用 import.meta 定位
 const here = fileURLToPath(new URL('.', import.meta.url))
@@ -43,6 +44,7 @@ interface ApiOptions {
   token?: string
   method?: string
   body?: unknown
+  headers?: Record<string, string>
 }
 
 /** 标准栈同一user_id共享20rps/40burst桶；夹具与浏览器、不同device/token也共用。
@@ -62,6 +64,7 @@ export async function api<T = unknown>(path: string, opts: ApiOptions = {}): Pro
       headers: {
         'content-type': 'application/json',
         ...(opts.token ? { authorization: `Bearer ${opts.token}` } : {}),
+        ...opts.headers,
       },
       body: opts.body === undefined ? undefined : JSON.stringify(opts.body),
     })
@@ -91,41 +94,108 @@ export async function mustData<T>(call: Promise<{ status: number; env: Envelope<
   return r.env.data
 }
 
+interface TicketTypeDraft {
+  id: string
+  code: string
+  version: number
+  current_published_version: string | null
+}
+
+export interface TicketDefinitionRef {
+  type_code: string
+  definition_version: string
+  definition_hash: string
+}
+
+async function findTicketTypeDraft(token: string, code: string): Promise<TicketTypeDraft | undefined> {
+  const { types } = await mustData(api<{ types: TicketTypeDraft[] }>('/api/v1/ticket-types', { token }), '读取工单类型草稿')
+  const draft = types.find(row => row.code === code)
+  if (draft && (typeof draft.id !== 'string' || !/^[1-9]\d*$/.test(draft.id) || !Number.isSafeInteger(draft.version) || draft.version < 1
+    || (draft.current_published_version !== null && (typeof draft.current_published_version !== 'string'
+    || !/^[1-9]\d*$/.test(draft.current_published_version))))) {
+    throw new Error(`工单类型 ${code} 的草稿身份、修订号或发布指针不完整`)
+  }
+  return draft
+}
+
+/** 在最后一次字段或流程保存后显式发布，按精确草稿修订和当前指针生成计划。 */
+export async function publishTicketType(token: string, code: string): Promise<TicketDefinitionRef> {
+  const draft = await findTicketTypeDraft(token, code)
+  if (!draft) throw new Error(`找不到待发布草稿 ${code}`)
+  const baseline = {
+    code,
+    expected_draft_revision: String(draft.version),
+    expected_published_version: draft.current_published_version,
+  }
+  const plan = await mustData(api<{
+    plan_id: string
+    canonical_hash: string
+    draft_revision: string
+    current_definition_ref: TicketDefinitionRef | null
+    warnings: Array<{ id: string }>
+  }>('/api/v1/ticket-types/definitions/plan', { token, method: 'POST', body: baseline }), `预览发布 ${code}`)
+  if (!plan.plan_id || !plan.canonical_hash || plan.draft_revision !== baseline.expected_draft_revision
+    || (plan.current_definition_ref?.definition_version ?? null) !== baseline.expected_published_version) {
+    throw new Error(`工单类型 ${code} 的发布计划与草稿基线不一致`)
+  }
+  const operationId = randomUUID()
+  const receipt = await mustData(api<{
+    operation_id: string
+    draft_revision: string
+    definition_ref: TicketDefinitionRef
+  }>('/api/v1/ticket-types/definitions/publish', {
+    token,
+    method: 'POST',
+    headers: { 'Idempotency-Key': operationId },
+    body: {
+      ...baseline,
+      plan_id: plan.plan_id,
+      canonical_hash: plan.canonical_hash,
+      acknowledged_warning_ids: plan.warnings.map(({ id }) => id),
+    },
+  }), `发布工单类型 ${code}`)
+  const ref = receipt.definition_ref
+  if (receipt.operation_id !== operationId || receipt.draft_revision !== baseline.expected_draft_revision
+    || ref.type_code !== code || typeof ref.definition_version !== 'string' || !/^[1-9]\d*$/.test(ref.definition_version) || !ref.definition_hash) {
+    throw new Error(`工单类型 ${code} 的发布回执与请求不一致`)
+  }
+  return ref
+}
+
+/** 草稿走受控删除，已有发布历史的夹具类型通过现行版本停用。 */
+export async function cleanupTicketType(token: string, code: string): Promise<void> {
+  const draft = await findTicketTypeDraft(token, code)
+  if (!draft) return
+  const { id, version, current_published_version } = draft
+  if (current_published_version === null) {
+    await mustData(api('/api/v1/ticket-types/delete', { token, method: 'POST', body: { id, code, version } }), `删除临时草稿 ${code}`)
+  } else {
+    await mustData(api('/api/v1/ticket-types/update', { token, method: 'POST', body: { id, code, version, is_active: false } }), `停用临时类型 ${code}`)
+  }
+}
+
 /** 临时工单类型（后端默认六状态图，open→assigned/closed 与 incident 同）——给依赖「新单初始态=open」的
  *  用例隔离自动分派规则：dev 栈是共享走查环境，可能存在 incident 全量命中规则（任何 incident 新单即刻
  *  assigned——2026-10-26 实证致 s2-home/s10/p5-s3a-transition 三 spec 假红）。
  *  transitionMeta 可选：create 端点不带 meta，须建后经 /ticket-types/update 全量替换（version 省略=不做 CAS）；
- *  cleanup 须在工单软删之后调用（类型删除守卫只拒有存活工单的类型，软删不阻）。 */
+ *  建单用例须显式发布；业务工单按用例清理，类型由 cleanup 退出。 */
 export async function tempTicketType(
   h: { token: string },
   prefix: string,
   transitionMeta?: Record<string, unknown>,
 ): Promise<{ code: string; cleanup: () => Promise<void> }> {
-  const code = `${prefix}_${Date.now().toString(36)}`
+  const code = `${prefix}_${randomUUID().slice(0, 12).replace('-', '')}`
   await mustData(api('/api/v1/ticket-types', { ...h, method: 'POST', body: { code, name: `E2E 临时类型 ${code}` } }), `POST /ticket-types(${code})`)
-  if (transitionMeta) {
-    await mustData(api('/api/v1/ticket-types/update', { ...h, method: 'POST', body: { code, transition_meta: transitionMeta } }), `POST /ticket-types/update(${code} meta)`)
+  const cleanup = () => cleanupTicketType(h.token, code)
+  try {
+    if (transitionMeta) {
+      await mustData(api('/api/v1/ticket-types/update', { ...h, method: 'POST', body: { code, transition_meta: transitionMeta } }), `POST /ticket-types/update(${code} meta)`)
+    }
+  } catch (error) {
+    await cleanup()
+    throw error
   }
-  return {
-    code,
-    cleanup: async () => {
-      // 类型删除守卫拒「有存活工单」——先删引用工单再删类型（2026-11-02 清理实证：
-      // 旧实现 .catch 静默吞「资源冲突」致 73 个类型跨日累积）；失败上抛不静默，
-      // 类型残留当轮显形（运行态列表卫生）。
-      const d1 = await api('/api/v1/ticket-types/delete', { ...h, method: 'POST', body: { code } }).catch(() => null)
-      if (d1?.env?.code !== 0) {
-        const list = await api(`/api/v1/tickets?type_code=${code}&page_size=100`, { ...h, method: 'GET' }).catch(() => null)
-        const rows = ((list?.env?.data as { list?: Array<{ id: string }> } | null)?.list ?? []) as Array<{ id: string }>
-        for (const t of rows) {
-          await api('/api/v1/tickets/delete', { ...h, method: 'POST', body: { id: t.id } }).catch(() => {})
-        }
-        const d2 = await api('/api/v1/ticket-types/delete', { ...h, method: 'POST', body: { code } }).catch(() => null)
-        if (d2?.env?.code !== 0) {
-          console.warn(`[cleanup] 临时类型 ${code} 删除仍失败（code=${d2?.env?.code}）——类型残留需人工核查`)
-        }
-      }
-    },
-  }
+  return { code, cleanup }
 }
 
 // ─── 直写 DB（panic 预造等无 API 触发面的场景——复核①：容器名/凭据 env 可覆盖）───

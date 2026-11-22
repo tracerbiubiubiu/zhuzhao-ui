@@ -10,11 +10,12 @@ import { test, expect } from '@playwright/test'
 import { api, apiLogin, loadState, waitUserRateBudget, API_BASE, type Envelope } from './helpers'
 import { uiLogin } from './ui'
 
-const state = loadState()
-const admin = state.admin
-
 test.describe('S5 存储面冒烟', () => {
   test.describe.configure({ mode: 'serial' })
+  let admin: ReturnType<typeof loadState>['admin']
+  test.beforeAll(() => {
+    admin = loadState().admin
+  })
 
   test('B5-4 richtext 渲染端点可达（登录态）', async ({ request }) => {
     // 直接 API 调用验证渲染端点（无需页面交互）

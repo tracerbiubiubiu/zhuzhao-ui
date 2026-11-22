@@ -9,13 +9,15 @@
  * - states/transitions=**画布模式（S2 B2-2，默认）+ JSON 源码模式（专家兜底）共存**——同一
  *   typeForm.statesText/transitionsText 为单一数据源，切模式时双向同步；保存前镜像后端
  *   validateTypeGraph 预检（A.3 双保险）+ **改图在途单告警（B2-3）**：被删/失去全部出边的
- *   状态上若有工单则弹确认（纯体验层，绕过亦被 AssertTransition 兜底）；
+ *   状态上若有工单则提示现有实例与草稿的规则差异；
  *   编辑框说明与S3a保持一致：实际流转受权限/条件/校验器约束；审批节点仍属S3b
  * - 乐观锁：类型/模板 version 回传 CAS（可省略——管理页应带上），409 → 保留草稿并提示重新读取
  */
 import { computed, nextTick, onBeforeUnmount, onDeactivated, reactive, ref, watch } from 'vue'
 import { useTableFit } from '@vea/hooks'
 import { compareInt64Desc } from '@/utils/int64'
+import { usePermission } from '@/common/auth'
+import { getSessionGeneration } from '@/common/auth/tokenStorage'
 import {
   ElAlert, ElButton, ElCard, ElCheckbox, ElDialog, ElForm, ElFormItem, ElInput, ElInputNumber,
   ElMessage, ElPagination, ElMessageBox, ElOption, ElRadioButton, ElRadioGroup, ElSelect, ElSwitch, ElTable, ElTableColumn, ElTabPane, ElTabs, ElTag,
@@ -30,6 +32,12 @@ import {
   type TicketTypeFullRow,
   type TicketTemplateRow,
 } from '@/api/ticket'
+import {
+  definitionPublicationPermission, listPublicationDraftsApi, planDefinitionPublicationApi,
+  publishDefinitionApi, readDraftRevision, readPublicationBaseline,
+  type PublicationDraftMetadata,
+} from '@/api/ticket/definitionPublication'
+import { newTicketOperationKey } from '@/api/ticket/operationKey'
 import { getOrgTreeApi, type OrgTreeNode } from '@/api/system/org'
 import FormDesigner from '@/components/FormDesigner/index.vue'
 import { isOptionType } from '@/components/FormDesigner/schemaAdapter'
@@ -40,11 +48,14 @@ import { validateTicketTypeContract } from '@/components/FlowGraphDesigner/contr
 import { stuckStates } from '@/components/FlowGraphDesigner/lint'
 import { DEFAULT_STATES, DEFAULT_TRANSITIONS, type Adjacency } from '@/components/FlowGraphDesigner/types'
 import { buildTransitionMeta, splitTransitionMeta, type MetaDraft } from './transitionMeta'
+import { createDefinitionPublication } from './definitionPublication'
 
 // keep-alive 契约：name=动态路由名（菜单 code ticket_type_manage）
 defineOptions({ name: 'ticket_type_manage' })
 
 const queryClient = useQueryClient()
+const { hasPerm } = usePermission()
+type TicketTypeManagementRow = TicketTypeFullRow & PublicationDraftMetadata
 
 // ─── 类型 Tab ───
 const typesQuery = useQuery({ queryKey: ['ticket', 'types'], queryFn: listTicketTypesApi })
@@ -52,7 +63,7 @@ const typesQuery = useQuery({ queryKey: ['ticket', 'types'], queryFn: listTicket
 const typeFilter = ref('')
 const typeStatusFilter = ref<'' | 'on' | 'off'>('')
 const filteredTicketTypes = computed(() =>
-  (((typesQuery.data.value ?? []) as TicketTypeFullRow[]).filter((t) => {
+  (((typesQuery.data.value ?? []) as TicketTypeManagementRow[]).filter((t) => {
     const kw = typeFilter.value.trim().toLowerCase()
     if (kw && !t.name.toLowerCase().includes(kw) && !t.code.toLowerCase().includes(kw)) return false
     if (typeStatusFilter.value === 'on' && !t.is_active) return false
@@ -85,8 +96,29 @@ const typeColumns = [
   { prop: 'default_sla_hours', label: 'SLA(h)', width: 80, align: 'center' as const },
   { prop: 'has_custom_fields', label: '自定义字段', width: 100, align: 'center' as const },
   { prop: 'is_active', label: '启用', width: 80, align: 'center' as const },
-  { prop: 'version', label: '版本', width: 70, align: 'center' as const },
+  { prop: 'definition', label: '规则版本', width: 142 },
 ]
+
+const publication = createDefinitionPublication({
+  allowed: () => hasPerm(definitionPublicationPermission),
+  generation: getSessionGeneration,
+  newKey: newTicketOperationKey,
+  plan: planDefinitionPublicationApi,
+  publish: publishDefinitionApi,
+  refresh: listPublicationDraftsApi,
+  onPublished: ({ definition_ref }) => {
+    void queryClient.invalidateQueries({ queryKey: ['ticket', 'types'] })
+    void queryClient.invalidateQueries({ queryKey: ['ticket', 'published-definition', definition_ref.type_code] })
+  },
+})
+const publicationState = publication.state
+onDeactivated(publication.close)
+onBeforeUnmount(publication.close)
+
+function publishedVersionText(row: TicketTypeManagementRow): string {
+  const baseline = readPublicationBaseline(row)
+  return baseline ? baseline.expected_published_version || '未发布' : '待核实'
+}
 
 const typeDialog = reactive({ visible: false, isCreate: true, loading: false, error: '' })
 const typeFormRef = ref<FormInstance>()
@@ -247,7 +279,7 @@ function serializeMeta(states: string[]): Record<string, unknown> | null {
 }
 
 /**
- * B2-3 改图在途单告警（02 号附录 A.4）：被删 / 失去全部出边的非终态上若有工单 → 弹确认。
+ * 被删 / 失去全部出边的非终态上若有工单，提示草稿与历史规则差异。
  * 逐状态 `GET /tickets?type_code&status` 取 total（零后端改动）；查询失败按"数量未知"仍提示。
  * 返回 false = 用户取消。
  */
@@ -271,7 +303,7 @@ async function confirmInflightImpact(session: number, code: string, candidates: 
   const lines = hit.map(([s, n]) => `${label(s)}（${n < 0 ? '数量未知' : `${n} 单`}）`).join('、')
   try {
     await ElMessageBox.confirm(
-      `以下状态上的工单将因本次改图无法再流转（状态被删除或失去全部出边）：${lines}。确认仍要保存？`,
+      `草稿删除了以下状态或它们的全部出边：${lines}。现有工单继续使用各自关联的规则。确认保存草稿？`,
       '改图影响在途工单',
       { type: 'warning', confirmButtonText: '仍要保存', confirmButtonClass: 'el-button--danger', cancelButtonText: '取消' },
     )
@@ -321,7 +353,7 @@ async function submitType() {
     }
 
     if (isCurrentTypeSession(session)) {
-      ElMessage.success(isCreate ? '类型已创建' : '类型已更新')
+      ElMessage.success(isCreate ? '类型草稿已创建' : '类型草稿已保存')
       typeDialog.visible = false
     }
     await queryClient.invalidateQueries({ queryKey: ['ticket', 'types'] })
@@ -431,14 +463,14 @@ async function saveFields() {
   fieldsDialog.error = ''
   try {
     const confirmed = await ElMessageBox.confirm(
-      `字段保存为「全量替换」：类型「${name}」的字段组将被以下 ${fields.length} 行整体覆盖（含删除未列出的字段）。确认？`,
+      `字段草稿采用「全量替换」：类型「${name}」的草稿字段组将被以下 ${fields.length} 行整体覆盖（含删除未列出的字段）。确认？`,
       '危险操作', { type: 'warning', confirmButtonText: '整体替换', confirmButtonClass: 'el-button--danger' },
     ).catch(() => false)
     if (!confirmed || session !== fieldsSession || !fieldsDialog.visible) return
 
     await replaceTicketTypeFieldsApi({ id, code, fields, version })
     if (session !== fieldsSession || !fieldsDialog.visible) return
-    ElMessage.success('字段已替换')
+    ElMessage.success('字段草稿已保存')
     fieldsDialog.visible = false
     await queryClient.invalidateQueries({ queryKey: ['ticket', 'types'] })
   } catch (err: unknown) {
@@ -619,13 +651,18 @@ useTableFit(tplTable, () => pagedTplRows.value)
                 <template v-else-if="col.prop === 'is_active'">
                   <el-tag :type="row.is_active ? 'success' : 'danger'" size="small">{{ row.is_active ? '启用' : '停用' }}</el-tag>
                 </template>
+                <template v-else-if="col.prop === 'definition'">
+                  <div class="break-all">草稿 {{ readDraftRevision(row as TicketTypeManagementRow) ?? '待核实' }}</div>
+                  <div class="break-all">发布 {{ publishedVersionText(row as TicketTypeManagementRow) }}</div>
+                </template>
                 <template v-else>{{ row[col.prop] }}</template>
               </template>
             </el-table-column>
-            <el-table-column label="操作" width="220" fixed="right">
+            <el-table-column label="操作" width="246" fixed="right">
               <template #default="{ row }">
                 <el-button v-permission="'ticket:type:manage'" link type="primary" size="small" @click="openTypeEdit(row as TicketTypeFullRow)">编辑</el-button>
                 <el-button v-permission="'ticket:type:manage'" link type="primary" size="small" @click="openFields(row as TicketTypeFullRow)">字段配置</el-button>
+                <el-button v-permission="definitionPublicationPermission" link type="primary" size="small" @click="publication.open(row as TicketTypeManagementRow)">发布规则</el-button>
                 <el-button v-permission="'ticket:type:manage'" link type="danger" size="small" @click="onDeleteType(row as TicketTypeFullRow)">删除</el-button>
               </template>
             </el-table-column>
@@ -675,8 +712,54 @@ useTableFit(tplTable, () => pagedTplRows.value)
       </el-tabs>
     </el-card>
 
+    <el-dialog
+      :model-value="publicationState.visible" title="发布流程规则" width="620px"
+      :close-on-click-modal="false" :close-on-press-escape="!publicationState.saving" :show-close="!publicationState.saving"
+      @update:model-value="visible => { if (!visible) publication.close() }"
+    >
+      <div class="max-h-[420px] overflow-auto space-y-3" :aria-busy="publicationState.planning || publicationState.saving">
+        <p v-if="publicationState.target">{{ publicationState.target.name }}（{{ publicationState.target.code }}）</p>
+        <p v-if="publicationState.planning" role="status">正在检查草稿与当前发布版本…</p>
+        <template v-if="publicationState.baseline">
+          <p>草稿修订 {{ publicationState.baseline.expected_draft_revision }} · 预览时的发布版本 {{ publicationState.baseline.expected_published_version || '未发布' }}</p>
+          <p>发布后的规则用于新工单，现有工单继续使用各自关联的版本。</p>
+        </template>
+        <template v-if="publicationState.plan && !publicationState.receipt">
+          <p v-if="publicationState.plan.plan_hash" class="break-all">计划摘要 {{ publicationState.plan.plan_hash }}</p>
+          <template v-if="publicationState.plan.diff != null">
+            <div>配置差异</div>
+            <pre class="max-h-[150px] overflow-auto whitespace-pre-wrap break-all">{{ JSON.stringify(publicationState.plan.diff, null, 2) }}</pre>
+          </template>
+          <el-alert v-for="(issue, index) in publicationState.plan.errors" :key="index" :title="issue.message" type="error" :closable="false" show-icon />
+          <el-alert v-for="(warning, index) in publicationState.plan.warnings" :key="index" :title="warning.message" type="warning" :closable="false" show-icon />
+          <el-checkbox v-if="publicationState.plan.warnings.length && !publicationState.uncertain" v-model="publicationState.warningsAccepted" :disabled="publicationState.saving">我已核对并接受这些发布告警</el-checkbox>
+        </template>
+        <el-alert v-if="publicationState.error" :title="publicationState.error" type="error" :closable="false" show-icon />
+        <p v-if="publicationState.uncertain" class="break-all">原操作号 {{ publicationState.operationId }}</p>
+        <template v-if="publicationState.receipt">
+          <el-alert
+            :title="publicationState.receipt.changed ? '规则已发布' : '规则内容未变，沿用当前发布版本'" type="success" :closable="false" show-icon
+          />
+          <p>当前已发布版本 {{ publicationState.receipt.definition_ref.definition_version }}</p>
+          <p class="break-all">定义摘要 {{ publicationState.receipt.definition_ref.definition_hash }}</p>
+        </template>
+      </div>
+      <template #footer>
+        <el-button :disabled="publicationState.saving" @click="publication.close()">关闭</el-button>
+        <el-button
+          v-if="(publicationState.error || publicationState.plan?.errors.length) && !publicationState.uncertain" v-permission="definitionPublicationPermission"
+          :disabled="publicationState.planning" @click="publication.refresh()"
+        >刷新后重新预览</el-button>
+        <el-button
+          v-if="!publicationState.receipt" v-permission="definitionPublicationPermission" type="primary"
+          :disabled="!publication.canSubmit()" :loading="publicationState.saving" @click="publication.submit()"
+        >{{ publicationState.uncertain ? '用原操作号重试' : '确认发布' }}</el-button>
+      </template>
+    </el-dialog>
+
     <!-- 类型新建/编辑（states/transitions=画布模式默认 + JSON 源码模式专家兜底——S2 B2-2） -->
     <el-dialog :close-on-click-modal="false" v-model="typeDialog.visible" :title="typeDialog.isCreate ? '新建类型' : '编辑类型'" :width="typeDialog.isCreate ? '600px' : '980px'">
+      <p class="mb-3">流程与字段先保存为草稿，从工单类型列表的「发布规则」预览并发布。</p>
       <el-form ref="typeFormRef" :model="typeForm" :inert="typeDialog.loading" label-width="110px">
         <el-form-item label="编码" required>
           <el-input v-model="typeForm.code" :disabled="!typeDialog.isCreate" placeholder="如 incident" maxlength="50" />
@@ -764,7 +847,7 @@ useTableFit(tplTable, () => pagedTplRows.value)
       <el-alert v-if="typeDialog.error" :title="typeDialog.error" type="error" show-icon class="mb-2" :closable="false" />
       <template #footer>
         <el-button @click="typeDialog.visible = false">取消</el-button>
-        <el-button type="primary" :loading="typeDialog.loading" @click="submitType">保存</el-button>
+        <el-button type="primary" :loading="typeDialog.loading" @click="submitType">保存草稿</el-button>
       </template>
     </el-dialog>
 
@@ -777,13 +860,13 @@ useTableFit(tplTable, () => pagedTplRows.value)
       <el-tabs v-if="fieldsDialog.ready" v-model="fieldsDialog.mode" v-loading="fieldsDialog.saving">
         <el-tab-pane label="设计模式" name="designer">
           <div class="mb-1 text-xs text-gray-400">
-            拖拽排序 / 属性面板编辑；保存为「全量替换」（与专家模式同一管线）。
+            拖拽排序或编辑属性。保存将整体替换草稿字段。
           </div>
           <FormDesigner :state="fieldEditor" />
         </el-tab-pane>
         <el-tab-pane label="专家模式（表格）" name="expert">
           <div class="mb-2 flex items-center justify-between">
-            <span class="text-xs text-gray-400">保存为「全量替换」。带独立值的选项和字典请在设计模式编辑。</span>
+            <span class="text-xs text-gray-400">保存将整体替换草稿字段。带独立值的选项和字典请在设计模式编辑。</span>
             <el-button v-permission="'ticket:type:manage'" size="small" @click="fieldEditor.add('input')">添加字段</el-button>
           </div>
           <el-table :data="fieldRows" row-key="_uid" size="small" border>
@@ -833,7 +916,7 @@ useTableFit(tplTable, () => pagedTplRows.value)
       <el-alert v-if="fieldsDialog.error" :title="fieldsDialog.error" type="error" show-icon class="mt-2" :closable="false" />
       <template #footer>
         <el-button :disabled="fieldsDialog.saving" @click="fieldsDialog.visible = false">取消</el-button>
-        <el-button type="primary" :disabled="!fieldsDialog.ready" :loading="fieldsDialog.saving" @click="saveFields">保存（整体替换）</el-button>
+        <el-button type="primary" :disabled="!fieldsDialog.ready" :loading="fieldsDialog.saving" @click="saveFields">保存草稿（整体替换）</el-button>
       </template>
     </el-dialog>
 

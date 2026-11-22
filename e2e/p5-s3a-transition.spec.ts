@@ -1,11 +1,11 @@
 /**
- * P5-S3a 统一转换端点（B3-1）：详情页按 GET /tickets/:id/transitions/available 渲染转换按钮，
+ * P5-S3a 统一转换端点（B3-1）：已绑定定义的详情页按 GET /tickets/:id/actions 渲染转换按钮，
  * 点击走 POST /tickets/transition → 状态标签变更 → 按钮集随新状态刷新；available **按人过滤**
  * （无处理人时 in_progress 不渲染——仅处理人可推进）。走默认六状态图 open→assigned→in_progress；
  * 末尾以 API 复核落库状态（非前端乐观更新）。
  */
 import { test, expect } from '@playwright/test'
-import { api, apiLogin, loadState, mustData, tempTicketType, waitUserRateBudget } from './helpers'
+import { api, apiLogin, loadState, mustData, publishTicketType, tempTicketType, waitUserRateBudget } from './helpers'
 import { uiLogin } from './ui'
 
 test('P5-S3a：转换按钮按 available 渲染并驱动 open→assigned→in_progress', async ({ page }) => {
@@ -20,13 +20,13 @@ test('P5-S3a：转换按钮按 available 渲染并驱动 open→assigned→in_pr
   // 临时类型隔离自动分派规则（默认六状态图与 incident 同）——起点必须 open；
   // meta 复刻 incident 的「assigned>in_progress 仅 assignee 可触发」：按人过滤断言的本源（默认图无此约束）
   const tt = await tempTicketType(h, 'e2e_s3at', { 'assigned>in_progress': { roles: ['assignee'] } })
-  const created = await api<{ id: string }>('/api/v1/tickets', {
-    ...h, method: 'POST', body: { type_code: tt.code, title: `P5-S3a 转换_${suffix}`, org_id: orgId },
-  })
-  expect(created.env?.code, '建单须成功').toBe(0)
-  const tid = created.env!.data.id
-
+  let tid: string | undefined
   try {
+    await publishTicketType(h.token, tt.code)
+    const created = await mustData(api<{ id: string }>('/api/v1/tickets', {
+      ...h, method: 'POST', body: { type_code: tt.code, title: `P5-S3a 转换_${suffix}`, org_id: orgId },
+    }), '建单')
+    tid = created.id
     await waitUserRateBudget() // 夹具与浏览器共用user_id桶，先补满再开始业务旅程
     await uiLogin(page, state.admin.employeeNo, state.admin.password)
     await page.waitForURL(/#\/home/, { timeout: 30_000 })
@@ -61,7 +61,7 @@ test('P5-S3a：转换按钮按 available 渲染并驱动 open→assigned→in_pr
     const got = await api<{ status: string }>(`/api/v1/tickets/${tid}`, h)
     expect(got.env?.data.status, '状态须落库').toBe('in_progress')
   } finally {
-    await api('/api/v1/tickets/delete', { ...h, method: 'POST', body: { id: tid } }).catch(() => {})
+    if (tid) await api('/api/v1/tickets/delete', { ...h, method: 'POST', body: { id: tid } }).catch(() => {})
     await tt.cleanup()
   }
 })

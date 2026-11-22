@@ -12,11 +12,11 @@
  *   关闭（带说明）→ 已关闭且编辑/分派/关闭动作隐藏（后端 409+90004 兜底，前端按钮级防呆）
  * - 用户切换后必须 page.reload()：hash 导航不重载 SPA，vue-query 缓存会带着
  *   上一个会话的数据串台（评论断言曾因此误绿）
- * - 清理：两单 API 软删 + 临时类型删除（软删不阻类型删除守卫）。类型用临时专属——dev 栈走查数据可能含
+ * - 清理：工单走 API 软删，已发布临时类型走停用。类型用临时专属——dev 栈走查数据可能含
  *   incident 全量命中的自动分派规则，新单秒变 assigned 会击穿「待处理」起点断言（2026-10-26 实证）
  */
 import { test, expect } from '@playwright/test'
-import { api, apiLogin, loadState, tempTicketType } from './helpers'
+import { api, apiLogin, loadState, mustData, publishTicketType, tempTicketType } from './helpers'
 import { uiLogin } from './ui'
 import { descriptionMetrics, setDarkTheme } from './appearance'
 
@@ -31,31 +31,44 @@ test('S10/S11：详情评论/备注分层+关联判重+分派/关闭流+viewer �
   const h = { token: admin.env!.data.access_token } as const
   const orgId = ((await api('/api/v1/orgs', { token: h.token })).env!.data as Array<{ id: string }>)[0].id
   const tt = await tempTicketType(h, 'e2e_s10')
+  const ticketIds: string[] = []
   const mk = async (title: string, description?: string) => {
-    const r = await api('/api/v1/tickets', { ...h, method: 'POST', body: { type_code: tt.code, title, org_id: orgId, description } })
-    expect(r.env!.code).toBe(0)
-    return (r.env!.data as { id: string }).id
+    const created = await mustData(api<{ id: string }>('/api/v1/tickets', {
+      ...h, method: 'POST', body: { type_code: tt.code, title, org_id: orgId, description },
+    }), 'S10 建单')
+    ticketIds.push(created.id)
+    return created.id
   }
-  const longDescription = '首行：保留  两个空格。\nhttps://example.invalid/' + 'abcd1234efgh'.repeat(40) + '\n末行：完整保留。'
-  const t1 = await mk(`S10 主单_${suffix}`, longDescription)
-  const extraTickets: string[] = []
-  let t2 = await mk(`S10 从单_${suffix}`)
-  // This spec must still exercise multiple keystrokes when run alone.
-  for (let i = 0; t2.length < 2 && i < 9; i++) {
-    extraTickets.push(t2)
-    t2 = await mk(`S10 从单_${suffix}_${i}`)
-  }
-  expect(t2).toMatch(/^\d{2,}$/)
-
-  // viewer 绑根组织（透明读旁观者——幂等 upsert，重复运行安全）。
-  // ⚠ 必须显式 ticket_scope:'group'：AddMember 缺省 scope='assigned'（repo 159），
-  // 不传则 viewer 仍只看「分派给我」，绑定形同虚设
-  const viewerLogin = await apiLogin(state.viewer.employeeNo, state.viewer.password, 's10-viewer')
-  const viewerUid = (await api('/api/v1/user/profile', { token: viewerLogin.env!.data.access_token })).env!.data as { id: string }
-  const bind = await api('/api/v1/orgs/members', { ...h, method: 'POST', body: { org_id: orgId, user_id: viewerUid.id, is_primary: false, ticket_scope: 'group' } })
-  expect([0, 10005]).toContain(bind.env!.code) // 0=新绑；409=已绑定（前次运行残留）
-
   try {
+    await mustData(api('/api/v1/ticket-types/fields/replace', {
+      ...h, method: 'POST', body: {
+        code: tt.code,
+        fields: [{ field_key: 'close_reason', field_label: '关闭说明', field_type: 'textarea', sort_order: 1 }],
+      },
+    }), 'S10 保存关闭字段')
+    await mustData(api('/api/v1/ticket-types/update', {
+      ...h, method: 'POST', body: {
+        code: tt.code,
+        transition_meta: { 'open>closed': { collect_fields: [{ key: 'close_reason', required: true }] } },
+      },
+    }), 'S10 保存关闭动作')
+    await publishTicketType(h.token, tt.code)
+
+    const longDescription = '首行：保留  两个空格。\nhttps://example.invalid/' + 'abcd1234efgh'.repeat(40) + '\n末行：完整保留。'
+    const t1 = await mk(`S10 主单_${suffix}`, longDescription)
+    let t2 = await mk(`S10 从单_${suffix}`)
+    // 单跑也须覆盖逐键输入多位 ID。
+    for (let i = 0; t2.length < 2 && i < 9; i++) {
+      t2 = await mk(`S10 从单_${suffix}_${i}`)
+    }
+    expect(t2).toMatch(/^\d{2,}$/)
+
+    // viewer 绑根组织并显式采用 group 工单范围，以只读旁观者验证评论分层。
+    const viewerLogin = await apiLogin(state.viewer.employeeNo, state.viewer.password, 's10-viewer')
+    const viewerUid = (await api('/api/v1/user/profile', { token: viewerLogin.env!.data.access_token })).env!.data as { id: string }
+    const bind = await api('/api/v1/orgs/members', { ...h, method: 'POST', body: { org_id: orgId, user_id: viewerUid.id, is_primary: false, ticket_scope: 'group' } })
+    expect([0, 10005]).toContain(bind.env!.code) // 0=新绑；409=已绑定（前次运行残留）
+
     // ── admin：评论/备注（UI composer）──
     await uiLogin(page, state.admin.employeeNo, state.admin.password)
     await page.waitForURL(/#\/home/, { timeout: 30_000 }) // 等登录重定向落定——勿带竞态 goto（fe3 同款）
@@ -190,19 +203,22 @@ test('S10/S11：详情评论/备注分层+关联判重+分派/关闭流+viewer �
     await expect(statusTag).toHaveText('待处理', { timeout: 10_000 })
 
     // 关闭（带说明）→ 已关闭 → 编辑/分派/关闭动作隐藏（删除保留）
-    await page.getByRole('button', { name: '关闭', exact: true }).click()
-    const closeDialog = page.locator('.el-dialog').filter({ hasText: '关闭工单' })
-    await closeDialog.getByPlaceholder('关闭说明（可选）').fill('S10 关闭说明')
-    await closeDialog.getByRole('button', { name: '确认关闭' }).click()
+    const closeAction = page.getByTestId('btn-transition-closed')
+    const closeActionTitle = (await closeAction.innerText()).trim()
+    await closeAction.click()
+    const closeDialog = page.getByRole('dialog', { name: closeActionTitle, exact: true })
+    await closeDialog.getByRole('textbox', { name: '关闭说明' }).fill('S10 关闭说明')
+    await closeDialog.getByRole('button', { name: `确认${closeActionTitle}`, exact: true }).click()
     await expect(statusTag).toHaveText('已关闭', { timeout: 10_000 })
+    const closed = await mustData(api<{ custom_data: { close_reason: string } }>(`/api/v1/tickets/${t2}`, h), 'S10 回读关闭说明')
+    expect(closed.custom_data.close_reason).toBe('S10 关闭说明')
     await expect(page.getByRole('button', { name: '编辑' })).toHaveCount(0)
     await expect(page.getByRole('button', { name: '分派', exact: true })).toHaveCount(0)
-    await expect(page.getByRole('button', { name: '关闭', exact: true })).toHaveCount(0)
+    await expect(closeAction).toHaveCount(0)
     // 限定头卡：附件/抄送/标签等列表行也带「删除」，页面级匹配会撞 strict mode
     await expect(page.locator('.el-card').first().getByRole('button', { name: '删除' })).toBeVisible()
   } finally {
-    // 清理：两单软删（不污染列表）
-    for (const id of [t1, t2, ...extraTickets]) {
+    for (const id of ticketIds) {
       await api('/api/v1/tickets/delete', { ...h, method: 'POST', body: { id } }).catch(() => {})
     }
     await tt.cleanup()
