@@ -3,8 +3,8 @@ import { AxiosError, type AxiosAdapter } from 'axios'
 import request from '@vea/request'
 import { clearTokens, setTokens } from '@/common/auth/tokenStorage'
 import {
-  finishRemediationApi, getRemediationContextApi, getRemediationOperationApi, reviewRemediationApi,
-  type RemediationFinishInput, type RemediationReviewInput,
+  finishRemediationApi, getRemediationContextApi, getRemediationOperationApi, handoffRemediationApi, reviewRemediationApi,
+  type RemediationFinishInput, type RemediationHandoffInput, type RemediationReviewInput,
 } from './remediation'
 
 // 请求封装保持真实；仅隔离浏览器路由依赖，网络在 Axios adapter 边界替换。
@@ -279,5 +279,81 @@ describe('按原操作号只读核查（remediation-operations）', () => {
       ['post', '/api/v1/risk-items/remediation-finish'],
       ['get', `/api/v1/risk-items/remediation-operations/${finishInput.operation_id}`],
     ])
+  })
+})
+
+describe('复测交接提交（remediation-handoff）', () => {
+  const handoffInput: RemediationHandoffInput = {
+    operation_id: '7c9e6679-7425-40de-944b-e07fc1f90ae7', ticket_id: ticketId, expected_ticket_revision: '41', definition_version: '7',
+    successor_user_id: '502', reason: '原复测责任人轮换，整组移交合成继任人复测',
+    items: [
+      { link_id: '301', expected_link_revision: '21', expected_risk_revision: '11', expected_proposal_version: '0' },
+      { link_id: '302', expected_link_revision: '22', expected_risk_revision: '12', expected_proposal_version: '3' },
+      { link_id: '303', expected_link_revision: '23', expected_risk_revision: '13', expected_proposal_version: '4' },
+    ],
+  }
+  const handoffOutcomeBody = () => ({
+    operation_id: handoffInput.operation_id, ticket_id: ticketId, ticket_revision: '42',
+    definition_version: '7', status: 'pending_verify', successor_user_id: '502',
+    items: [
+      { link_id: '301', risk_id: '9007199254740995', link_revision: '22', risk_revision: '12', proposal_version: '0', resolution_version: '0', result: 'applied' },
+      { link_id: '304', risk_id: '104', link_revision: '24', risk_revision: '14', proposal_version: '5', resolution_version: '9', result: 'preserved' },
+    ],
+    terminal_allowed: false,
+  })
+
+  it('POST 精确七字段整组未决项（提案钉 0 原样保留），回执含继任人与 preserved', async () => {
+    respond(handoffOutcomeBody())
+    await expect(handoffRemediationApi(handoffInput)).resolves.toEqual(handoffOutcomeBody())
+    const config = adapter.mock.calls[0]![0]
+    expect(config.url).toBe('/api/v1/risk-items/remediation-handoff')
+    expect(config.method).toBe('post')
+    expect(config._silentError).toBe(true)
+    const body = JSON.parse(config.data)
+    expect(Object.keys(body).sort()).toEqual(['definition_version', 'expected_ticket_revision', 'items', 'operation_id', 'reason', 'successor_user_id', 'ticket_id'])
+    expect(body.items.map((item: { link_id: string }) => item.link_id)).toEqual(['301', '302', '303'])
+    expect(body.items[0]).toEqual({ link_id: '301', expected_link_revision: '21', expected_risk_revision: '11', expected_proposal_version: '0' })
+    expect(body.reason).toBe(handoffInput.reason)
+  })
+
+  it('交接回执可经原号只读核查端点取回（动作无关）', async () => {
+    respond(handoffOutcomeBody())
+    await expect(getRemediationOperationApi(handoffInput.operation_id)).resolves.toEqual(handoffOutcomeBody())
+    expect(adapter.mock.calls[0]![0].method).toBe('get')
+  })
+
+  it.each([
+    ['bad uuid', { ...handoffInput, operation_id: 'not-a-uuid' }],
+    ['zero successor', { ...handoffInput, successor_user_id: '0' }],
+    ['numeric successor', { ...handoffInput, successor_user_id: 502 }],
+    ['blank reason', { ...handoffInput, reason: '   ' }],
+    ['nul reason', { ...handoffInput, reason: '理由\u0000合成' }],
+    ['over 2000 bytes reason', { ...handoffInput, reason: '交'.repeat(667) }],
+    ['empty items', { ...handoffInput, items: [] }],
+    ['over 20 items', { ...handoffInput, items: Array.from({ length: 21 }, (_, i) => ({ ...handoffInput.items[0]!, link_id: String(400 + i) })) }],
+    ['duplicate link', { ...handoffInput, items: [handoffInput.items[0]!, handoffInput.items[0]!] }],
+    ['zero link revision', { ...handoffInput, items: [{ ...handoffInput.items[0]!, expected_link_revision: '0' }] }],
+    ['negative proposal', { ...handoffInput, items: [{ ...handoffInput.items[0]!, expected_proposal_version: '-1' }] }] as unknown as [label: string, input: RemediationHandoffInput],
+    ['overflow proposal', { ...handoffInput, items: [{ ...handoffInput.items[0]!, expected_proposal_version: '9223372036854775808' }] }],
+    ['common header field', { ...handoffInput, comment: '交接不得携带办理说明' }] as unknown as [label: string, input: RemediationHandoffInput],
+    ['extra item field', { ...handoffInput, items: [{ ...handoffInput.items[0]!, decision: 'approve' }] }] as unknown as [label: string, input: RemediationHandoffInput],
+  ])('网络前拒绝 %s', async (_label, input) => {
+    await expect(handoffRemediationApi(input as RemediationHandoffInput)).rejects.toThrow()
+    expect(adapter).not.toHaveBeenCalled()
+  })
+
+  it('交接理由字节界限内（666 个中文字符 = 1998 字节）放行', async () => {
+    respond(handoffOutcomeBody())
+    await expect(handoffRemediationApi({ ...handoffInput, reason: '交'.repeat(666) })).resolves.toMatchObject({ successor_user_id: '502' })
+    expect(adapter).toHaveBeenCalledTimes(1)
+  })
+
+  it.each([
+    ['non-decimal successor', { ...handoffOutcomeBody(), successor_user_id: 'abc' }],
+    ['unknown preserved-like result', { ...handoffOutcomeBody(), items: [{ ...handoffOutcomeBody().items[0]!, result: 'moved' }] }],
+  ])('成功信封内 %s 仍拒绝且绝不续投', async (_label, body) => {
+    respond(body)
+    await expect(handoffRemediationApi(handoffInput)).rejects.toThrow('整改回执数据格式异常')
+    expect(adapter).toHaveBeenCalledTimes(1)
   })
 })

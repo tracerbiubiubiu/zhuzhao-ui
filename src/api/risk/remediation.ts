@@ -7,7 +7,11 @@
  * - POST /risk-items/remediation-finish               办理人提交整改证据（resolution 恒 fixed；
  *                                                     accept 属风险接受接线，不在本适配范围）
  * - POST /risk-items/remediation-review               复测责任人逐项通过(A)/打回(B)，证据恒空数组
- * - GET  /risk-items/remediation-operations/:id       按原操作号只读核查（403/404 保持安全语义）
+ * - POST /risk-items/remediation-handoff              复测交接整组未决资产（successor+reason，
+ *                                                     每项带当前提案钉；请求体仅七字段，服务端
+ *                                                     DisallowUnknownFields 禁带 comment/patch）
+ * - GET  /risk-items/remediation-operations/:id       按原操作号只读核查（403/404 保持安全语义；
+ *                                                     动作无关，handoff 回执同端点取回）
  *
  * 同号同参幂等、同号异参 409；断网/超时/5xx=提交结果未知——按原号核查，
  * 不换号重做。办理与复测字段互斥由服务端强制（办理提交含复测字段=400），
@@ -19,10 +23,10 @@ import request from '@vea/request'
 import type { RiskPostBody } from './contracts'
 
 export type RemediationState = 'open' | 'pending_verify' | 'rejected' | 'pending_acceptance' | 'resolved'
-/** 回执逐项结果（service 层常量）：待复测确认/已生效/已打回/冲突未生效 */
-export type RemediationItemResult = 'pending_confirmation' | 'applied' | 'rejected' | 'conflict' | 'reworked'
+/** 回执逐项结果，含到期接续及交接保留结论。 */
+export type RemediationItemResult = 'pending_confirmation' | 'applied' | 'rejected' | 'conflict' | 'reworked' | 'preserved'
 export type RemediationDecision = 'approve' | 'reject'
-export type RemediationAction = 'finish' | 'review' | 'accept_request' | 'accept_decision' | 'accept_rework' | 'assign_handler' | 'accept_assignment'
+export type RemediationAction = 'finish' | 'review' | 'accept_request' | 'accept_decision' | 'accept_rework' | 'assign_handler' | 'accept_assignment' | 'handoff'
 
 export interface RemediationContextItemDto {
   link_id: string
@@ -107,6 +111,25 @@ export interface RemediationReviewInput extends RemediationCommonInput {
   items: RemediationReviewItemInput[]
 }
 
+/** 交接项：携带当前三钉；提案钉允许 '0'（in_progress 下 open/rejected 未提交提案） */
+export interface RemediationHandoffItemInput {
+  link_id: string
+  expected_link_revision: string
+  expected_risk_revision: string
+  expected_proposal_version: string
+}
+
+/** 复测交接请求：仅七字段（服务端 DisallowUnknownFields），无 comment/custom_data_patch */
+export interface RemediationHandoffInput {
+  operation_id: string
+  ticket_id: string
+  expected_ticket_revision: string
+  definition_version: string
+  successor_user_id: string
+  reason: string
+  items: RemediationHandoffItemInput[]
+}
+
 export interface RemediationOutcomeItemDto {
   link_id: string
   risk_id: string
@@ -117,7 +140,7 @@ export interface RemediationOutcomeItemDto {
   result: RemediationItemResult
 }
 
-/** 提交与只读核查共用回执（acceptance_* 属风险接受接线，本组件不渲染仅透传） */
+/** 提交与只读核查共用回执（acceptance_* 属风险接受接线，本组件不渲染仅透传；successor_* 属交接回执） */
 export interface RemediationOutcomeDto {
   operation_id: string
   ticket_id: string
@@ -127,6 +150,9 @@ export interface RemediationOutcomeDto {
   acceptance_id?: string
   acceptance_revision?: string
   acceptance_status?: string
+  successor_user_id?: string
+  /** 交接回执携带的工单组状态（riskWorkflowOutcome.status，omitempty） */
+  status?: string
 }
 
 /** 组件注入端口：生产走真实请求；测试经模块替身注入（DispatchDialog.test.ts 同型） */
@@ -134,6 +160,7 @@ export interface RemediationPort {
   context(ticketId: string, signal?: AbortSignal): Promise<RemediationContextDto>
   finish(input: RemediationFinishInput): Promise<RemediationOutcomeDto>
   review(input: RemediationReviewInput): Promise<RemediationOutcomeDto>
+  handoff(input: RemediationHandoffInput): Promise<RemediationOutcomeDto>
   operation(operationId: string, signal?: AbortSignal): Promise<RemediationOutcomeDto>
 }
 
@@ -149,12 +176,15 @@ export interface RemediationEvidenceSource {
 
 const maxInt64 = '9223372036854775807'
 const REMEDIATION_STATES = ['open', 'pending_verify', 'rejected', 'pending_acceptance', 'resolved'] as const
-const ITEM_RESULTS = ['pending_confirmation', 'applied', 'rejected', 'conflict', 'reworked'] as const
+const ITEM_RESULTS = ['pending_confirmation', 'applied', 'rejected', 'conflict', 'reworked', 'preserved'] as const
 const MEASURES_NOTE_MAX = 16000
 const EVIDENCE_MAX = 50
 const EVIDENCE_REF_MAX = 1000
 const EVIDENCE_VERSION_MAX = 200
 const OPERATION_KEY_MAX = 128
+/** handoff 服务端界限（service/riskremediation/handoff.go）：理由字节长 ≤2000 且禁 NUL；整组 ≤20 项 */
+const HANDOFF_REASON_MAX_BYTES = 2000
+const HANDOFF_ITEMS_MAX = 20
 
 function isDecimalId(value: unknown): value is string {
   return typeof value === 'string' && /^[1-9]\d{0,18}$/.test(value)
@@ -211,9 +241,71 @@ function isPlainPatch(value: unknown): value is Record<string, unknown> {
   return isObject(value) && Object.keys(value).length > 0
 }
 
+function isCanonicalUuid(value: unknown): value is string {
+  return typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(value)
+}
+
+/** 交接理由发送侧界限与服务端同口径：UTF-8 字节数（Go len）而非字符数 */
+function handoffReasonValid(reason: string): boolean {
+  return reason.trim().length > 0 && !reason.includes('\u0000')
+    && new TextEncoder().encode(reason).length <= HANDOFF_REASON_MAX_BYTES
+}
+
+/** 交接项序列化：仅四字段白名单，拒绝办理/复测字段混入（服务端禁未知字段同语义） */
+function handoffItemWire(item: RemediationHandoffItemInput) {
+  if (Object.keys(item).some(key => !['link_id', 'expected_link_revision', 'expected_risk_revision', 'expected_proposal_version'].includes(key))) {
+    throw new Error('交接项包含不支持的字段')
+  }
+  assertId(item.link_id, '资产关联 ID')
+  assertPositiveVersion(item.expected_link_revision, '预期关联修订')
+  assertPositiveVersion(item.expected_risk_revision, '预期风险修订')
+  assertVersion(item.expected_proposal_version, '预期提案版本')
+  return {
+    link_id: item.link_id,
+    expected_link_revision: item.expected_link_revision,
+    expected_risk_revision: item.expected_risk_revision,
+    expected_proposal_version: item.expected_proposal_version,
+  }
+}
+
+/** 交接序列化：整组未决资产一次提交，仅七字段；服务端按原号幂等 */
+function handoffWire(input: RemediationHandoffInput) {
+  if (Object.keys(input).some(key => !['operation_id', 'ticket_id', 'expected_ticket_revision', 'definition_version',
+    'successor_user_id', 'reason', 'items'].includes(key))) {
+    throw new Error('交接请求包含不支持的字段')
+  }
+  if (!isCanonicalUuid(input.operation_id)) {
+    throw new Error('原操作号必须为规范 UUID')
+  }
+  assertId(input.ticket_id, '工单 ID')
+  assertPositiveVersion(input.expected_ticket_revision, '预期工单修订')
+  assertVersion(input.definition_version, '定义版本')
+  assertId(input.successor_user_id, '继任人 ID')
+  if (!handoffReasonValid(input.reason)) throw new Error('交接理由必须为非空、无空字符且不超过 2000 字节的文本')
+  if (!Array.isArray(input.items) || input.items.length === 0 || input.items.length > HANDOFF_ITEMS_MAX) {
+    throw new Error('交接提交须为 1-20 项未决资产')
+  }
+  const seen = new Set<string>()
+  const items = input.items.map(item => {
+    const wire = handoffItemWire(item)
+    if (seen.has(wire.link_id)) throw new Error('交接项不得重复同一资产关联')
+    seen.add(wire.link_id)
+    return wire
+  })
+  return {
+    operation_id: input.operation_id,
+    ticket_id: input.ticket_id,
+    expected_ticket_revision: input.expected_ticket_revision,
+    definition_version: input.definition_version,
+    successor_user_id: input.successor_user_id,
+    reason: input.reason,
+    items,
+  }
+}
+
 /** 通用提交头序列化（空 patch/空注释不发送，服务端按缺省归一） */
 function commonWire(input: RemediationCommonInput) {
-  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(input.operation_id)) {
+  if (!isCanonicalUuid(input.operation_id)) {
     throw new Error('原操作号必须为规范 UUID')
   }
   assertId(input.ticket_id, '工单 ID')
@@ -328,14 +420,15 @@ export function validateRemediationContext(value: unknown, ticketId: string): Re
   return value as unknown as RemediationContextDto
 }
 
-/** 回执校验：原号一致才确认（原请求明确回据）；acceptance_* 仅形状校验不渲染 */
+/** 回执校验：原号一致才确认（原请求明确回据）；acceptance/successor 扩展字段仅形状校验不终审 */
 export function validateRemediationOutcome(value: unknown, operationId: string): RemediationOutcomeDto {
   if (!isObject(value) || value.operation_id !== operationId || !isOperationKey(value.operation_id)
     || !isDecimalId(value.ticket_id) || !isDecimalVersion(value.ticket_revision)
     || !Array.isArray(value.items) || !value.items.every(isOutcomeItem)
     || typeof value.terminal_allowed !== 'boolean'
     || !optionalDecimal(value.acceptance_id) || !optionalDecimal(value.acceptance_revision)
-    || !optionalStatus(value.acceptance_status)) {
+    || !optionalStatus(value.acceptance_status) || !optionalDecimal(value.successor_user_id)
+    || !optionalStatus(value.status)) {
     throw new Error('整改回执数据格式异常')
   }
   return value as unknown as RemediationOutcomeDto
@@ -368,6 +461,17 @@ export async function reviewRemediationApi(input: RemediationReviewInput): Promi
   return validateRemediationOutcome(data, input.operation_id)
 }
 
+/**
+ * 复测交接整组未决资产（断网/超时/5xx=结果未知：保留原号原参，按 operations/:id 只读核查）。
+ * 该端点尚未进生成 Schema（主会话统一 codegen 后补 `satisfies RiskPostBody` 接线），
+ * 请求体形状由 handoffWire 按候选 handler 显式构造并全量校验。
+ */
+export async function handoffRemediationApi(input: RemediationHandoffInput): Promise<RemediationOutcomeDto> {
+  const body = handoffWire(input) satisfies RiskPostBody<'/api/v1/risk-items/remediation-handoff'>
+  const data: unknown = await request.post('/api/v1/risk-items/remediation-handoff', body, silent)
+  return validateRemediationOutcome(data, input.operation_id)
+}
+
 /** 按原操作号只读核查（404=服务端尚未记录该号，不代表未提交；绝不回退 POST） */
 export async function getRemediationOperationApi(operationId: string, signal?: AbortSignal): Promise<RemediationOutcomeDto> {
   assertOperationKey(operationId)
@@ -379,5 +483,6 @@ export const riskRemediationHttpPort: RemediationPort = {
   context: getRemediationContextApi,
   finish: finishRemediationApi,
   review: reviewRemediationApi,
+  handoff: handoffRemediationApi,
   operation: getRemediationOperationApi,
 }

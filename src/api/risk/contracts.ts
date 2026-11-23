@@ -139,8 +139,7 @@ export interface RiskCreateCommand {
   affected_org_id?: RiskId
   /** 可选；不传=责任待确认（owner_unconfirmed） */
   owner_user_id?: RiskId
-  /** 候选扩展（人工登记成对提供发现键+资产引用）：生成 Schema 尚未含此二字段，
-   * 契约批合入后随 pnpm codegen 接线；旧模式两者缺省不发送 */
+  /** 人工登记的漏洞标识与资产引用须成对提供，兼容两者均缺省。 */
   finding_key?: string
   asset_ref?: AssetRefDto
   expected_revision: RiskRevision

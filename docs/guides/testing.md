@@ -60,7 +60,7 @@ ESLint是纯检查，修复用lint:fix后重跑。E2E使用[playwright.config.ts
 
 [专用配置](../../playwright.b2.config.ts)发现 3 个 spec、8 条用例。登记 2 条，派单 3 条，整改与复测 3 条。`pnpm test:e2e:b2 --list` 无需夹具环境，核对 2/3/3 清单。`pnpm test:e2e:b2 --preflight` 另核对本轮变量、夹具结构和文件归属，服务连接和浏览器均留给实跑。`pnpm test:e2e:b2` 连接预启动的独占真栈并运行全套。它使用单 worker、零重试、无全局建号和自动服务启动，入口拒绝筛选，缺失、跳过或未执行的用例均失败。
 
-第 9 项使用独立入口 `B2_BROWSER_ITEM9_ONLY=1 pnpm test:e2e:b2`，追加 `--list` 或 `--preflight` 可核对单条用例及参数。使用下文定义的同轮独占 UI、Core 和 PG，以及必需的独占 `B2_RISK_STORAGE_ORIGIN`。通过 `B2_RISK_LIFECYCLE_{M,U,P,X}_NO` 和对应 `_PASSWORD` 注入四个准备好的非种子合成账号。目标取 `B2_RISK_LIFECYCLE_ORG_ID`、`B2_RISK_LIFECYCLE_TYPE_CODE`、`B2_RISK_LIFECYCLE_DEFINITION_VERSION`，发布规则应包含分派、接单、带办理说明的送复测和带 `synthetic_review_mark` 的复测关单。准备人可建立组织、规则和账号，风险和工单由浏览器现场创建。
+第 9 项使用独立入口 `B2_BROWSER_ITEM9_ONLY=1 pnpm test:e2e:b2`，追加 `--list` 或 `--preflight` 可核对单条用例及参数。使用下文定义的同轮独占 UI、Core 和 PG，以及必需的独占 `B2_RISK_STORAGE_ORIGIN`。通过 `B2_RISK_LIFECYCLE_{M,U,P,X,T}_NO` 和对应 `_PASSWORD` 注入五个准备好的非种子合成账号。T 只持有普通工单读权，用于核对该工单的历史整改证据范围。目标取 `B2_RISK_LIFECYCLE_ORG_ID`、`B2_RISK_LIFECYCLE_TYPE_CODE`、`B2_RISK_LIFECYCLE_DEFINITION_VERSION`，发布规则应包含分派、接单、带办理说明的送复测和带 `synthetic_review_mark` 的复测关单。准备人可建立组织、规则和账号，风险和工单由浏览器现场创建。
 
 第 9 项使用本轮空的 `B2_RISK_LIFECYCLE_RESTART_DIR` 与固定 `B2_EXPECTED_CORE_DIGEST`，沿用下文重启交接协议。分组快照此次应含一张票和一条风险。独立读回应包含风险编号、工单编号和该票首代接单提醒的调度事实。实际通知入箱按送达发生单独记证。
 

@@ -20,9 +20,10 @@ export function loadLifecycleFixture() {
     U: b2Account('B2_RISK_LIFECYCLE_U'),
     P: b2Account('B2_RISK_LIFECYCLE_P'),
     X: b2Account('B2_RISK_LIFECYCLE_X'),
+    T: b2Account('B2_RISK_LIFECYCLE_T'),
   }
-  if (new Set(Object.values(accounts).map(account => account.employeeNo.toUpperCase())).size !== 4) {
-    throw new Error('第 9 项须使用四个不同的合成账号')
+  if (new Set(Object.values(accounts).map(account => account.employeeNo.toUpperCase())).size !== 5) {
+    throw new Error('第 9 项须使用五个不同的合成账号')
   }
   const target = {
     org_id: positiveInt64('B2_RISK_LIFECYCLE_ORG_ID'),
@@ -78,8 +79,8 @@ export async function withLifecycleActors<T>(browser: Browser, fixture: Fixture,
   }
 
   try {
-    const actors = { M: await signIn('M'), U: await signIn('U'), P: await signIn('P'), X: await signIn('X') }
-    expect(new Set(Object.values(actors).map(actor => actor.userId)).size).toBe(4)
+    const actors = { M: await signIn('M'), U: await signIn('U'), P: await signIn('P'), X: await signIn('X'), T: await signIn('T') }
+    expect(new Set(Object.values(actors).map(actor => actor.userId)).size).toBe(5)
     return await run(actors)
   } finally {
     await Promise.all(contexts.map(context => context.close()))

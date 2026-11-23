@@ -30,7 +30,7 @@ type Page = {
   selected: Ref<string[]>
   finishDrafts: Ref<Record<string, { measures: string; evidence: string[] }>>
   reviewDrafts: Ref<Record<string, { decision: '' | 'approve' | 'reject'; note: string }>>
-  attempt: Ref<{ kind: 'finish' | 'review'; input: Record<string, unknown>; signature: string } | null>
+  attempt: Ref<{ kind: 'finish' | 'review' | 'handoff'; input: Record<string, unknown>; signature: string } | null>
   result: Ref<RemediationOutcomeDto | null>
   busy: Ref<boolean>
   error: Ref<string>
@@ -45,6 +45,10 @@ type Page = {
   inputChanged: Ref<boolean>
   canSubmitFinish: Ref<boolean>
   canSubmitReview: Ref<boolean>
+  canSubmitHandoff: Ref<boolean>
+  successorUserId: Ref<string>
+  handoffReason: Ref<string>
+  handoffPendingItems: Ref<DraftItem[]>
   canInspect: Ref<boolean>
   canRetry: Ref<boolean>
   finished: Ref<boolean>
@@ -55,6 +59,7 @@ type Page = {
   canToggle(item: DraftItem): boolean
   submitFinish(): Promise<void>
   submitReview(): Promise<void>
+  submitHandoff(): Promise<void>
   inspect(): Promise<void>
   retry(): Promise<void>
   startNext(): Promise<void>
@@ -67,16 +72,17 @@ type Api = {
   getRemediationContextApi: ReturnType<typeof vi.fn>
   finishRemediationApi: ReturnType<typeof vi.fn>
   reviewRemediationApi: ReturnType<typeof vi.fn>
+  handoffRemediationApi: ReturnType<typeof vi.fn>
   getRemediationOperationApi: ReturnType<typeof vi.fn>
 }
 
-type FixtureProps = Partial<{ modelValue: boolean; canRead: boolean; canFinish: boolean; canReview: boolean }>
+type FixtureProps = Partial<{ modelValue: boolean; canRead: boolean; canFinish: boolean; canReview: boolean; canHandoff: boolean }>
 
 const stubbedComponents = ['ElAlert', 'ElButton', 'ElCheckbox', 'ElCheckboxGroup', 'ElDialog', 'ElEmpty', 'ElInput', 'ElRadio', 'ElRadioGroup', 'ElTag']
 
 function fixture(configure?: (api: Api) => void, propOverrides: FixtureProps = {}) {
   const props = reactive({
-    modelValue: true, ticketId, canRead: true, canFinish: true, canReview: true, ...propOverrides,
+    modelValue: true, ticketId, canRead: true, canFinish: true, canReview: true, canHandoff: false, ...propOverrides,
     customDataPatch: undefined as Record<string, unknown> | undefined,
     comment: undefined as string | undefined,
     ticketActions: undefined as InstanceAction[] | undefined,
@@ -91,6 +97,7 @@ function fixture(configure?: (api: Api) => void, propOverrides: FixtureProps = {
     getRemediationContextApi: vi.fn().mockResolvedValue(contextBody()),
     finishRemediationApi: vi.fn().mockResolvedValue(outcome()),
     reviewRemediationApi: vi.fn().mockResolvedValue(outcome()),
+    handoffRemediationApi: vi.fn().mockResolvedValue(outcome()),
     getRemediationOperationApi: vi.fn(),
   }
   configure?.(api)
@@ -99,6 +106,8 @@ function fixture(configure?: (api: Api) => void, propOverrides: FixtureProps = {
   const newCommandId = vi.fn(() => ++operationNumber === 1 ? 'synthetic-op-k' : `synthetic-op-k-${operationNumber}`)
   const { page } = setupPage<Page>(source, {
     '@/views/ticket/detail/TransitionActionDialog.vue': {},
+    // UserPicker 内部走 people 搜索请求，测试以空替身注入。
+    '@/components/UserPicker/index.vue': { default: { name: 'UserPicker' } },
     'element-plus': Object.fromEntries(stubbedComponents.map(name => [name, { name }])),
     '@/api/risk/remediation': api,
     '@/api/risk/remediationCommands': { newRemediationCommandId: newCommandId },
@@ -868,5 +877,135 @@ describe('模板契约（可集成性）', () => {
     const reviewDraftText = textOf(findId(body, 'remediation-review-drafts'))
     expect(reviewDraftText).toContain('通过（A）')
     expect(reviewDraftText).toContain('打回（B）')
+  })
+})
+
+describe('复测交接（remediation-handoff）', () => {
+  const handoffOutcome = (over: Partial<RemediationOutcomeDto> = {}): RemediationOutcomeDto => ({
+    operation_id: 'synthetic-op-k', ticket_id: ticketId, ticket_revision: '42', successor_user_id: '502', status: 'pending_verify',
+    items: [
+      { link_id: '301', risk_id: '9007199254740995', link_revision: '22', risk_revision: '12', proposal_version: '0', resolution_version: '0', result: 'applied' },
+      { link_id: '302', risk_id: '102', link_revision: '23', risk_revision: '13', proposal_version: '3', resolution_version: '0', result: 'applied' },
+      { link_id: '303', risk_id: '103', link_revision: '24', risk_revision: '14', proposal_version: '4', resolution_version: '0', result: 'applied' },
+      { link_id: '304', risk_id: '104', link_revision: '24', risk_revision: '14', proposal_version: '5', resolution_version: '9', result: 'preserved' },
+    ],
+    terminal_allowed: false, ...over,
+  })
+
+  async function readyHandoff(page: Page, successor = '502', reason = '合成轮换交接理由') {
+    await settle()
+    page.successorUserId.value = successor
+    page.handoffReason.value = reason
+    await settle()
+    return page.canSubmitHandoff.value
+  }
+
+  it('就绪后整组未决项一次交接：七字段、resolved 不入列、提案钉 0 保留、回执按交接文案展示', async () => {
+    const { api, page, props } = fixture(api => api.handoffRemediationApi.mockResolvedValueOnce(handoffOutcome()), { canHandoff: true })
+    await settle()
+    expect(page.handoffPendingItems.value.map(item => item.link_id)).toEqual(['301', '302', '303'])
+    expect(page.canSubmitHandoff.value).toBe(false)
+    expect(await readyHandoff(page)).toBe(true)
+    await page.submitHandoff()
+    expect(api.handoffRemediationApi).toHaveBeenCalledTimes(1)
+    const input = api.handoffRemediationApi.mock.calls[0]![0]
+    expect(input).toEqual({
+      operation_id: 'synthetic-op-k', ticket_id: ticketId, expected_ticket_revision: '41', definition_version: '7',
+      successor_user_id: '502', reason: '合成轮换交接理由',
+      items: [
+        { link_id: '301', expected_link_revision: '21', expected_risk_revision: '11', expected_proposal_version: '0' },
+        { link_id: '302', expected_link_revision: '22', expected_risk_revision: '12', expected_proposal_version: '3' },
+        { link_id: '303', expected_link_revision: '23', expected_risk_revision: '13', expected_proposal_version: '4' },
+      ],
+    })
+    expect(Object.keys(input).sort()).toEqual(['definition_version', 'expected_ticket_revision', 'items', 'operation_id', 'reason', 'successor_user_id', 'ticket_id'])
+    expect(page.uncertain.value).toBe(false)
+    expect(page.savedOperation.value).toBe('synthetic-op-k')
+    const { body } = renderDialog(page, props)
+    const outcomeText = textOf(findId(body, 'remediation-outcome'))
+    expect(outcomeText).toContain('已交接')
+    expect(outcomeText).toContain('已生效资产保持不变')
+    expect(textOf(body)).toContain('复测继任人：502')
+  })
+
+  it('无 handoff 权不渲染入口也不提交', async () => {
+    const { api, page, props } = fixture(undefined, { canHandoff: false })
+    await settle()
+    expect(page.canSubmitHandoff.value).toBe(false)
+    await readyHandoff(page)
+    expect(page.canSubmitHandoff.value).toBe(false)
+    await page.submitHandoff()
+    expect(api.handoffRemediationApi).not.toHaveBeenCalled()
+    expect(findId(renderDialog(page, props).body, 'remediation-handoff-form')).toBeUndefined()
+    expect(findId(renderDialog(page, props).footer, 'remediation-handoff')).toBeUndefined()
+  })
+
+  it('存在不可管理未决项、继任人或理由缺失、理由超字节或含 NUL 时拒绝提交', async () => {
+    const noManage = contextBody()
+    noManage.items[0]!.can_manage_risk = false
+    const blocked = fixture(api => api.getRemediationContextApi.mockResolvedValue(noManage), { canHandoff: true })
+    await settle()
+    await readyHandoff(blocked.page)
+    expect(blocked.page.canSubmitHandoff.value).toBe(false)
+    await blocked.page.submitHandoff()
+    expect(blocked.api.handoffRemediationApi).not.toHaveBeenCalled()
+
+    const empty = fixture(undefined, { canHandoff: true })
+    await settle()
+    expect(empty.page.canSubmitHandoff.value).toBe(false)
+    empty.page.successorUserId.value = '502'
+    expect(empty.page.canSubmitHandoff.value).toBe(false)
+    empty.page.handoffReason.value = '合成理由'
+    expect(empty.page.canSubmitHandoff.value).toBe(true)
+    empty.page.handoffReason.value = '交'.repeat(667)
+    expect(empty.page.canSubmitHandoff.value).toBe(false)
+    empty.page.handoffReason.value = '理由\u0000合成'
+    expect(empty.page.canSubmitHandoff.value).toBe(false)
+    await empty.page.submitHandoff()
+    expect(empty.api.handoffRemediationApi).not.toHaveBeenCalled()
+  })
+
+  it('明确409后按既有交互：保留原号核查入口，刷新后新号重提', async () => {
+    const { api, page, props } = fixture(api => api.handoffRemediationApi.mockRejectedValueOnce(httpError(409, '交接冲突，未生效')), { canHandoff: true })
+    expect(await readyHandoff(page)).toBe(true)
+    await page.submitHandoff()
+    const original = JSON.parse(JSON.stringify(api.handoffRemediationApi.mock.calls[0]![0]))
+    expect(page.uncertain.value).toBe(false)
+    expect(page.rejected.value).toBe(true)
+    expect(page.canRetry.value).toBe(false)
+    expect(page.canInspect.value).toBe(true)
+    const refresh = findId(renderDialog(page, props).footer, 'remediation-rejected-refresh')
+    expect(refresh?.props?.disabled).toBe(false)
+    const fresh = contextBody()
+    fresh.ticket_revision = '44'
+    fresh.items[0]!.link_revision = '25'
+    api.getRemediationContextApi.mockResolvedValueOnce(fresh)
+    refresh.props.onClick()
+    await settle()
+    expect(api.handoffRemediationApi).toHaveBeenCalledTimes(1)
+    expect(page.attempt.value).toBeNull()
+    expect(await readyHandoff(page)).toBe(true)
+    api.handoffRemediationApi.mockResolvedValueOnce(handoffOutcome({ operation_id: 'synthetic-op-k-2' }))
+    await page.submitHandoff()
+    expect(api.handoffRemediationApi).toHaveBeenCalledTimes(2)
+    expect(api.handoffRemediationApi.mock.calls[1]![0]).toMatchObject({ operation_id: 'synthetic-op-k-2', expected_ticket_revision: '44' })
+    expect(api.handoffRemediationApi.mock.calls[1]![0].items[0]).toMatchObject({ expected_link_revision: '25' })
+    expect(api.handoffRemediationApi.mock.calls[0]![0]).toEqual(original)
+  })
+
+  it.each([500, 503])('handoff %s 保持待核查；GET 404 后原号原参续办', async status => {
+    const { api, page } = fixture(api => api.handoffRemediationApi.mockRejectedValueOnce(httpError(status)), { canHandoff: true })
+    expect(await readyHandoff(page)).toBe(true)
+    await page.submitHandoff()
+    const original = JSON.parse(JSON.stringify(page.attempt.value))
+    expect(page.uncertain.value).toBe(true)
+    expect(page.canRetry.value).toBe(false)
+    api.getRemediationOperationApi.mockRejectedValueOnce(httpError(404))
+    await page.inspect()
+    expect(page.canRetry.value).toBe(true)
+    await page.retry()
+    expect(api.handoffRemediationApi).toHaveBeenCalledTimes(2)
+    expect(api.handoffRemediationApi.mock.calls[1]![0]).toEqual(api.handoffRemediationApi.mock.calls[0]![0])
+    expect(page.attempt.value).toEqual(original)
   })
 })

@@ -291,6 +291,6 @@ export async function reworkRemediationAcceptanceApi(input: ReworkRemediationAcc
     link_id: input.link_id, expected_link_revision: input.expected_link_revision,
     acceptance_id: input.acceptance_id, expected_acceptance_revision: input.expected_acceptance_revision,
     reason: input.reason,
-  }, silent)
+  } satisfies RiskPostBody<'/api/v1/risk-items/remediation-accept-rework'>, silent)
   return validateRemediationCommandOutcome(data, body.operation_id, body.ticket_id)
 }

@@ -28,6 +28,7 @@ type LifecycleRemediation = {
   dispatcher: LifecycleActor
   handler: LifecycleActor
   owner: LifecycleActor
+  ticketOnly: LifecycleActor
   ticketId: string
   riskId: string
   definitionVersion: string
@@ -156,7 +157,7 @@ async function uploadSyntheticEvidence(handler: LifecycleActor, ticketId: string
   expect(attachments).toEqual([expect.objectContaining({
     file_name: fileName, object_key: pre.object_key, evidence_version: expect.stringMatching(/\S/),
   })])
-  const downloadPath = '/api/v1/files/' + pre.object_key.split('/').map(encodeURIComponent).join('/')
+  const downloadPath = evidenceFilePath(pre.object_key)
   const download = await page.request.get(downloadPath, { maxRedirects: 0 })
   try {
     expect(download.status()).toBe(200)
@@ -165,6 +166,10 @@ async function uploadSyntheticEvidence(handler: LifecycleActor, ticketId: string
     await download.dispose()
   }
   return { fileName, evidence: { kind: 'file', ref: pre.object_key, version: attachments[0]!.evidence_version! } }
+}
+
+function evidenceFilePath(key: string) {
+  return '/api/v1/files/' + key.split('/').map(encodeURIComponent).join('/')
 }
 
 async function submitWithPublishedField(dialog: Locator, kind: 'finish' | 'review', value: string) {
@@ -184,7 +189,7 @@ async function submitWithPublishedField(dialog: Locator, kind: 'finish' | 'revie
 }
 
 export async function runRiskLifecycleRemediation(options: LifecycleRemediation) {
-  const { dispatcher, handler, owner, ticketId, riskId, definitionVersion } = options
+  const { dispatcher, handler, owner, ticketOnly, ticketId, riskId, definitionVersion } = options
   expect(new Set([dispatcher.userId, handler.userId, owner.userId]).size).toBe(3)
   const dispatcherWrites = observeBusinessWrites(dispatcher.page)
   const handlerWrites = observeBusinessWrites(handler.page)
@@ -233,6 +238,8 @@ export async function runRiskLifecycleRemediation(options: LifecycleRemediation)
     expect(browserContext.ticket_revision).toBe(claimed.after.context.ticket_revision)
     expect(browserContext.allowed_actions).toContain('finish')
     const source = await uploadSyntheticEvidence(handler, ticketId)
+    await expect.poll(async () => (await readAttachments(ticketOnly.client, ticketId)).map(attachment => attachment.object_key))
+      .toEqual([source.evidence.ref])
     const before = await read()
     const { item } = sameRisk(before, options)
     expect(item.link_id).toBe(sameRisk(claimed.after, options).item.link_id)
@@ -264,7 +271,7 @@ export async function runRiskLifecycleRemediation(options: LifecycleRemediation)
     expect(after.attachments).toEqual(before.attachments)
     expect(await readOutcome(handler.client, ticketId, outcome.operation_id)).toEqual(outcome)
     await closeRemediationDialog(dialog)
-    return { after, operationId: outcome.operation_id }
+    return { after, operationId: outcome.operation_id, source }
   })
 
   const reviewed = await test.step('现势责任人逐项复测原风险并关闭同一工单', async () => {
@@ -305,6 +312,23 @@ export async function runRiskLifecycleRemediation(options: LifecycleRemediation)
     expect(after.attachments).toEqual(finished.after.attachments)
     expect(await readOutcome(owner.client, ticketId, outcome.operation_id)).toEqual(outcome)
     await closeRemediationDialog(dialog)
+    expect(await readAttachments(ticketOnly.client, ticketId)).toEqual([])
+    const filePath = evidenceFilePath(finished.source.evidence.ref)
+    const unauthorized = await ticketOnly.page.request.get(filePath, {
+      headers: { 'If-None-Match': '"' + finished.source.evidence.version + '"' }, maxRedirects: 0,
+    })
+    try {
+      expect(unauthorized.status()).toBe(404)
+    } finally {
+      await unauthorized.dispose()
+    }
+    const authorized = await owner.page.request.get(filePath, { maxRedirects: 0 })
+    try {
+      expect(authorized.status()).toBe(200)
+      expect(await authorized.body()).toEqual(Buffer.from(`B2 第9项合成整改证据 ${finished.source.fileName}\n`, 'utf8'))
+    } finally {
+      await authorized.dispose()
+    }
     return { after, asset, operationId: outcome.operation_id }
   })
 

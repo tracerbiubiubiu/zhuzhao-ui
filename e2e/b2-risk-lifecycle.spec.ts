@@ -84,7 +84,7 @@ test('B2 第9项 人工登记同一风险，派单重启后原号只读核查，
     asset_ref: { provider: 'synthetic', external_id: `b2-asset-${sampleId}` },
   }
 
-  await withLifecycleActors(browser, fixture, async ({ M, U, P, X }) => {
+  await withLifecycleActors(browser, fixture, async ({ M, U, P, X, T }) => {
     const managerWrites = observeBusinessWrites(M.page)
     const { risk: original, receipt: created } = await test.step('M 在风险列表登记新漏洞及受影响资产', async () => {
       expect(await findRisk(M.page, origin, sample.title)).toMatchObject({ total: 0, items: [] })
@@ -190,7 +190,7 @@ test('B2 第9项 人工登记同一风险，派单重启后原号只读核查，
       page: M.page, origin, actorId: M.userId, ownerId: U.userId, riskId, target, restartDir, read: M.read,
     }))
     expect(dispatch.riskRefs).toEqual([{ id: riskId, ref: humanKey }])
-    const final = await runRiskLifecycleRemediation({ dispatcher: M, handler: P, owner: U, ticketId: dispatch.ticket.id,
+    const final = await runRiskLifecycleRemediation({ dispatcher: M, handler: P, owner: U, ticketOnly: T, ticketId: dispatch.ticket.id,
       riskId, definitionVersion: target.definition_version })
     await test.step('回读原风险、原票关单与只读访问的最终事实', async () => {
       expect(final).toMatchObject({ ticketId: dispatch.ticket.id, riskId, linkId: dispatch.linkId, status: 'closed' })

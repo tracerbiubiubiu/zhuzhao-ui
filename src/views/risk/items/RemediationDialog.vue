@@ -2,20 +2,23 @@
 import { computed, nextTick, onScopeDispose, ref, watch } from 'vue'
 import { ElAlert, ElButton, ElCheckbox, ElCheckboxGroup, ElDialog, ElEmpty, ElInput, ElRadio, ElRadioGroup, ElTag } from 'element-plus'
 import {
-  finishRemediationApi, getRemediationContextApi, getRemediationOperationApi,
+  finishRemediationApi, getRemediationContextApi, getRemediationOperationApi, handoffRemediationApi,
   reviewRemediationApi, type RemediationCommonInput, type RemediationContextDto,
   type RemediationContextItemDto, type RemediationEvidenceSource, type RemediationFinishInput,
-  type RemediationOutcomeDto, type RemediationReviewInput,
+  type RemediationHandoffInput, type RemediationOutcomeDto, type RemediationOutcomeItemDto,
+  type RemediationReviewInput,
 } from '@/api/risk/remediation'
 import { newRemediationCommandId } from '@/api/risk/remediationCommands'
 import { getSessionGeneration } from '@/common/auth/tokenStorage'
 import { apiErrorMessage, apiReadError } from '@/utils/apiError'
+import UserPicker from '@/components/UserPicker/index.vue'
 import type { InstanceAction } from '@/api/ticket/instanceActions'
 import TransitionActionDialog from '@/views/ticket/detail/TransitionActionDialog.vue'
 import type { TransitionActionInput } from '@/views/ticket/detail/transitionActionFields'
 
 // 挂载入口与写权限由工单详情提供；本组件不自行判定权限码，也不伪造上传、
 // 权限或风险接受接线。证据只能引用调用方注入的同票已绑定带版本附件。
+// 复测交接（handoff）为整组动作：一次提交全部未决资产，不走工单过渡动作。
 const props = defineProps<{
   modelValue: boolean
   ticketId: string
@@ -24,6 +27,7 @@ const props = defineProps<{
   canRead: boolean
   canFinish: boolean
   canReview: boolean
+  canHandoff: boolean
   ticketActions?: InstanceAction[]
   /** 父页工单、上下文和已发布动作全部刷新成功后才允许新一轮。 */
   refreshContext?: () => Promise<void>
@@ -37,14 +41,14 @@ const emit = defineEmits<{
   result: [value: RemediationOutcomeDto]
   readDenied: [value: { ticket_id: string; status: 403 | 404 }]
   /** 主页面应保持本组件挂载；可保留此原号供离页前受权核查 */
-  operation: [value: { operation_id: string; kind: 'finish' | 'review' }]
+  operation: [value: { operation_id: string; kind: 'finish' | 'review' | 'handoff' }]
 }>()
 
-type AttemptKind = 'finish' | 'review'
+type AttemptKind = 'finish' | 'review' | 'handoff'
 interface Attempt {
   kind: AttemptKind
   actorId?: string
-  input: RemediationFinishInput | RemediationReviewInput
+  input: RemediationFinishInput | RemediationReviewInput | RemediationHandoffInput
   /** 创建时的原请求签名；续办与核查只认原号原参 */
   signature: string
 }
@@ -57,6 +61,8 @@ const contextError = ref('')
 const selected = ref<string[]>([])
 const finishDrafts = ref<Record<string, FinishDraft>>({})
 const reviewDrafts = ref<Record<string, ReviewDraft>>({})
+const successorUserId = ref('')
+const handoffReason = ref('')
 const attempt = ref<Attempt | null>(null)
 const result = ref<RemediationOutcomeDto | null>(null)
 const resultVersion = ref(0)
@@ -103,12 +109,26 @@ const canSubmitFinish = computed(() => !sessionInvalid.value && props.modelValue
   && commonUsable.value && !attempt.value && !busy.value && !contextLoading.value && !contextError.value && !!context.value && finishSelectionValid.value)
 const canSubmitReview = computed(() => !sessionInvalid.value && props.modelValue && canViewContext.value && props.canReview
   && commonUsable.value && !attempt.value && !busy.value && !contextLoading.value && !contextError.value && !!context.value && reviewSelectionValid.value)
+/** 交接覆盖全部未决项；已生效资产由服务端保持原状。每项可管理资格与上下文 allowed_actions 均由服务端裁决。 */
+const handoffPendingItems = computed(() => items.value.filter(item => item.remediation_state !== 'resolved'))
+const handoffReasonValid = computed(() => {
+  const reason = handoffReason.value
+  return reason.trim().length > 0 && !reason.includes('\u0000')
+    && new TextEncoder().encode(reason).length <= 2000
+})
+const handoffFormActive = computed(() => props.modelValue && canViewContext.value && props.canHandoff && !attempt.value && !busy.value)
+const canSubmitHandoff = computed(() => !sessionInvalid.value && props.modelValue && canViewContext.value && props.canHandoff
+  && !attempt.value && !busy.value && !contextLoading.value && !contextError.value && !!context.value
+  && handoffPendingItems.value.length > 0
+  && handoffPendingItems.value.every(item => item.can_manage_risk !== false)
+  && isPositiveDecimal(successorUserId.value)
+  && handoffReasonValid.value)
 const canInspect = computed(() => !sessionInvalid.value && props.modelValue && props.canRead && !contextReadDenied.value && !busy.value
   && !!attempt.value && ownsAttempt(attempt.value))
 const canRetry = computed(() => !sessionInvalid.value && props.modelValue && canViewContext.value && !busy.value
   && receiptMissing.value && !result.value && !inputChanged.value
   && !!attempt.value && ownsAttempt(attempt.value) && !finished.value && !rejected.value
-  && (attempt.value.kind === 'finish' ? props.canFinish : props.canReview))
+  && (attempt.value.kind === 'finish' ? props.canFinish : attempt.value.kind === 'review' ? props.canReview : props.canHandoff))
 
 function isFinishTarget(item: RemediationContextItemDto): boolean {
   return props.canFinish && (item.remediation_state === 'open' || item.remediation_state === 'rejected'
@@ -159,6 +179,8 @@ function clearSelection() {
   selected.value = []
   finishDrafts.value = {}
   reviewDrafts.value = {}
+  successorUserId.value = ''
+  handoffReason.value = ''
 }
 function clearContext() {
   context.value = null
@@ -284,9 +306,26 @@ function buildReviewRequest(operationId: string): RemediationReviewInput {
     }),
   }
 }
+function buildHandoffRequest(operationId: string): RemediationHandoffInput {
+  return {
+    operation_id: operationId,
+    ticket_id: props.ticketId,
+    expected_ticket_revision: context.value?.ticket_revision ?? '',
+    definition_version: context.value?.definition_version ?? '',
+    successor_user_id: successorUserId.value,
+    reason: handoffReason.value.trim(),
+    items: handoffPendingItems.value.map(item => ({
+      link_id: item.link_id,
+      expected_link_revision: item.link_revision,
+      expected_risk_revision: item.risk_revision,
+      expected_proposal_version: item.proposal_version,
+    })),
+  }
+}
 function draftSignature(kind: AttemptKind): string {
   // 签名不含操作号：选择/草稿/票版本/公共输入任一变化都算原请求已漂移。
-  const request = kind === 'finish' ? buildFinishRequest('signature') : buildReviewRequest('signature')
+  const request = kind === 'finish' ? buildFinishRequest('signature')
+    : kind === 'review' ? buildReviewRequest('signature') : buildHandoffRequest('signature')
   return JSON.stringify({ ...request, operation_id: null })
 }
 
@@ -299,6 +338,11 @@ async function submitReview() {
   const rejected = selectedItems.value.some(item => reviewDrafts.value[item.link_id]?.decision === 'reject')
   const allResolved = items.value.every(item => item.remediation_state === 'resolved' || selected.value.includes(item.link_id))
   await collectTicketFields('review', rejected ? 'in_progress' : allResolved ? 'closed' : 'pending_verify')
+}
+// 交接本身更新票的复测责任人绑定，不经过工单过渡动作，无 ticketActions 依赖。
+async function submitHandoff() {
+  if (!checkSession() || !canSubmitHandoff.value || !context.value) return
+  await beginAttempt('handoff')
 }
 async function collectTicketFields(kind: AttemptKind, to: string) {
   if (props.ticketActions === undefined) {
@@ -343,7 +387,8 @@ async function beginAttempt(kind: AttemptKind) {
     error.value = '无法生成操作号，请重试'
     return
   }
-  const request = kind === 'finish' ? buildFinishRequest(operationId) : buildReviewRequest(operationId)
+  const request = kind === 'finish' ? buildFinishRequest(operationId)
+    : kind === 'review' ? buildReviewRequest(operationId) : buildHandoffRequest(operationId)
   // 首个 await 前锁住原请求快照；此后输入/权限变化都不改写原请求。
   attempt.value = { kind, actorId: props.currentActorId, input: JSON.parse(JSON.stringify(request)) as typeof request, signature: draftSignature(kind) }
   savedOperation.value = operationId
@@ -401,7 +446,7 @@ async function startNext() {
 async function run(readOnly = false) {
   const current = attempt.value
   if (disposed || !current || !checkSession() || !props.modelValue || !props.canRead || contextReadDenied.value || !ownsAttempt(current) || busy.value) return
-  if (!readOnly && (current.kind === 'finish' ? !props.canFinish : !props.canReview)) return
+  if (!readOnly && (current.kind === 'finish' ? !props.canFinish : current.kind === 'review' ? !props.canReview : !props.canHandoff)) return
   const wasUncertain = uncertain.value
   receiptMissing.value = false
   busy.value = true
@@ -416,7 +461,9 @@ async function run(readOnly = false) {
       ? await getRemediationOperationApi(current.input.operation_id)
       : current.kind === 'finish'
         ? await finishRemediationApi(current.input as RemediationFinishInput)
-        : await reviewRemediationApi(current.input as RemediationReviewInput)
+        : current.kind === 'review'
+          ? await reviewRemediationApi(current.input as RemediationReviewInput)
+          : await handoffRemediationApi(current.input as RemediationHandoffInput)
     if (!alive() || !props.canRead) return
     // 组件侧同号复核（真实适配层已校验，这里兜底替身/漂移）：异号回执不确认完成。
     if (response.operation_id !== current.input.operation_id || response.ticket_id !== current.input.ticket_id) {
@@ -464,6 +511,13 @@ function updateVisible(value: boolean) {
   if (!value) close()
 }
 
+function isPositiveDecimal(value: string): boolean {
+  return /^[1-9]\d{0,18}$/.test(value) && (value.length < 19 || value <= '9223372036854775807')
+}
+/** 交接回执逐项文案：applied=责任人已变更交接，preserved=已生效资产维持原状 */
+const handoffResultText: Record<string, string> = {
+  applied: '已交接', preserved: '已生效资产保持不变',
+}
 const stateText: Record<string, string> = {
   open: '待办理', pending_verify: '待复测', rejected: '已打回待重办', pending_acceptance: '待接受', resolved: '已生效',
 }
@@ -472,6 +526,11 @@ const stateTagType: Record<string, 'primary' | 'warning' | 'danger' | 'success' 
 }
 const resultText: Record<string, string> = {
   pending_confirmation: '已提交待复测', applied: '已生效', rejected: '已打回', conflict: '冲突未生效', reworked: '已恢复整改',
+}
+const isHandoffOutcome = computed(() => attempt.value?.kind === 'handoff' || !!result.value?.successor_user_id)
+function outcomeResultText(row: RemediationOutcomeItemDto): string {
+  const text = isHandoffOutcome.value ? handoffResultText[row.result] ?? resultText[row.result] : resultText[row.result]
+  return text ?? row.result
 }
 </script>
 
@@ -553,13 +612,25 @@ const resultText: Record<string, string> = {
               placeholder="复测说明（必填）" data-testid="remediation-note" :name="`note-${linkId}`" />
           </li>
         </ul>
+        <section v-if="handoffFormActive" data-testid="remediation-handoff-form" class="remediation-handoff" aria-label="复测交接">
+          <p class="remediation-handoff-title">复测交接</p>
+          <p class="remediation-meta">将整组 {{ handoffPendingItems.length }} 项未决资产一并移交继任人复测；已生效资产保持不变，原操作号照常保留。</p>
+          <label for="remediation-handoff-successor">继任人</label>
+          <UserPicker id="remediation-handoff-successor" v-model="successorUserId"
+            :context="{ purpose: 'assign', ticketId }" :active="handoffFormActive" data-testid="remediation-handoff-picker" />
+          <label for="remediation-handoff-reason">交接理由</label>
+          <el-input id="remediation-handoff-reason" v-model="handoffReason" type="textarea" :rows="2" maxlength="2000" show-word-limit
+            placeholder="交接理由（必填，服务端按 UTF-8 字节 ≤2000 校验）" data-testid="remediation-handoff-reason" name="handoff-reason" />
+          <p v-if="handoffReason.trim() && !handoffReasonValid" class="remediation-meta">交接理由需非空且不超过 2000 字节（约 666 个中文字符），当前不可提交。</p>
+        </section>
       </template>
       <el-empty v-else-if="canViewContext && sessionMatches() && !contextLoading && !contextError" description="该工单当前没有可办理的关联资产" />
       <div v-if="result && canViewContext && sessionMatches()" class="mt-4">
         <p>回执逐项结果（票修订 {{ result.ticket_revision }}）：</p>
+        <p v-if="result.successor_user_id">复测继任人：{{ result.successor_user_id }}</p>
         <ul data-testid="remediation-outcome" role="list">
           <li v-for="row in result.items" :key="row.link_id">
-            关联 {{ row.link_id }}（风险 {{ row.risk_id }}）：{{ resultText[row.result] ?? row.result }}
+            关联 {{ row.link_id }}（风险 {{ row.risk_id }}）：{{ outcomeResultText(row) }}
             ；风险版本 {{ row.risk_revision }} / 关联版本 {{ row.link_revision }} / 提案版本 {{ row.proposal_version }}
           </li>
         </ul>
@@ -577,6 +648,7 @@ const resultText: Record<string, string> = {
       <el-button :disabled="dismissLocked" @click="close">{{ attempt && !finished ? '关闭并保留本次操作' : '关闭' }}</el-button>
       <el-button v-if="!attempt" data-testid="remediation-finish" type="primary" :disabled="!canSubmitFinish" :loading="busy" @click="submitFinish">提交整改办理</el-button>
       <el-button v-if="!attempt" data-testid="remediation-review" type="primary" :disabled="!canSubmitReview" :loading="busy" @click="submitReview">提交复测决定</el-button>
+      <el-button v-if="!attempt && canHandoff" data-testid="remediation-handoff" type="primary" :disabled="!canSubmitHandoff" :loading="busy" @click="submitHandoff">提交复测交接</el-button>
       <el-button v-if="attempt" data-testid="remediation-inspect" :disabled="!canInspect" :loading="busy" @click="inspect">按原号核查（只读）</el-button>
       <el-button v-if="attempt && !finished && !rejected" data-testid="remediation-resume" type="primary" :disabled="!canRetry" :loading="busy" @click="retry">按原号续办（重发原请求）</el-button>
       <el-button v-if="attempt && rejected" data-testid="remediation-rejected-refresh" :disabled="busy || !canViewContext" @click="startNext">刷新上下文并修改（新操作）</el-button>
@@ -594,4 +666,7 @@ const resultText: Record<string, string> = {
 .remediation-meta, .remediation-versions { color: var(--el-text-color-secondary); font-size: 12px; }
 .remediation-drafts li { padding: 8px 0; border-bottom: 1px dashed var(--el-border-color-lighter); }
 .remediation-evidence { display: flex; flex-direction: column; gap: 4px; margin-top: 4px; }
+.remediation-handoff { margin-top: 12px; padding-top: 8px; border-top: 1px dashed var(--el-border-color-lighter); }
+.remediation-handoff-title { font-weight: 600; }
+.remediation-handoff label { display: block; margin: 8px 0 4px; }
 </style>

@@ -2405,6 +2405,49 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/risk-items/remediation-accept-rework": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 接续在办工单的到期风险接受 */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            /** @description 原批准、关联和当前修订 */
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["internal_handler.riskWorkflowAcceptanceRework"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["response.Response"] & {
+                            data?: components["schemas"]["internal_handler.riskWorkflowOutcome"];
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/risk-items/remediation-assign-handler": {
         parameters: {
             query?: never;
@@ -2510,6 +2553,49 @@ export interface paths {
             requestBody: {
                 content: {
                     "application/json": components["schemas"]["internal_handler.riskWorkflowSubmitRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["response.Response"] & {
+                            data?: components["schemas"]["internal_handler.riskWorkflowOutcome"];
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/risk-items/remediation-handoff": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 交接整组未决风险复测 */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            /** @description 复测交接请求 */
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["internal_handler.riskWorkflowHandoffRequest"];
                 };
             };
             responses: {
@@ -5196,7 +5282,7 @@ export interface paths {
         };
         /**
          * 工单附件列表（JOIN 视图）
-         * @description L2 read 面（工单可见性——不可见单 404 同形）；条目含 object_key/file_name/mime/size
+         * @description L2 read 面（工单可见性——不可见单 404 同形）；当前风险不可见的整改证据省略；条目含 object_key/file_name/mime/size
          */
         get: {
             parameters: {
@@ -6426,6 +6512,7 @@ export interface components {
             source_ref: string;
             source_sequence?: string;
             source_severity?: components["schemas"]["github_com_tracerbiubiubiu_zhuzhao_internal_model.RiskSourceSeverity"];
+            valid_until?: string;
         };
         "github_com_tracerbiubiubiu_zhuzhao_internal_model.LoginRequest": {
             captcha?: string;
@@ -6593,6 +6680,7 @@ export interface components {
         "github_com_tracerbiubiubiu_zhuzhao_internal_model.RiskAssessRequest": {
             assessment_note?: string;
             deadline?: string;
+            dispatch_basis_valid_until?: string;
             expected_revision: string;
             /** @example 0 */
             id: string;
@@ -6616,11 +6704,15 @@ export interface components {
         "github_com_tracerbiubiubiu_zhuzhao_internal_model.RiskCreateRequest": {
             /** @example 0 */
             affected_org_id?: string;
+            /** @description 资产键身份；与 FindingKey 成对 */
+            asset_ref?: components["schemas"]["github_com_tracerbiubiubiu_zhuzhao_internal_model.RiskAssetRef"];
             attributes?: Record<string, never>;
             description?: string;
             evidence_refs?: components["schemas"]["github_com_tracerbiubiubiu_zhuzhao_internal_model.RiskEvidenceRef"][];
             /** @description 新建恒 "0" */
             expected_revision?: string;
+            /** @description 稳定漏洞键；与 AssetRef 成对 */
+            finding_key?: string;
             operation_id: string;
             /** @example 0 */
             org_id: string;
@@ -6694,6 +6786,10 @@ export interface components {
         };
         "github_com_tracerbiubiubiu_zhuzhao_internal_model.RiskWorkflowItem": {
             can_manage_risk?: boolean;
+            /** @example 0 */
+            expired_acceptance_id?: string;
+            /** @example 0 */
+            expired_acceptance_revision?: string;
             is_risk_owner?: boolean;
             /** @example 0 */
             link_id?: string;
@@ -7211,6 +7307,30 @@ export interface components {
             ticket_id: string;
             valid_until: string;
         };
+        "internal_handler.riskWorkflowAcceptanceRework": {
+            /** @example 0 */
+            acceptance_id: string;
+            comment?: string;
+            custom_data_patch?: components["schemas"]["internal_handler.riskWorkflowPatch"];
+            /** @example 0 */
+            definition_version: string;
+            /** @example 0 */
+            expected_acceptance_revision: string;
+            /** @example 0 */
+            expected_link_revision: string;
+            /** @example 0 */
+            expected_risk_revision: string;
+            /** @example 0 */
+            expected_ticket_revision: string;
+            /** @example 0 */
+            link_id: string;
+            operation_id: string;
+            reason: string;
+            /** @example 0 */
+            risk_id: string;
+            /** @example 0 */
+            ticket_id: string;
+        };
         "internal_handler.riskWorkflowAssigneeRequest": {
             /** @example 0 */
             assigned_to_user_id: string;
@@ -7221,6 +7341,29 @@ export interface components {
             /** @example 0 */
             expected_ticket_revision: string;
             operation_id: string;
+            /** @example 0 */
+            ticket_id: string;
+        };
+        "internal_handler.riskWorkflowHandoffItemWire": {
+            /** @example 0 */
+            expected_link_revision: string;
+            /** @example 0 */
+            expected_proposal_version: string;
+            /** @example 0 */
+            expected_risk_revision: string;
+            /** @example 0 */
+            link_id: string;
+        };
+        "internal_handler.riskWorkflowHandoffRequest": {
+            /** @example 0 */
+            definition_version: string;
+            /** @example 0 */
+            expected_ticket_revision: string;
+            items: components["schemas"]["internal_handler.riskWorkflowHandoffItemWire"][];
+            operation_id: string;
+            reason: string;
+            /** @example 0 */
+            successor_user_id: string;
             /** @example 0 */
             ticket_id: string;
         };
@@ -7269,6 +7412,8 @@ export interface components {
             items?: components["schemas"]["internal_handler.riskWorkflowItemResult"][];
             operation_id?: string;
             status?: string;
+            /** @example 0 */
+            successor_user_id?: string;
             terminal_allowed?: boolean;
             /** @example 0 */
             ticket_id?: string;

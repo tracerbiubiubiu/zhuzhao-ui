@@ -1057,6 +1057,7 @@ function onRelationInput(event: Event) {
       :can-finish="hasRiskAction('finish') && assignedActor && riskWorkflowContext?.status === 'in_progress'"
       :can-review="hasRiskAction('review') && riskWorkflowContext?.status === 'pending_verify'
         && riskWorkflowContext?.items.some(item => item.is_risk_owner)"
+      :can-handoff="hasRiskAction('handoff')"
       :ticket-actions="availableActions"
       @result="onRiskWorkflowResult"
       @read-denied="onRiskWorkflowReadDenied"
