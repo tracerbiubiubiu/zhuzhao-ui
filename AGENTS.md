@@ -31,7 +31,8 @@ pnpm typecheck     # vue-tsc --noEmit（codegen 类型**部分接线**：入参 
 pnpm test          # Vitest（动态路由解析/请求层单飞刷新/keep-alive 防漂移断言等——31 文件 / 244 用例，含六哨兵矩阵：apiPaths 前缀/viewNames/epImports 导入/tableFit/分页覆盖/uiConventions——全表见 docs/guides/testing.md「防漂移哨兵矩阵」）
 pnpm audit --prod  # npm 供应链（对称 Go 侧 govulncheck；镜像源无 audit 端点时加 --registry=https://registry.npmjs.org）
 pnpm build         # 产物构建
-pnpm test:e2e      # 现有关键真实栈Playwright（S1–S8/S10/S12/S16–S17/FE3·FE4/W4·W5/P4/P5 穿插池——30 spec / 42 用例；本发现范围不改为stub——W5 需 activelist/taskrunner 上游，前提见下）
+pnpm test:e2e      # 标准真实栈 Playwright（36 spec / 55 用例，含 B2 第 4–5 项；W5 需 activelist/taskrunner 上游）
+pnpm test:e2e:b2   # B2 第 6–8 项专用真实栈（3 spec / 8 用例；显式独占夹具，详见测试指南）
 pnpm gate          # ordinary档六件一键串行（lint → typecheck → test → audit:prod → build → test:e2e）；任一红即停，适用的真实栈E2E不得静默跳过
 pnpm quality:plan  # 显示base..HEAD及在途改动的分档与完整适用组合，不执行门禁
 pnpm quality:check # 执行文档/参考检查；ordinary档要求另在独占环境跑原六件并退出失败
@@ -40,6 +41,8 @@ pnpm quality:check # 执行文档/参考检查；ordinary档要求另在独占�
 **E2E 运行前提**：主仓 `bash scripts/dev-stack.sh up`（dev PG/Redis）+ `INTERNAL_JOBS_SK=xxx make dev`（app @33333）；W5 场景另需两上游：activelist（compose.dev PG@15432 + `ACTIVELIST_CALLER_ZHUZHAO_SK=dev-gateway-sk go run ./cmd/apiserver`——监听地址随其自身 config 默认 :18081（11-02 迁移后），无需 addr env + 主仓 `make dev` 自动注入 `GATEWAY_AL_TARGET=http://127.0.0.1:18081` 免改 config（2026-11-02 env 注入治理））+ taskrunner（@18080：TASKRUNNER_HTTP_ADDR=:18080 + TASKRUNNER_REDIS_PASSWORD=zhuzhao_dev + CALLER_ZHUZHAO_SK=dev-taskrunner-sk/SELF_SK + CALLBACK_TARGET_URL=http://127.0.0.1:33333/internal/jobs/callback，app 侧带 TASKRUNNER_BASE_URL=http://127.0.0.1:18080/TASKRUNNER_SK=dev-taskrunner-sk）；vite dev server 由 Playwright webServer 自动拉起。globalSetup 幂等建号（admin 凭据闭环/operator·viewer 预设/S1 重置），可无限重放。浏览器下载被墙时：`PLAYWRIGHT_DOWNLOAD_HOST=https://cdn.npmmirror.com/binaries/playwright pnpm exec playwright install chromium`。
 
 **测试账号纪律**：E000001（superadmin种子号）密码终态恒为`admin12345`；人工/agent多账号测试一律用专属E000002+，禁止修改E000001。仅acceptance/globalSetup既定幂等例外流或主仓break-glass复原可收敛其值，权威见主仓runbook §4。
+
+两套浏览器门禁适用时，按[测试指南](docs/guides/testing.md#b2-第-68-项专用真实栈门禁)串行执行 `E2E_REQUIRE_COMPLETE=1 pnpm gate` 和 `pnpm test:e2e:b2`，两个退出状态均须成功。专项预检用 `pnpm test:e2e:b2 --preflight`。
 
 **纪律**：完整适用门禁不全绿不得标记完成；关键真实栈E2E仍打真后端（菜单/资源权限、迁移、服务调用与写动作必须有真实证据），mock/contract通过不能替代；CI（`.github/workflows/ci.yml`）的`changes`按事件真实差集生成计划，提交与文档检查必跑，`reference-check`按计划执行，原`lint`/`test`仅在`runtime=true`时执行且保留原完整行为；`quality-gate`聚合检查，拒绝应跑未跑、失败、取消或应跑却跳过。现有真实栈E2E与Go仓acceptance同口径走本地执行，不能静默省略；**推送后核实 CI run 转绿才算交付闭环**（`gh run list`/`gh run watch`——本地绿≠CI绿）。远端required checks是否切到聚合身份须另获授权配置与回执，不能因本条自行修改保护。每批分别披露mock、contract、real及视觉/键盘结果；未实现的测试工具不写作已运行。
 
@@ -72,7 +75,7 @@ pnpm quality:check # 执行文档/参考检查；ordinary档要求另在独占�
 - **语言**：中文（代码标识符/命令/路径除外）；子模块 README 同口径
 - **日期**：一律 `YYYY-MM-DD`
 - **标题**：H1 = `# <文档名> — <一句话定位>`，章节用 H2、不编号
-- **计数口径**（随实际增长同步，禁止两处不同值）：E2E「30 spec / 42 用例」（P5 六件=CC 标签/S2 画布/S6 消息中心/S3a 转换+规则/通知配置管理面，2026-10-25/26 补齐——phase5 曾全程未落浏览器，见主仓 11 号同日批次行）、单测「31 文件 / 244 用例」、E2E 范围串「S1–S8/S10/S12/S16–S17/FE3·FE4/W4·W5/P4/P5 穿插池」、门禁统称「六件门禁」（lint/typecheck/test/audit/build/test:e2e，一键=`pnpm gate`）
+- **计数口径**（随实际增长同步，禁止两处不同值）：标准 E2E「36 spec / 55 用例」，B2 第 6–8 项 E2E「3 spec / 8 用例」，分别用各自入口的 `--list` 核对。单测「31 文件 / 244 用例」。六件门禁为 lint/typecheck/test/audit/build/test:e2e，一键 `pnpm gate`。
 - **存放**：五仓各自维护 `docs/`、统一分类；UI自身设计/规范/指南归本仓，跨服务工程/API/IAM/迁移与阶段决策仍回链主仓唯一权威。根README为入口、AGENTS保留机器协议；正式时点报告住 `docs/review/reports/`，命名 `<topic-kebab>-<YYYY-MM-DD>.md`，原日志/执行卡等在ignored `.codex/`执行，收尾按主仓材料目录归仓库外档案。`doc/`为本地参考，旧deliverables/outputs/audit-reports不再受控入口，Git与Docker均忽略。
 - **计数/状态声明须与实测一致**：改 E2E/单测数量或修复状态时，以实际输出和本节快照核对，README只保留入口不复制数字；「全部修复」类表述须有逐项证据（docs/review/reports/或主仓当轮收据为凭）
 

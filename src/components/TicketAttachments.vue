@@ -48,7 +48,7 @@
  * TicketAttachments B5-3 工单附件区（05 号 §5）——列表/上传/删除/下载（代理端点稳定 URL）。
  * L2 由后端 handler 编排（附件属 ticket:update 面）；cookie 自动带无需手动 auth。
  */
-import { ref, watch, onBeforeUnmount } from 'vue'
+import { computed, ref, watch, onBeforeUnmount } from 'vue'
 import { isAxiosError } from 'axios'
 import { ElAlert, ElButton, ElEmpty, ElUpload, ElMessage, ElMessageBox } from 'element-plus'
 import type { UploadFile } from 'element-plus'
@@ -67,6 +67,9 @@ const props = defineProps<{
 }>()
 
 const attachments = ref<AttachmentView[]>([])
+const evidenceSources = computed(() => attachments.value.flatMap(row => row.evidence_version
+  ? [{ ref: row.object_key, file_name: row.file_name, version: row.evidence_version }]
+  : []))
 const loading = ref(false)
 const loadError = ref('')
 const uploading = ref(false)
@@ -170,7 +173,7 @@ watch(() => props.ticketId, () => {
   void refresh()
 }, { immediate: true })
 onBeforeUnmount(() => { disposed = true; loadSequence++ })
-defineExpose({ refresh })
+defineExpose({ refresh, evidenceSources })
 </script>
 
 <style scoped>
