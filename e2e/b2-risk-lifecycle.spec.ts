@@ -126,9 +126,9 @@ test('B2 第9项 人工登记同一风险，派单重启后原号只读核查，
       const note = 'B2 第9项合成核实依据'
       await assessDialog.getByRole('textbox', { name: /核实说明/ }).fill(note)
       const deadline = new Date(Math.floor(Date.now() / 1000) * 1000 + 7 * 86_400_000).toISOString()
-      const deadlineField = field(assessDialog, '整改期限')
+      const deadlineField = assessDialog.getByPlaceholder('可选，留空按级别策略', { exact: true })
       await deadlineField.fill(deadline.slice(0, 19).replace('T', ' '))
-      await deadlineField.press('Tab')
+      await deadlineField.press('Enter')
       await expect(deadlineField).toHaveValue(deadline.slice(0, 19).replace('T', ' '))
       const assessed = await mutateRisk(assessDialog, origin, '提交核实', 'assess', {
         id: riskId, expected_revision: original.revision, level: 'high', treatment: 'mitigate', assessment_note: note, deadline,
