@@ -131,8 +131,7 @@ describe('risk-items 写命令（Mutation：body 携带 operation_id + expected_
     await expect(createRiskItemApi(legacy)).resolves.toEqual({
       risk: view.risk, status: 'new', receipt_ref: { ...createReceipt, operation_id: 'op-06' },
     })
-    expect(request.post.mock.calls[1]![0]).not.toHaveProperty('finding_key')
-    expect(request.post.mock.calls[1]![0]).not.toHaveProperty('asset_ref')
+    expect(request.post).toHaveBeenLastCalledWith('/api/v1/risk-items/create', legacy, { _silentError: true })
   })
 
   it('核实命令透传级别/策略/期限，回执对象与 deadline 空值归一', async () => {

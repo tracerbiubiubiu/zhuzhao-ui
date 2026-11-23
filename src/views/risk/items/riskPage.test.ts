@@ -137,6 +137,11 @@ interface Harness {
     assessTarget: Ref
     assessForm: { level: string, note: string, treatment: string, deadline: Date | null }
     assignForm: { owner: string, reason: string }
+    dispatchTarget: { orgId: string, typeCode: string }
+    dispatchVisible: Ref<boolean>
+    dispatchInput: Ref
+    selectDispatchRisk: (row: RiskViewDto, checked: unknown) => void
+    openDispatch: () => void
     createSession: Ref
     assessSession: Ref
     verifyNote: Ref
