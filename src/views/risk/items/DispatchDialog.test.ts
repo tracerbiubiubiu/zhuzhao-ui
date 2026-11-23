@@ -57,12 +57,18 @@ type Page = {
 function fixture() {
   const props = reactive({ modelValue: true, canDispatch: true, canRead: true, canReadTickets: true, itemDetails: [] as RiskViewDto[], targetOrgId: '9007199254740995', targetTypeCode: 'synthetic_remediation',
     items: [{ risk_id: '9007199254740993', expected_revision: '7' }, { risk_id: '102', expected_revision: '8' }, { risk_id: '103', expected_revision: '9' }] })
-  const api = { getDispatchOperation: vi.fn(), planDispatch: vi.fn().mockResolvedValue(planA()), applyDispatch: vi.fn().mockImplementation(async input => ({ ...complete(), ...input })) }
+  const api = {
+    getDispatchOperation: vi.fn(), planDispatch: vi.fn().mockResolvedValue(planA()),
+    applyDispatch: vi.fn().mockImplementation(async input => ({ ...complete(), ...input })),
+    getRiskItemApi: vi.fn(async (id: string) => ({ view: { risk: {
+      id, revision: props.items.find(item => item.risk_id === id)?.expected_revision,
+    } } })),
+  }
   let generation = 1
   const { page, lifecycle } = setupPage<Page>(source, {
     'element-plus': Object.fromEntries(['ElAlert', 'ElButton', 'ElCheckbox', 'ElDialog', 'ElEmpty', 'ElTag'].map(name => [name, { name }])),
     '@/components/ProTable/index.vue': { name: 'ProTable' }, '@/components/UserNameText/index.vue': { name: 'UserNameText' },
-    '@/api/risk/dispatch': api, '@/utils/apiError': apiError,
+    '@/api/risk/dispatch': api, '@/api/risk': api, '@/utils/apiError': apiError,
     '@/common/auth/tokenStorage': { getSessionGeneration: () => generation },
   }, props)
   return { props, api, page, lifecycle, changeSession: () => generation++ }
@@ -116,7 +122,12 @@ describe('风险派单独立弹窗', () => {
   })
 
   it('partial/pending 保留已完成组与失败原因，后续只用原号续查且清除旧授权引用', async () => {
-    const { api, page } = fixture()
+    const { api, page, props } = fixture()
+    props.items.push({ risk_id: '104', expected_revision: '10' })
+    const pendingGroup = { group_key: 'group-w', owner_user_id: '73', items: [
+      { risk_id: '104', revision: '10', human_key: 'R-D', title: '合成资产 D' },
+    ] }
+    api.planDispatch.mockResolvedValueOnce({ ...planA(), groups: [...planA().groups, pendingGroup] })
     api.applyDispatch.mockImplementationOnce(async input => ({ ...input, status: 'partial', groups: [
       { group_key: 'group-u', status: 'completed', ticket: { id: '201', ref: 'T-201' }, items: [{ risk_id: '9007199254740993', result: 'created' }] },
       { group_key: 'group-v', status: 'failed', items: [{ risk_id: '103', result: 'denied', reason: 'dispatch_forbidden' }] },
@@ -128,12 +139,15 @@ describe('风险派单独立弹窗', () => {
     expect(page.dismissLocked.value).toBe(false)
     expect(page.resultGroups.value[1].items[0].reason).toBe('dispatch_forbidden')
     expect(page.reasonText('dispatch_forbidden')).toContain('权限')
+    expect(page.failedRepreviewAvailable.value).toBe(false)
     const replay = deferred()
     api.applyDispatch.mockReturnValueOnce(replay.promise)
     const retry = page.retry()
     expect(page.resultGroups.value[0].ticket).toBeUndefined()
-    replay.resolve({ ...api.applyDispatch.mock.calls[0][0], status: 'completed', groups: [
+    replay.resolve({ ...api.applyDispatch.mock.calls[0][0], status: 'partial', groups: [
       { group_key: 'group-u', status: 'completed', items: [{ risk_id: '9007199254740993', result: 'already_linked' }] },
+      { group_key: 'group-v', status: 'failed', items: [{ risk_id: '103', result: 'denied', reason: 'dispatch_forbidden' }] },
+      { group_key: 'group-w', status: 'completed', items: [{ risk_id: '104', result: 'created' }] },
     ] })
     await retry
     expect(api.applyDispatch.mock.calls[1][0]).toEqual(api.applyDispatch.mock.calls[0][0])
@@ -569,7 +583,7 @@ describe('确定失败组展示与显式重预览', () => {
     expect(textOf(startNext)).toContain('开始下一次派单')
   })
 
-  it('partial 混合组：既有成功与确定失败同展示，parent 文案按部分确定结果提示', async () => {
+  it('partial 的每组都已结算时，显示成功与失败并开放失败组重新预览', async () => {
     const { api, page } = fixture()
     api.applyDispatch.mockImplementationOnce(async input => ({ ...input, status: 'partial', groups: [
       { group_key: 'group-u', status: 'completed', ticket: { id: '201', ref: 'T-201' }, items: [{ risk_id: '9007199254740993', result: 'created' }] },
@@ -579,8 +593,9 @@ describe('确定失败组展示与显式重预览', () => {
     page.confirmed.value = true
     await page.submit()
     expect(page.resultGroups.value.map(g => g.status)).toEqual(['completed', 'failed'])
-    expect(page.finished.value).toBe(false)
-    expect(page.resultSummary.value).toContain('部分组已有确定结果')
+    expect(page.finished.value).toBe(true)
+    expect(page.failedRepreviewAvailable.value).toBe(true)
+    expect(page.resultSummary.value).toContain('各组均已结算')
   })
 
   it('失败项显式重预览：归档原操作号与原结果（剥票引用），按失败子集与原目标预览，确认前不写入', async () => {
@@ -596,8 +611,10 @@ describe('确定失败组展示与显式重预览', () => {
     await page.submit()
     const original = { ...page.attempt.value! }
     expect(page.failedRepreviewAvailable.value).toBe(true)
+    api.getRiskItemApi.mockResolvedValueOnce({ view: { risk: { id: '103', revision: '19' } } })
 
     expect(page.startFailedRepreview()).toBe(true)
+    await settle()
     // 禁止自动重投：归档与预览路径不触发任何 POST 写入
     expect(api.applyDispatch).toHaveBeenCalledTimes(1)
     expect(page.priorResults.value).toHaveLength(1)
@@ -607,7 +624,7 @@ describe('确定失败组展示与显式重预览', () => {
     expect(page.attempt.value).toBeNull()
     expect(page.result.value).toBeNull()
     expect(api.planDispatch).toHaveBeenLastCalledWith({
-      items: [{ risk_id: '103', expected_revision: '9' }],
+      items: [{ risk_id: '103', expected_revision: '19' }],
       target_org_id: '9007199254740995', target_type_code: 'synthetic_remediation',
     })
     expect(page.confirmed.value).toBe(false)
@@ -641,7 +658,7 @@ describe('确定失败组展示与显式重预览', () => {
     expect(footer(props, page).some((n: any) => n.props?.['data-testid'] === 'dispatch-repreview-cancel')).toBe(true)
   })
 
-  it('缺失组仍未知时重预览展示警示，归档条目注明原操作不再由本弹窗续办', async () => {
+  it('缺失组仍未知时保留原号核查和续办，不开放失败组的新预览', async () => {
     const { api, page, props } = fixture()
     api.applyDispatch.mockImplementationOnce(async input => ({ ...input, status: 'pending', groups: [
       { group_key: 'group-v', status: 'failed', items: [{ risk_id: '103', result: 'denied', reason: 'dispatch_forbidden' }] },
@@ -649,12 +666,13 @@ describe('确定失败组展示与显式重预览', () => {
     await page.preview()
     page.confirmed.value = true
     await page.submit()
-    page.startFailedRepreview()
+    const original = { ...page.attempt.value! }
+    expect(page.startFailedRepreview()).toBe(false)
     await settle()
-    expect(page.priorResults.value[0].status).toBe('pending')
-    const { text } = bodyText(props, page)
-    expect(text).toContain('未完成组')
-    expect(text).toContain('不再对原操作续办')
+    expect(page.priorResults.value).toHaveLength(0)
+    expect(page.attempt.value).toEqual(original)
+    expect(api.getRiskItemApi).not.toHaveBeenCalled()
+    expect(footer(props, page).some((n: any) => n.props?.['data-testid'] === 'dispatch-resume')).toBe(true)
   })
 
   it('重预览守卫：失败风险缺原始版本映射则不请求；结果待核查或在途不可入口', async () => {

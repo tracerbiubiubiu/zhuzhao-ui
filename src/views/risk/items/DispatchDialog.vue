@@ -5,6 +5,7 @@ import ProTable from '@/components/ProTable/index.vue'
 import type { ProTableColumn, ProTableFetcher } from '@/components/ProTable/types'
 import UserNameText from '@/components/UserNameText/index.vue'
 import { applyDispatch, getDispatchOperation, planDispatch, type DispatchGroupOutcome, type DispatchInput, type DispatchPlan, type DispatchPlanInput, type DispatchResult, type TicketReference } from '@/api/risk/dispatch'
+import { getRiskItemApi } from '@/api/risk'
 import type { RiskViewDto } from '@/api/risk/contracts'
 import { formatDateTime } from '@/utils/datetime'
 import { getSessionGeneration } from '@/common/auth/tokenStorage'
@@ -66,8 +67,13 @@ const previewGroups = computed(() => sessionInvalid.value || !props.canRead ? []
 const resultGroups = computed(() => sessionInvalid.value || !props.canRead ? [] : result.value?.groups ?? [])
 // 不把缺少引用当成没有在办票；预计涉及票数与新建票数不是同一个指标。
 const projectedTickets = computed(() => previewGroups.value.length)
-// completed/failed=parent 终态（逐组确定结果）；pending/partial 仍有缺失组未知。
-const finished = computed(() => !sessionInvalid.value && (result.value?.status === 'completed' || result.value?.status === 'failed') && !uncertain.value)
+const finished = computed(() => {
+  if (sessionInvalid.value || uncertain.value || !result.value) return false
+  if (result.value.status === 'completed' || result.value.status === 'failed') return true
+  if (result.value.status !== 'partial' || !plan.value?.groups.length) return false
+  const received = new Set(result.value.groups.map(group => group.group_key))
+  return plan.value.groups.every(group => received.has(group.group_key))
+})
 const dismissLocked = computed(() => busy.value || uncertain.value)
 const canPreview = computed(() => !sessionInvalid.value && props.modelValue && props.canRead && props.canDispatch && !busy.value && !attempt.value
   && (repreviewInput.value ? repreviewInput.value.items.length > 0 : props.items.length > 0 && !!props.targetOrgId && !!props.targetTypeCode))
@@ -75,14 +81,16 @@ const canConfirm = computed(() => !sessionInvalid.value && props.modelValue && p
 const canInspect = computed(() => !sessionInvalid.value && props.modelValue && props.canRead && !busy.value && !!attempt.value)
 const canRetry = computed(() => !sessionInvalid.value && props.modelValue && props.canRead && props.canDispatch && !busy.value && !!attempt.value && !finished.value)
 // 仅确定失败组（group failed）开放显式重预览；缺失组未知，须按原号核查/续办，不得混入。
-const failedRepreviewAvailable = computed(() => !sessionInvalid.value && props.modelValue && props.canRead
-  && props.canDispatch && !busy.value && !uncertain.value && !!attempt.value && !!boundInput.value
+const failedRepreviewAvailable = computed(() => finished.value && props.modelValue && props.canRead
+  && props.canDispatch && !busy.value && !!attempt.value && !!boundInput.value
   && resultGroups.value.some(group => group.status === 'failed'))
 const resultSummary = computed(() => {
   const status = result.value?.status
   if (status === 'completed') return '本次派单已完成'
   if (status === 'failed') return '本次派单已失败，请核对逐组原因；可显式对失败风险重新预览（生成新操作号），原操作号与已成功结果保留'
-  if (status === 'partial') return '部分组已有确定结果，其余组尚未完成；请核对逐组结果'
+  if (status === 'partial') return finished.value
+    ? '各组均已结算，部分组失败。可核对原因后重新预览失败组。'
+    : '部分组已有确定结果，其余组尚未完成；请核对逐组结果'
   return '尚有未完成组，请核对原因'
 })
 
@@ -136,13 +144,20 @@ async function preview() {
   resetPreview()
   session = getSessionGeneration()
   const generation = previewGeneration
-  const requestInput = input()
-  const requestDetails = (props.itemDetails ?? []).filter(row => requestInput.items.some(item => item.risk_id === row.risk.id && item.expected_revision === row.risk.revision)).map(row => ({ ...row, risk: { ...row.risk }, asset_ref: row.asset_ref ? { ...row.asset_ref } : null }))
+  let requestInput = input()
+  let details = props.itemDetails ?? []
   const current = () => !disposed && generation === previewGeneration && checkSession() && props.modelValue
   busy.value = true
   try {
+    if (repreviewInput.value) {
+      details = (await Promise.all(requestInput.items.map(item => getRiskItemApi(item.risk_id)))).map(detail => detail.view)
+      if (!current() || !props.canRead || !props.canDispatch) return
+      requestInput = { ...requestInput, items: details.map(({ risk }) => ({ risk_id: risk.id, expected_revision: risk.revision })) }
+      repreviewInput.value = requestInput
+    }
+    const requestDetails = details.filter(row => requestInput.items.some(item => item.risk_id === row.risk.id && item.expected_revision === row.risk.revision)).map(row => ({ ...row, risk: { ...row.risk }, asset_ref: row.asset_ref ? { ...row.asset_ref } : null }))
     const response = await planDispatch(requestInput)
-    if (!current()) return
+    if (!current() || !props.canRead || !props.canDispatch) return
     plan.value = response
     boundInput.value = requestInput
     boundDetails.value = requestDetails
@@ -209,8 +224,7 @@ function archiveCurrentResult(operationId: string): void {
 /** 用户显式把确定失败风险重新预览：保留原操作号/原结果，仅重新预览，不产生任何写请求。
  * 新派单必须走既有确认流再生成新操作号；返回是否已启动。 */
 function startFailedRepreview(): boolean {
-  if (!checkSession() || busy.value || uncertain.value || !attempt.value || !result.value
-    || !props.canDispatch || !props.canRead) return false
+  if (!checkSession() || !failedRepreviewAvailable.value || !attempt.value) return false
   const items = failedRiskItems()
   const source = boundInput.value
   if (!items.length || !source) {
@@ -374,9 +388,6 @@ const resultFetcher: ProTableFetcher = async ({ page, page_size }) => ({ list: r
               {{ item.risk_id }}：{{ itemResultText(item.result) }}<span v-if="item.reason"> · {{ reasonText(item.reason) }}</span>
             </li></ul>
           </li></ul>
-          <div v-if="entry.status === 'pending' || entry.status === 'partial'">
-            该操作仍有未完成组（结果未知）：本弹窗不再对原操作续办，如需续办请按原操作号另行受权核查。
-          </div>
         </li></ul>
       </div>
       <div v-if="result && canRead && sessionMatches()" class="mt-4">
