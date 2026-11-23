@@ -56,10 +56,13 @@ export async function waitUserRateBudget(): Promise<void> {
 
 /** 裸 API 调用（Node fetch；信封与 HTTP 状态原样透出，由调用方分流）。
  *  仅 429 退避重试一次：串行 spec 密集预置（登录+profile+orgs+建单+分派…）会打穿每用户 20rps/burst 40 桶
- *  （p5 五 spec 连跑实证 http=429 code=10007）；桶 1s 回填，退避 1.1s 足够；其他状态码原样透出不掩盖缺陷。 */
-export async function api<T = unknown>(path: string, opts: ApiOptions = {}): Promise<{ status: number; env: Envelope<T> | null }> {
+ *  （p5 五 spec 连跑实证 http=429 code=10007）；桶 1s 回填，退避 1.1s 足够；其他状态码原样透出不掩盖缺陷。
+ *  专项可显式传入已验证的 origin，限制目标、拒绝重定向并隐藏失败信封的自由文本。 */
+export async function api<T = unknown>(path: string, opts: ApiOptions = {}, isolatedOrigin?: string): Promise<{ status: number; env: Envelope<T> | null }> {
+  const url = isolatedOrigin === undefined ? `${API_BASE}${path}` : new URL(path, isolatedOrigin)
+  if (typeof url !== 'string' && url.origin !== isolatedOrigin) throw new Error('专项请求必须发送至已核对的 origin')
   const once = async () => {
-    const res = await fetch(`${API_BASE}${path}`, {
+    const res = await fetch(url, {
       method: opts.method ?? 'GET',
       headers: {
         'content-type': 'application/json',
@@ -67,8 +70,13 @@ export async function api<T = unknown>(path: string, opts: ApiOptions = {}): Pro
         ...opts.headers,
       },
       body: opts.body === undefined ? undefined : JSON.stringify(opts.body),
+      ...(isolatedOrigin === undefined ? {} : { redirect: 'error', signal: AbortSignal.timeout(10_000) }),
+    }).catch((error: unknown) => {
+      if (isolatedOrigin !== undefined) throw new Error('专项 HTTP 请求失败')
+      throw error
     })
     const env = (await res.json().catch(() => null)) as Envelope<T> | null
+    if (isolatedOrigin !== undefined && env && env.code !== 0) return { status: res.status, env: { ...env, message: '' } }
     return { status: res.status, env }
   }
   const first = await once()

@@ -64,6 +64,7 @@
     "types/**/*.d.ts",
     "e2e/**/*.ts",
     "playwright.config.ts",
+    "playwright.b2.config.ts",
     "vite.config.ts",
     "vitest.config.ts",
     "uno.config.ts"

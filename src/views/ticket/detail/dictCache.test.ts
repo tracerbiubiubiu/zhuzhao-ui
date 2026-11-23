@@ -23,6 +23,7 @@ function setupDetail(extra = {}) {
     '@/api/ticket': { STATUS_LABEL: {}, ...writes },
     '@/api/ticket/instanceActions': { getInstanceActionsApi: vi.fn(), normalizeTicketDefinition, transitionInstanceApi: transition },
     '@/api/ticket/operationKey': { newTicketOperationKey },
+    '@/api/risk/remediation': { getRemediationContextApi: vi.fn(), getRemediationOperationApi: vi.fn() },
     '@/api/system/dict': dictionaries,
     '@/common/auth/tokenStorage': { getSessionGeneration: () => 1 },
     'element-plus': { ElMessage: { success: vi.fn() } },
@@ -30,6 +31,8 @@ function setupDetail(extra = {}) {
     '@/store/modules/user': { useUserStoreWithOut: () => ({ hasPermission: () => false }) },
     '@/components/UserNameText/index.vue': {}, '@/components/UserPicker/index.vue': {}, '@/components/TicketAttachments.vue': {},
     './TransitionActionDialog.vue': {},
+    '@/views/risk/items/RemediationDialog.vue': {},
+    '@/views/risk/items/RemediationCommandDialog.vue': {},
     './transitionSubmission': { createTransitionSubmission },
     './useRenderedRichtext': { useRenderedRichtext },
     './relationSession': { createRelationSession: ({ active }: { active: () => boolean }) => {
@@ -40,6 +43,7 @@ function setupDetail(extra = {}) {
       useQuery: (options: { queryKey: MaybeRef<readonly unknown[]> }) => ({
         data: unref(options.queryKey)[1] === 'detail' ? detail : ref(),
         isError: ref(false),
+        error: ref(null),
         isSuccess: ref(true),
         enabled: 'enabled' in options ? options.enabled : undefined,
       }),

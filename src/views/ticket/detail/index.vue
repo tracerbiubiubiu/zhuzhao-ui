@@ -12,7 +12,7 @@
  */
 import { apiReadError } from '@/utils/apiError'
 import { formatDateTime } from '@/utils/datetime'
-import { computed, onActivated, onBeforeUnmount, onDeactivated, reactive, ref, toRef, watch } from 'vue'
+import { computed, nextTick, onActivated, onBeforeUnmount, onDeactivated, reactive, ref, toRef, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   ElAlert, ElButton, ElCard, ElCheckbox, ElDescriptions, ElDescriptionsItem, ElDialog,
@@ -29,6 +29,7 @@ import {
 } from '@/api/ticket'
 import { getInstanceActionsApi, normalizeTicketDefinition, transitionInstanceApi, type InstanceAction } from '@/api/ticket/instanceActions'
 import { newTicketOperationKey } from '@/api/ticket/operationKey'
+import { getRemediationContextApi, getRemediationOperationApi, type RemediationAction } from '@/api/risk/remediation'
 import { useUserStoreWithOut } from '@/store/modules/user'
 import { getSessionGeneration } from '@/common/auth/tokenStorage'
 import UserNameText from '@/components/UserNameText/index.vue'
@@ -40,6 +41,8 @@ import { createRelationSession } from './relationSession'
 import { useRenderedRichtext } from './useRenderedRichtext'
 import TransitionActionDialog from './TransitionActionDialog.vue'
 import { createTransitionSubmission } from './transitionSubmission'
+import RemediationDialog from '@/views/risk/items/RemediationDialog.vue'
+import RemediationCommandDialog from '@/views/risk/items/RemediationCommandDialog.vue'
 
 // keep-alive 契约：name=静态路由名（参数路由——同工单不同 ID 依赖 :key 路由 fullPath 分实例）
 defineOptions({ name: 'TicketDetail' })
@@ -52,6 +55,12 @@ const userStore = useUserStoreWithOut()
 // AppView 按 fullPath 缓存实例。路由参数由 RouterView 传入，缓存页不跟随全局 route 换单。
 const ticketId = toRef(props, 'ticketId')
 const active = ref(true)
+const riskSession = getSessionGeneration()
+const riskActor = userStore.profile?.id
+function hasTicketReadScope() {
+  return active.value && riskSession === getSessionGeneration() && riskActor === userStore.profile?.id
+}
+const ticketReadScope = computed(hasTicketReadScope)
 onDeactivated(() => { active.value = false })
 const canQueryTicket = computed(() => active.value && !!ticketId.value && ticketId.value !== 'new')
 
@@ -92,6 +101,119 @@ const typeLabel = computed(
   () => typesQuery.data.value?.find((t) => t.code === ticket.value?.type_code)?.name ?? ticket.value?.type_code ?? '—',
 )
 const isClosed = computed(() => ticket.value?.status === 'closed')
+const canReadRiskWorkflow = computed(() => canQueryTicket.value && !!ticket.value
+  && ticketReadScope.value && userStore.hasPermission('route:/risks'))
+const riskReadDenied = ref(false)
+const riskWorkflow = useQuery({
+  queryKey: computed(() => ['ticket', 'risk-workflow', ticketId.value, riskActor, riskSession] as const),
+  queryFn: ({ queryKey, signal }) => {
+    if (riskReadDenied.value || !hasTicketReadScope() || !canReadRiskWorkflow.value) throw new Error('读取资格已变化，请在原会话受权核查')
+    return getRemediationContextApi(queryKey[2], signal)
+  },
+  enabled: computed(() => canReadRiskWorkflow.value && !riskReadDenied.value),
+  retry: false,
+})
+watch(() => riskWorkflow.error.value, error => {
+  const status = (error as { response?: { status?: number } } | null)?.response?.status
+  // An initial 404 is also the normal response for an ordinary ticket.
+  if (riskWorkflow.data.value && (status === 403 || status === 404)) riskReadDenied.value = true
+}, { flush: 'sync', immediate: true })
+// 显式拒绝不能借上次成功缓存继续核查；临时故障仍保留受权旧上下文。
+const canInspectRiskWorkflow = computed(() => canReadRiskWorkflow.value && !riskReadDenied.value
+  && ![403, 404].includes((riskWorkflow.error.value as { response?: { status?: number } } | null)?.response?.status ?? 0))
+const riskWorkflowContext = computed(() => canInspectRiskWorkflow.value ? riskWorkflow.data.value : undefined)
+const hideRiskTicketActions = computed(() => riskReadDenied.value || (!!riskWorkflow.data.value && !canInspectRiskWorkflow.value))
+function onRiskWorkflowReadDenied(value: { ticket_id: string; status: 403 | 404 }) {
+  if (value.ticket_id !== ticketId.value || !hasTicketReadScope() || !riskWorkflow.data.value) return
+  riskReadDenied.value = true
+}
+const publicEvidence = computed(() => (commentsQuery.data.value ?? []).flatMap(row => !row.is_internal && row.evidence_version
+  ? [{ kind: 'reference' as const, ref: `ticket-comment:${row.id}`, file_name: `公开记录 #${row.id}`, version: row.evidence_version }]
+  : []))
+const riskWorkflowVisible = ref(false)
+const riskCommandsVisible = ref(false)
+const retainedRiskCommand = ref<{ ticketId: string; actorId: string; session: number } | null>(null)
+const riskWorkflowNotice = ref('')
+let riskRefreshEpoch = 0
+watch([ticketId, active, () => userStore.profile?.id, canReadRiskWorkflow], () => { riskRefreshEpoch++ }, { flush: 'sync' })
+onBeforeUnmount(() => { riskRefreshEpoch++ })
+const canReopenRiskCommand = computed(() => {
+  const retained = retainedRiskCommand.value
+  return canInspectRiskWorkflow.value && !!riskCommandContext.value && !!retained
+    && retained.ticketId === ticketId.value && retained.actorId === userStore.profile?.id
+    && retained.session === getSessionGeneration()
+})
+function retainRiskCommand(operation: { ticket_id: string }) {
+  if (!canReadRiskWorkflow.value || operation.ticket_id !== ticketId.value || !userStore.profile?.id) return
+  retainedRiskCommand.value = { ticketId: operation.ticket_id, actorId: userStore.profile.id, session: getSessionGeneration() }
+}
+const assignedActor = computed(() => !!userStore.profile?.id && ticket.value?.assigned_to === userStore.profile.id)
+// Rejecting a risk read must not restore the ordinary lifecycle controls.
+const activeRiskWorkflow = computed(() => riskReadDenied.value
+  || (!!riskWorkflow.data.value && riskWorkflow.data.value.status !== 'closed'))
+const riskCommandContext = computed(() => {
+  const current = riskWorkflowContext.value
+  if (!current || !canInspectRiskWorkflow.value) return null
+  return { ...current, items: current.items.map(item => ({ ...item,
+    is_risk_owner: item.is_risk_owner === true, can_manage_risk: item.can_manage_risk === true,
+  })) }
+})
+function hasRiskAction(action: RemediationAction): boolean {
+  return riskWorkflowContext.value?.writes_enabled === true && riskWorkflowContext.value.allowed_actions?.includes(action) === true
+}
+const riskCommandPermissions = computed(() => {
+  const current = riskCommandContext.value
+  const activeReview = current?.status === 'in_progress' || current?.status === 'pending_verify'
+  return {
+    canAssign: hasRiskAction('assign_handler') && current?.status === 'assigned'
+      && current.items.length > 0 && current.items.every(item => item.can_manage_risk),
+    canAcceptAssignment: hasRiskAction('accept_assignment') && current?.status === 'assigned' && assignedActor.value,
+    canRequestAcceptance: hasRiskAction('accept_request') && current?.status === 'pending_verify'
+      && current.items.some(item => item.is_risk_owner),
+    canDecideAcceptance: hasRiskAction('accept_decision') && activeReview
+      && current.items.some(item => item.can_manage_risk && !item.is_risk_owner && !!item.pending_acceptance_id),
+  }
+})
+async function refreshRiskWorkflowContext() {
+  const source = ticketId.value, actor = userStore.profile?.id, session = getSessionGeneration(), epoch = riskRefreshEpoch
+  const assertCurrent = () => {
+    if (!hasTicketReadScope() || !actor || source !== ticketId.value || actor !== userStore.profile?.id || session !== getSessionGeneration()
+      || epoch !== riskRefreshEpoch || !canInspectRiskWorkflow.value) {
+      throw new Error('工单、身份或读取权限已变化，原操作仍保留，请返回受权上下文核查')
+    }
+  }
+  assertCurrent()
+  const detail = await ticketQuery.refetch({ throwOnError: true })
+  assertCurrent()
+  if (!detail.isSuccess || !detail.data) throw detail.error ?? new Error('工单刷新失败，原操作仍保留')
+  // 动作查询键依赖新票的状态和定义；等待观察器切换到新键后再刷新。
+  await nextTick()
+  assertCurrent()
+  const context = await riskWorkflow.refetch({ throwOnError: true })
+  assertCurrent()
+  if (!context.isSuccess || !context.data) throw context.error ?? new Error('办理上下文刷新失败，原操作仍保留')
+  const definition = detail.data.definition
+  if (detail.data.row.id !== source || context.data.ticket_id !== source || definition.resolution !== 'exact'
+    || context.data.ticket_revision !== definition.revision
+    || context.data.definition_version !== definition.reference.definition_version) {
+    throw new Error('工单与办理上下文版本不一致，原操作仍保留，请刷新后重试')
+  }
+  const actions = await actionsQuery.refetch({ throwOnError: true })
+  assertCurrent()
+  if (!actions.isSuccess || !actions.data) throw actions.error ?? new Error('已发布动作刷新失败，原操作仍保留')
+  if (actions.data.actions.some(action => action.expectedRevision !== context.data.ticket_revision
+    || action.definitionVersion !== context.data.definition_version)) {
+    throw new Error('已发布动作与办理上下文版本不一致，原操作仍保留')
+  }
+  await nextTick()
+  assertCurrent()
+  riskWorkflowNotice.value = ''
+}
+function onRiskWorkflowResult() {
+  void refreshRiskWorkflowContext().catch(cause => {
+    if (canReadRiskWorkflow.value) riskWorkflowNotice.value = apiReadError(cause, '操作已取得回执，但刷新失败，请保留原号并重试')
+  })
+}
 
 // 仅旧响应缺少全部版本元数据时，兼容读取原有类型字段接口。
 const typeFieldsQuery = useQuery({
@@ -104,10 +226,11 @@ const typeFieldsQuery = useQuery({
 const actionsQuery = useQuery({
   queryKey: computed(() => ['ticket', 'transitions', ticketId.value, ticket.value?.status, ticketDefinition.value] as const),
   queryFn: ({ queryKey }) => {
+    if (hideRiskTicketActions.value) throw new Error('读取资格已变化，请在原会话受权核查')
     if (!queryKey[4]) throw new Error('请先刷新工单详情')
     return getInstanceActionsApi(queryKey[2], queryKey[4])
   },
-  enabled: computed(() => canWriteTicket.value && (!isClosed.value || ticketDefinition.value?.resolution === 'exact')),
+  enabled: computed(() => !hideRiskTicketActions.value && canWriteTicket.value && (!isClosed.value || ticketDefinition.value?.resolution === 'exact')),
   retry: false,
 })
 
@@ -140,7 +263,7 @@ const formatCustomValue = (f: TicketTypeFieldDef): string => {
   return String(v)
 }
 
-const availableActions = computed(() => actionsQuery.isSuccess.value ? actionsQuery.data.value?.actions ?? [] : [])
+const availableActions = computed(() => actionsQuery.isSuccess.value && !hideRiskTicketActions.value ? actionsQuery.data.value?.actions ?? [] : [])
 const selectedAction = ref<InstanceAction | null>(null)
 let selectedSession: number | undefined
 const actionDialog = computed(() => {
@@ -163,7 +286,8 @@ onActivated(() => {
 })
 const canUseOtherWrites = computed(() => canWriteTicket.value && !transition.state.busy && !transitionRefreshing.value
   && transition.state.phase !== 'unknown' && transition.state.phase !== 'refresh')
-const canUseLegacyClose = computed(() => canUseOtherWrites.value && ticketDefinition.value?.resolution === 'legacy')
+const canUseOrdinaryLifecycle = computed(() => canUseOtherWrites.value && !activeRiskWorkflow.value)
+const canUseLegacyClose = computed(() => canUseOrdinaryLifecycle.value && ticketDefinition.value?.resolution === 'legacy')
 const selectedActionCurrent = computed(() => {
   const selected = selectedAction.value
   return availableActions.value.some(action => action.id === selected?.id && action.to === selected.to
@@ -460,7 +584,7 @@ const assignError = ref('')
 const assignForm = reactive({ userId: '', escalationSupervisor: '' })
 
 function openAssign() {
-  if (!canUseOtherWrites.value) return
+  if (!canUseOrdinaryLifecycle.value) return
   assignForm.userId = ''
   assignForm.escalationSupervisor = ''
   assignError.value = ''
@@ -468,7 +592,7 @@ function openAssign() {
 }
 
 async function submitAssign() {
-  if (!canUseOtherWrites.value) return
+  if (!canUseOrdinaryLifecycle.value) return
   const uid = assignForm.userId.trim()
   if (!/^\d+$/.test(uid)) {
     assignError.value = '请填写数字用户 ID'
@@ -489,14 +613,14 @@ async function submitAssign() {
 }
 
 async function unassign() {
-  if (!canUseOtherWrites.value) return
+  if (!canUseOrdinaryLifecycle.value) return
   const source = ticketId.value
   try {
     await ElMessageBox.confirm('取消分派后工单将回到「待处理」，确认？', '取消分派', { type: 'warning' })
   } catch {
     return
   }
-  if (!canUseOtherWrites.value || ticketId.value !== source) return
+  if (!canUseOrdinaryLifecycle.value || ticketId.value !== source) return
   try {
     await assignTicketApi(source, null)
     ElMessage.success('已取消分派')
@@ -537,7 +661,7 @@ async function submitClose() {
 
 // ─── 删除（ticket:delete——软删，回列表）───
 async function onDelete() {
-  if (!canUseOtherWrites.value) return
+  if (!canUseOrdinaryLifecycle.value) return
   const source = ticketId.value
   try {
     await ElMessageBox.confirm(`确认删除工单 #${ticketId.value}？删除后列表不再展示。`, '危险操作', {
@@ -546,7 +670,7 @@ async function onDelete() {
   } catch {
     return
   }
-  if (!canUseOtherWrites.value || ticketId.value !== source) return
+  if (!canUseOrdinaryLifecycle.value || ticketId.value !== source) return
   try {
     await deleteTicketApi(source)
     ElMessage.success('已删除')
@@ -682,7 +806,7 @@ function onRelationInput(event: Event) {
         <el-button v-if="transition.state.phase === 'refresh'" size="small" :loading="transitionRefreshing" @click="refreshTransitionState">刷新工单</el-button>
       </el-alert>
       <div v-if="canWriteTicket" class="mt-4 flex gap-2 flex-wrap">
-        <template v-if="!isClosed">
+        <template v-if="!isClosed && !activeRiskWorkflow">
         <el-button
           v-for="action in availableActions"
           :key="action.id"
@@ -695,13 +819,24 @@ function onRelationInput(event: Event) {
           @click="openTransition(action)"
         >{{ action.title }}</el-button>
         </template>
-        <el-button v-permission="'ticket:update'" v-if="!isClosed" :disabled="!canUseOtherWrites" @click="openEdit">编辑</el-button>
-        <el-button v-permission="'ticket:assign'" v-if="!isClosed" :disabled="!canUseOtherWrites" type="primary" @click="openAssign">分派</el-button>
-        <el-button v-permission="'ticket:assign'" v-if="!isClosed && ticket.assigned_to" :disabled="!canUseOtherWrites" @click="unassign">取消分派</el-button>
-        <el-button v-permission="'ticket:close'" v-if="!isClosed && canUseLegacyClose" type="warning" @click="openClose">关闭</el-button>
-        <el-button v-permission="'ticket:delete'" :disabled="!canUseOtherWrites" type="danger" plain @click="onDelete">删除</el-button>
+        <el-button v-if="!isClosed && userStore.hasPermission('ticket:update')" :disabled="!canUseOtherWrites" @click="openEdit">编辑</el-button>
+        <el-button v-if="!isClosed && !activeRiskWorkflow && userStore.hasPermission('ticket:assign')"
+          :disabled="!canUseOtherWrites" type="primary" @click="openAssign">分派</el-button>
+        <el-button v-if="!isClosed && !activeRiskWorkflow && ticket.assigned_to && userStore.hasPermission('ticket:assign')"
+          :disabled="!canUseOtherWrites" @click="unassign">取消分派</el-button>
+        <el-button v-if="!isClosed && !activeRiskWorkflow && canUseLegacyClose && userStore.hasPermission('ticket:close')"
+          type="warning" @click="openClose">关闭</el-button>
+        <el-button v-if="!activeRiskWorkflow && userStore.hasPermission('ticket:delete')"
+          :disabled="!canUseOtherWrites" type="danger" plain @click="onDelete">删除</el-button>
       </div>
+      <div v-if="riskWorkflowContext && canInspectRiskWorkflow" class="mt-4">
+        <el-button data-testid="open-risk-remediation" @click="riskWorkflowVisible = true">逐资产办理与复测</el-button>
+        <el-button v-if="canReopenRiskCommand || Object.values(riskCommandPermissions).some(Boolean)" data-testid="open-risk-workflow-commands"
+          @click="riskCommandsVisible = true">分派、接单与风险接受</el-button>
+      </div>
+      <el-alert v-if="riskWorkflowNotice" :title="riskWorkflowNotice" type="warning" :closable="false" class="mt-2" />
     </el-card>
+
 
     <el-card shadow="hover" class="mb-4">
       <template #header><span class="font-semibold">描述</span></template>
@@ -909,6 +1044,36 @@ function onRelationInput(event: Event) {
 
     <!-- 编辑对话框 -->
     </div>
+    <RemediationDialog
+      v-model="riskWorkflowVisible"
+      :ticket-id="ticketId"
+      :attachments="attachments?.evidenceSources ?? []"
+      :references="publicEvidence"
+      :can-read="canInspectRiskWorkflow"
+      :current-actor-id="userStore.profile?.id ?? ''"
+      :refresh-context="refreshRiskWorkflowContext"
+      :can-finish="hasRiskAction('finish') && assignedActor && riskWorkflowContext?.status === 'in_progress'"
+      :can-review="hasRiskAction('review') && riskWorkflowContext?.status === 'pending_verify'
+        && riskWorkflowContext?.items.some(item => item.is_risk_owner)"
+      :ticket-actions="availableActions"
+      @result="onRiskWorkflowResult"
+      @read-denied="onRiskWorkflowReadDenied"
+    />
+    <RemediationCommandDialog
+      v-model="riskCommandsVisible"
+      :current="riskCommandContext"
+      :can-read="canInspectRiskWorkflow"
+      :refresh-context="refreshRiskWorkflowContext"
+      :permissions="riskCommandPermissions"
+      :assigned-to="ticket?.assigned_to"
+      :current-actor-id="userStore.profile?.id ?? ''"
+      :inspect-operation="getRemediationOperationApi"
+      :ticket-actions="availableActions"
+      @operation="retainRiskCommand"
+      @result="onRiskWorkflowResult"
+    />
+
+
     <TransitionActionDialog
       v-if="actionDialog"
       :model-value="canWriteTicket"
@@ -927,7 +1092,7 @@ function onRelationInput(event: Event) {
           <el-input v-model="editForm.title" maxlength="200" show-word-limit />
         </el-form-item>
         <el-form-item label="优先级">
-          <el-select v-model="editForm.priority" class="!w-[140px]">
+          <el-select v-model="editForm.priority" :disabled="activeRiskWorkflow" class="!w-[140px]">
             <el-option label="紧急" :value="1" />
             <el-option label="高" :value="2" />
             <el-option label="中" :value="3" />
@@ -946,7 +1111,7 @@ function onRelationInput(event: Event) {
     </el-dialog>
 
     <!-- 分派对话框 -->
-    <el-dialog v-if="canUseOtherWrites" v-model="assignVisible" :close-on-click-modal="false" title="分派工单" width="420px">
+    <el-dialog v-if="canUseOrdinaryLifecycle" v-model="assignVisible" :close-on-click-modal="false" title="分派工单" width="420px">
       <el-form label-width="80px" @submit.prevent>
         <el-form-item label="处理人">
           <UserPicker v-model="assignForm.userId" :context="{ purpose: 'assign', ticketId }" :active="active && assignVisible" />
