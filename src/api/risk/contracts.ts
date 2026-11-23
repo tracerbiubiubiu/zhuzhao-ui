@@ -139,6 +139,10 @@ export interface RiskCreateCommand {
   affected_org_id?: RiskId
   /** 可选；不传=责任待确认（owner_unconfirmed） */
   owner_user_id?: RiskId
+  /** 候选扩展（人工登记成对提供发现键+资产引用）：生成 Schema 尚未含此二字段，
+   * 契约批合入后随 pnpm codegen 接线；旧模式两者缺省不发送 */
+  finding_key?: string
+  asset_ref?: AssetRefDto
   expected_revision: RiskRevision
   attributes: Record<string, never>
 }
@@ -360,7 +364,9 @@ export function validateAssignResult(value: unknown, operationId: string): RiskM
   return base
 }
 
-type RegistrationErrors = Partial<Record<'title' | 'org_id' | 'affected_org_id' | 'owner_user_id', string>>
+type RegistrationErrors = Partial<
+  Record<'title' | 'org_id' | 'affected_org_id' | 'owner_user_id' | 'finding_key' | 'asset_ref', string>
+>
 
 export interface RiskRegistrationDraft {
   title: string
@@ -368,6 +374,11 @@ export interface RiskRegistrationDraft {
   org_id: RiskId
   affected_org_id: string
   owner_user_id: string
+  /** 候选扩展（人工登记）：finding_key 与资产引用 provider/external_id 成对提供；
+   * 全部留空=旧模式兼容。表单以平铺字段绑定，提交前组装 asset_ref 对象 */
+  finding_key?: string
+  asset_ref_provider?: string
+  asset_ref_external_id?: string
 }
 
 export function validateRiskRegistration(input: RiskRegistrationDraft): {
@@ -378,15 +389,26 @@ export function validateRiskRegistration(input: RiskRegistrationDraft): {
   const org_id = input.org_id.trim()
   const affected_org_id = input.affected_org_id.trim()
   const owner_user_id = input.owner_user_id.trim()
+  const finding_key = (input.finding_key ?? '').trim()
+  const asset_provider = (input.asset_ref_provider ?? '').trim()
+  const asset_external = (input.asset_ref_external_id ?? '').trim()
   const errors: RegistrationErrors = {}
   if (!title) errors.title = '请填写标题'
   if (!isRiskId(org_id)) errors.org_id = '请填写有效的风险管理组织 ID'
   if (affected_org_id && !isRiskId(affected_org_id)) errors.affected_org_id = '请填写有效的受影响组织 ID'
   if (owner_user_id && !isRiskId(owner_user_id)) errors.owner_user_id = '请填写有效的责任人 ID，留空则待确认'
+  // 成对纪律：资产引用 provider 与外部 ID 必须同给同缺；发现键须与完整资产引用成对出现
+  const assetComplete = !!asset_provider && !!asset_external
+  const assetTouched = !!asset_provider || !!asset_external
+  if ((!!finding_key || assetTouched) && !(!!finding_key && assetComplete)) {
+    errors.finding_key = '发现键须与资产引用（provider+外部 ID）成对提供，两者留空则按旧模式登记'
+  }
+  if (!!asset_provider !== !!asset_external) errors.asset_ref = '资产引用须同时提供 provider 与外部 ID'
   const draft = Object.keys(errors).length ? null : {
     title, description: input.description, org_id,
     ...(affected_org_id && { affected_org_id }),
     ...(owner_user_id && { owner_user_id }),
+    ...(assetComplete && { finding_key, asset_ref: { provider: asset_provider, external_id: asset_external } }),
   }
   return { draft, errors }
 }

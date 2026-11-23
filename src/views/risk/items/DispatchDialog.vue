@@ -4,7 +4,7 @@ import { ElAlert, ElButton, ElCheckbox, ElDialog, ElEmpty, ElTag } from 'element
 import ProTable from '@/components/ProTable/index.vue'
 import type { ProTableColumn, ProTableFetcher } from '@/components/ProTable/types'
 import UserNameText from '@/components/UserNameText/index.vue'
-import { applyDispatch, getDispatchOperation, planDispatch, type DispatchInput, type DispatchPlan, type DispatchPlanInput, type DispatchResult, type TicketReference } from '@/api/risk/dispatch'
+import { applyDispatch, getDispatchOperation, planDispatch, type DispatchGroupOutcome, type DispatchInput, type DispatchPlan, type DispatchPlanInput, type DispatchResult, type TicketReference } from '@/api/risk/dispatch'
 import type { RiskViewDto } from '@/api/risk/contracts'
 import { formatDateTime } from '@/utils/datetime'
 import { getSessionGeneration } from '@/common/auth/tokenStorage'
@@ -45,13 +45,20 @@ const boundInput = ref<DispatchPlanInput | null>(null)
 const resultVersion = ref(0)
 const statusElement = ref<HTMLElement | null>(null)
 const previewButton = ref<{ $el: HTMLElement } | null>(null)
+// 显式失败项重预览：子集输入钉住后 input() 不再跟随页面选择；归档保留原操作号与原结果。
+const repreviewInput = ref<DispatchPlanInput | null>(null)
+const priorResults = ref<{ operationId: string, status: DispatchResult['status'], groups: DispatchGroupOutcome[] }[]>([])
 let previewGeneration = 0
 let session = getSessionGeneration()
 let disposed = false
 
-function input(): DispatchPlanInput {
+function propsInput(): DispatchPlanInput {
   return { items: props.items.map(item => ({ risk_id: item.risk_id, expected_revision: item.expected_revision })), target_org_id: props.targetOrgId, target_type_code: props.targetTypeCode }
 }
+function input(): DispatchPlanInput {
+  return repreviewInput.value ?? propsInput()
+}
+const propsInputKey = computed(() => JSON.stringify(propsInput()))
 const inputKey = computed(() => JSON.stringify(input()))
 const inputChanged = computed(() => !!boundInput.value && inputKey.value !== JSON.stringify(boundInput.value))
 const displayInput = computed(() => boundInput.value ?? input())
@@ -59,12 +66,25 @@ const previewGroups = computed(() => sessionInvalid.value || !props.canRead ? []
 const resultGroups = computed(() => sessionInvalid.value || !props.canRead ? [] : result.value?.groups ?? [])
 // 不把缺少引用当成没有在办票；预计涉及票数与新建票数不是同一个指标。
 const projectedTickets = computed(() => previewGroups.value.length)
-const finished = computed(() => !sessionInvalid.value && result.value?.status === 'completed' && !uncertain.value)
+// completed/failed=parent 终态（逐组确定结果）；pending/partial 仍有缺失组未知。
+const finished = computed(() => !sessionInvalid.value && (result.value?.status === 'completed' || result.value?.status === 'failed') && !uncertain.value)
 const dismissLocked = computed(() => busy.value || uncertain.value)
-const canPreview = computed(() => !sessionInvalid.value && props.modelValue && props.canRead && props.canDispatch && !busy.value && !attempt.value && props.items.length > 0 && !!props.targetOrgId && !!props.targetTypeCode)
+const canPreview = computed(() => !sessionInvalid.value && props.modelValue && props.canRead && props.canDispatch && !busy.value && !attempt.value
+  && (repreviewInput.value ? repreviewInput.value.items.length > 0 : props.items.length > 0 && !!props.targetOrgId && !!props.targetTypeCode))
 const canConfirm = computed(() => !sessionInvalid.value && props.modelValue && props.canRead && props.canDispatch && !busy.value && !attempt.value && !!plan.value && projectedTickets.value > 0 && confirmed.value && !inputChanged.value && Date.parse(plan.value.expires_at) > Date.now())
 const canInspect = computed(() => !sessionInvalid.value && props.modelValue && props.canRead && !busy.value && !!attempt.value)
 const canRetry = computed(() => !sessionInvalid.value && props.modelValue && props.canRead && props.canDispatch && !busy.value && !!attempt.value && !finished.value)
+// 仅确定失败组（group failed）开放显式重预览；缺失组未知，须按原号核查/续办，不得混入。
+const failedRepreviewAvailable = computed(() => !sessionInvalid.value && props.modelValue && props.canRead
+  && props.canDispatch && !busy.value && !uncertain.value && !!attempt.value && !!boundInput.value
+  && resultGroups.value.some(group => group.status === 'failed'))
+const resultSummary = computed(() => {
+  const status = result.value?.status
+  if (status === 'completed') return '本次派单已完成'
+  if (status === 'failed') return '本次派单已失败，请核对逐组原因；可显式对失败风险重新预览（生成新操作号），原操作号与已成功结果保留'
+  if (status === 'partial') return '部分组已有确定结果，其余组尚未完成；请核对逐组结果'
+  return '尚有未完成组，请核对原因'
+})
 
 function sessionMatches() { return !sessionInvalid.value && session === getSessionGeneration() }
 function checkSession() {
@@ -92,9 +112,11 @@ function resetPreview() {
   error.value = ''
   busy.value = false
 }
-watch(() => [props.modelValue, inputKey.value], () => {
+// 仅页面来源的输入（选择/目标）变化才作废旧预览；在途原号与重预览子集会话都保留，
+// 完成后的下一轮由 startNext / cancelFailedRepreview 显式清除。
+watch(() => [props.modelValue, propsInputKey.value], () => {
   if (!checkSession()) return
-  if (attempt.value) return // 关闭、权限或选择改变都保留原号；完成后显式开始下一次。
+  if (attempt.value || repreviewInput.value) return
   resetPreview()
 }, { flush: 'sync' })
 onScopeDispose(() => { disposed = true; previewGeneration++ })
@@ -163,6 +185,54 @@ function startNext() {
   result.value = null
   uncertain.value = false
   verificationNote.value = ''
+  repreviewInput.value = null
+  resetPreview()
+}
+/** 确定失败组（group failed）的逐项原选择版本；缺失映射的项防御性跳过。 */
+function failedRiskItems(): DispatchPlanInput['items'] {
+  const bound = boundInput.value
+  const current = result.value
+  if (!bound || !current) return []
+  const failedIds = new Set(current.groups.filter(group => group.status === 'failed')
+    .flatMap(group => group.items.map(item => item.risk_id)))
+  return bound.items.filter(item => failedIds.has(item.risk_id)).map(item => ({ ...item }))
+}
+/** 归档条目保留原操作号与逐组结果（票引用随归档剥离）；缺失组注明不再由本弹窗续办。 */
+function archiveCurrentResult(operationId: string): void {
+  const current = result.value
+  if (!current) return
+  priorResults.value = [...priorResults.value, {
+    operationId, status: current.status,
+    groups: current.groups.map(group => ({ ...group, ticket: undefined, items: group.items.map(item => ({ ...item, ticket: undefined })) })),
+  }]
+}
+/** 用户显式把确定失败风险重新预览：保留原操作号/原结果，仅重新预览，不产生任何写请求。
+ * 新派单必须走既有确认流再生成新操作号；返回是否已启动。 */
+function startFailedRepreview(): boolean {
+  if (!checkSession() || busy.value || uncertain.value || !attempt.value || !result.value
+    || !props.canDispatch || !props.canRead) return false
+  const items = failedRiskItems()
+  const source = boundInput.value
+  if (!items.length || !source) {
+    error.value = '无法定位失败风险的原始版本，请关闭后从列表重新选择并预览'
+    return false
+  }
+  archiveCurrentResult(attempt.value.operation_id)
+  repreviewInput.value = {
+    items, target_org_id: source.target_org_id, target_type_code: source.target_type_code,
+  }
+  attempt.value = null
+  result.value = null
+  uncertain.value = false
+  verificationNote.value = ''
+  resetPreview()
+  void preview()
+  return true
+}
+/** 取消重预览子集：返回页面当前全集已选；已归档的原操作号与结果保留展示。 */
+function cancelFailedRepreview() {
+  if (!checkSession() || busy.value || attempt.value) return
+  repreviewInput.value = null
   resetPreview()
 }
 function revokeTicketReferences() {
@@ -230,6 +300,9 @@ function reasonText(reason: string) { return reasons[reason] ?? reason }
 function itemResultText(value: string) {
   return ({ created: '已建票', linked: '已追加', already_linked: '已有关联', denied: '权限拒绝', invalid: '输入无效', conflict: '发生冲突' } as Record<string, string>)[value] ?? value
 }
+function priorStatusText(status: DispatchResult['status']) {
+  return ({ completed: '已完成', failed: '已失败', partial: '部分组已确定结果', pending: '尚有未完成组' } as Record<string, string>)[status] ?? status
+}
 const previewColumns: ProTableColumn[] = [
   { prop: 'group_key', label: '分组', minWidth: 120, wrap: true },
   { prop: 'owner_user_id', label: '具体负责人', width: 120 },
@@ -255,6 +328,10 @@ const resultFetcher: ProTableFetcher = async ({ page, page_size }) => ({ list: r
         <p v-if="plan && canRead && sessionMatches()">预计涉及 {{ projectedTickets }} 张工单。实际新建或追加以提交结果为准；预览不预留名额。</p>
         <p v-if="attempt">操作号：<code>{{ attempt.operation_id }}</code>（保存在本页面内存，离页前请保存）</p>
         <p v-else-if="savedOperation">上次操作号：<code>{{ savedOperation }}</code></p>
+        <p v-if="repreviewInput && canRead && sessionMatches()" data-testid="dispatch-repreview-banner">
+          正在为 {{ repreviewInput.items.length }} 项确定失败风险重新预览（目标组织 {{ repreviewInput.target_org_id }}，整改类型 {{ repreviewInput.target_type_code }}）；
+          新派单须再次确认并生成新操作号，不会自动重投。
+        </p>
         <p v-if="verificationNote">{{ verificationNote }}</p>
         <el-alert v-if="error" :title="error" type="error" :closable="false" show-icon />
         <el-alert v-if="!canDispatch" title="当前无派单权限，请受权核查" type="warning" :closable="false" />
@@ -287,8 +364,23 @@ const resultFetcher: ProTableFetcher = async ({ page, page_size }) => ({ list: r
         </div>
         <el-checkbox v-if="!attempt && projectedTickets" v-model="confirmed" :disabled="busy || !canDispatch" class="mt-4">我已核对分组、目标和受阻项，确认按此预览派单</el-checkbox>
       </template>
+      <div v-if="priorResults.length && canRead && sessionMatches()" data-testid="dispatch-prior-results" class="mt-4">
+        <p>先前尝试（原操作号与结果已保留；旧成功组不会自动重投）：</p>
+        <ul class="dispatch-items"><li v-for="entry in priorResults" :key="entry.operationId">
+          原操作号：<code>{{ entry.operationId }}</code> · {{ priorStatusText(entry.status) }}
+          <ul class="dispatch-items"><li v-for="group in entry.groups" :key="group.group_key">
+            {{ group.group_key }}：{{ group.status === 'completed' ? '已完成' : '失败' }}
+            <ul class="dispatch-items"><li v-for="item in group.items" :key="item.risk_id">
+              {{ item.risk_id }}：{{ itemResultText(item.result) }}<span v-if="item.reason"> · {{ reasonText(item.reason) }}</span>
+            </li></ul>
+          </li></ul>
+          <div v-if="entry.status === 'pending' || entry.status === 'partial'">
+            该操作仍有未完成组（结果未知）：本弹窗不再对原操作续办，如需续办请按原操作号另行受权核查。
+          </div>
+        </li></ul>
+      </div>
       <div v-if="result && canRead && sessionMatches()" class="mt-4">
-        <p>{{ result.status === 'completed' ? '本次派单已完成' : result.status === 'partial' ? '部分组已完成，其余组尚未完成；请核对逐组结果' : '尚有未完成组，请核对原因' }}</p>
+        <p>{{ resultSummary }}</p>
         <ProTable :key="resultVersion" data-testid="dispatch-results" :columns="resultColumns" :fetcher="resultFetcher" row-key="group_key">
           <template #group_key="{ row }">{{ row.group_key }}</template>
           <template #status="{ row }"><el-tag :type="row.status === 'completed' ? 'success' : 'danger'">{{ row.status === 'completed' ? '已完成' : '失败' }}</el-tag></template>
@@ -307,10 +399,12 @@ const resultFetcher: ProTableFetcher = async ({ page, page_size }) => ({ list: r
     </div>
     <template #footer>
       <el-button :disabled="dismissLocked" @click="close">{{ attempt && !finished ? '关闭并保留本次操作' : '关闭' }}</el-button>
-      <el-button v-if="!attempt" ref="previewButton" :disabled="!canPreview" :loading="busy" @click="preview">{{ plan ? '重新预览' : '预览派单' }}</el-button>
+      <el-button v-if="repreviewInput && !attempt && !busy" data-testid="dispatch-repreview-cancel" @click="cancelFailedRepreview">取消重预览，返回全部已选</el-button>
+      <el-button v-if="!attempt" ref="previewButton" :disabled="!canPreview" :loading="busy" @click="preview">{{ plan ? '重新预览' : repreviewInput ? '重新预览失败项' : '预览派单' }}</el-button>
       <el-button v-if="!attempt" type="primary" :disabled="!canConfirm" @click="submit">确认派单</el-button>
       <el-button v-if="attempt" data-testid="dispatch-inspect" :disabled="!canInspect" :loading="busy" @click="inspect">按原号核查（只读）</el-button>
       <el-button v-if="attempt && !finished" data-testid="dispatch-resume" type="primary" :disabled="!canRetry" :loading="busy" @click="retry">按原号续办（可能提交未完成组）</el-button>
+      <el-button v-if="failedRepreviewAvailable" data-testid="dispatch-repreview-failed" :disabled="busy" @click="startFailedRepreview">失败项重新预览（新操作号）</el-button>
       <el-button v-if="attempt && finished" :disabled="busy || !canDispatch || !canRead" @click="startNext">开始下一次派单</el-button>
     </template>
   </el-dialog>

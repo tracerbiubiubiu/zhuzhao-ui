@@ -209,3 +209,57 @@ it('登记拦截空标题、超出 int64 的组织 ID 和非法责任人', () =>
   expect(result.draft).toBeNull()
   expect(Object.keys(result.errors)).toEqual(['title', 'org_id', 'affected_org_id', 'owner_user_id'])
 })
+
+it('登记成对提交 finding_key 与资产引用（provider+external_id，含 trim）', () => {
+  const result = validateRiskRegistration({
+    title: '合成漏洞', description: '', org_id: '91001', affected_org_id: '', owner_user_id: '',
+    finding_key: ' SYN-FINDING-001 ', asset_ref_provider: ' synthetic-cmdb ', asset_ref_external_id: ' asset-9 ',
+  })
+  expect(result.errors).toEqual({})
+  expect(result.draft).toEqual({
+    title: '合成漏洞', description: '', org_id: '91001',
+    finding_key: 'SYN-FINDING-001', asset_ref: { provider: 'synthetic-cmdb', external_id: 'asset-9' },
+  })
+})
+
+it('旧模式兼容：finding_key 与资产引用缺省或全空时不进入候选草稿', () => {
+  const absent = validateRiskRegistration({
+    title: '合成漏洞', description: '', org_id: '91001', affected_org_id: '', owner_user_id: '',
+  })
+  expect(absent.errors).toEqual({})
+  expect(absent.draft).toEqual({ title: '合成漏洞', description: '', org_id: '91001' })
+  expect(absent.draft).not.toHaveProperty('finding_key')
+  expect(absent.draft).not.toHaveProperty('asset_ref')
+
+  const blank = validateRiskRegistration({
+    title: '合成漏洞', description: '', org_id: '91001', affected_org_id: '', owner_user_id: '',
+    finding_key: ' ', asset_ref_provider: '', asset_ref_external_id: ' ',
+  })
+  expect(blank.errors).toEqual({})
+  expect(blank.draft).toEqual({ title: '合成漏洞', description: '', org_id: '91001' })
+})
+
+it('发现键与资产引用不成对即拦截：缺发现键、缺资产或半填资产', () => {
+  const base = { title: '合成漏洞', description: '', org_id: '91001', affected_org_id: '', owner_user_id: '' }
+  const onlyFinding = validateRiskRegistration({ ...base, finding_key: 'SYN-FINDING-001' })
+  expect(onlyFinding.draft).toBeNull()
+  expect(Object.keys(onlyFinding.errors)).toEqual(['finding_key'])
+
+  const onlyAsset = validateRiskRegistration({
+    ...base, asset_ref_provider: 'synthetic-cmdb', asset_ref_external_id: 'asset-9',
+  })
+  expect(onlyAsset.draft).toBeNull()
+  expect(Object.keys(onlyAsset.errors)).toEqual(['finding_key'])
+
+  const halfAsset = validateRiskRegistration({
+    ...base, finding_key: 'SYN-FINDING-001', asset_ref_provider: 'synthetic-cmdb',
+  })
+  expect(halfAsset.draft).toBeNull()
+  expect(Object.keys(halfAsset.errors)).toEqual(['finding_key', 'asset_ref'])
+
+  const externalOnly = validateRiskRegistration({
+    ...base, asset_ref_external_id: 'asset-9',
+  })
+  expect(externalOnly.draft).toBeNull()
+  expect(Object.keys(externalOnly.errors)).toEqual(['finding_key', 'asset_ref'])
+})

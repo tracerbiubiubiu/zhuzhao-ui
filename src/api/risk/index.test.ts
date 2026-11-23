@@ -6,6 +6,7 @@ import {
 } from './index'
 import type { RiskAssessCommand, RiskCreateCommand, RiskReceiptDto, RiskViewDto } from './contracts'
 
+
 vi.mock('@vea/request', () => ({ default: { get: vi.fn(), post: vi.fn() } }))
 beforeEach(() => {
   vi.mocked(request.get).mockReset()
@@ -104,6 +105,34 @@ describe('risk-items 写命令（Mutation：body 携带 operation_id + expected_
     vi.mocked(request.post).mockResolvedValue({ risk: view.risk, status: 'new', receipt_ref: createReceipt } as never)
     await expect(createRiskItemApi(command)).resolves.toEqual({ risk: view.risk, status: 'new', receipt_ref: createReceipt })
     expect(request.post).toHaveBeenCalledWith('/api/v1/risk-items/create', command, { _silentError: true })
+  })
+
+  it('人工登记候选字段 finding_key 与 asset_ref 成对透传；旧模式不带新键', async () => {
+    const command: RiskCreateCommand = {
+      operation_id: 'op-05',
+      title: '合成漏洞',
+      description: '',
+      org_id: '91001',
+      expected_revision: '0',
+      attributes: {},
+      finding_key: 'SYN-FINDING-001',
+      asset_ref: { provider: 'synthetic-cmdb', external_id: 'asset-9' },
+    }
+    const receipt: RiskReceiptDto = { ...createReceipt, operation_id: 'op-05' }
+    vi.mocked(request.post).mockResolvedValueOnce({ risk: view.risk, status: 'new', receipt_ref: receipt } as never)
+    await expect(createRiskItemApi(command)).resolves.toEqual({ risk: view.risk, status: 'new', receipt_ref: receipt })
+    expect(request.post).toHaveBeenCalledWith('/api/v1/risk-items/create', command, { _silentError: true })
+    const legacy: RiskCreateCommand = {
+      operation_id: 'op-06', title: '旧模式', description: '', org_id: '91001', expected_revision: '0', attributes: {},
+    }
+    vi.mocked(request.post).mockResolvedValueOnce({
+      risk: view.risk, status: 'new', receipt_ref: { ...createReceipt, operation_id: 'op-06' },
+    } as never)
+    await expect(createRiskItemApi(legacy)).resolves.toEqual({
+      risk: view.risk, status: 'new', receipt_ref: { ...createReceipt, operation_id: 'op-06' },
+    })
+    expect(request.post.mock.calls[1]![0]).not.toHaveProperty('finding_key')
+    expect(request.post.mock.calls[1]![0]).not.toHaveProperty('asset_ref')
   })
 
   it('核实命令透传级别/策略/期限，回执对象与 deadline 空值归一', async () => {

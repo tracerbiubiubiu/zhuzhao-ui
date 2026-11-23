@@ -236,18 +236,28 @@ function verifyMutation(session: { phase: WritePhase, operationId: string } | un
 }
 
 // ─── 登记风险 ───
-const blankDraft = (): RiskRegistrationDraft => ({ title: '', description: '', org_id: '', affected_org_id: '', owner_user_id: '' })
+const blankDraft = (): RiskRegistrationDraft => ({
+  title: '', description: '', org_id: '', affected_org_id: '', owner_user_id: '',
+  finding_key: '', asset_ref_provider: '', asset_ref_external_id: '',
+})
 const draft = ref(blankDraft())
 const registrationVisible = ref(false)
-const touched = reactive({ title: false, org_id: false, affected_org_id: false, owner_user_id: false })
+const touched = reactive({
+  title: false, org_id: false, affected_org_id: false, owner_user_id: false,
+  finding_key: false, asset_ref: false,
+})
 const registration = computed(() => validateRiskRegistration(draft.value))
 
 function hydrateCreateDraft(input: CreateInput) {
   draft.value = {
     title: input.title, description: input.description, org_id: input.org_id,
     affected_org_id: input.affected_org_id ?? '', owner_user_id: input.owner_user_id ?? '',
+    finding_key: input.finding_key ?? '',
+    asset_ref_provider: input.asset_ref?.provider ?? '',
+    asset_ref_external_id: input.asset_ref?.external_id ?? '',
   }
   touched.title = touched.org_id = touched.affected_org_id = touched.owner_user_id = true
+  touched.finding_key = touched.asset_ref = true
 }
 
 function openRegistration() {
@@ -263,6 +273,7 @@ function closeRegistration() {
   if (createWrites.session(REGISTRATION_KEY)?.phase === 'unknown') return
   draft.value = blankDraft()
   touched.title = touched.org_id = touched.affected_org_id = touched.owner_user_id = false
+  touched.finding_key = touched.asset_ref = false
 }
 
 function discardCreate() {
@@ -270,6 +281,7 @@ function discardCreate() {
   writeVersion.value++
   draft.value = blankDraft()
   touched.title = touched.org_id = touched.affected_org_id = touched.owner_user_id = false
+  touched.finding_key = touched.asset_ref = false
   verifyNote.value = ''
 }
 
@@ -693,6 +705,27 @@ onScopeDispose(clearReads)
           <el-input
             v-model="draft.owner_user_id" inputmode="numeric" placeholder="留空则责任待确认"
             :disabled="createPending || createSession?.phase === 'unknown'" @blur="touched.owner_user_id = true"
+          />
+        </el-form-item>
+        <el-form-item label="发现键" :error="touched.finding_key ? registration.errors.finding_key : undefined">
+          <el-input
+            v-model="draft.finding_key" data-testid="registration-finding-key" placeholder="与资产引用成对填写"
+            :disabled="createPending || createSession?.phase === 'unknown'"
+            @blur="touched.finding_key = touched.asset_ref = true"
+          />
+        </el-form-item>
+        <el-form-item label="资产 provider" :error="touched.asset_ref ? registration.errors.asset_ref : undefined">
+          <el-input
+            v-model="draft.asset_ref_provider" data-testid="registration-asset-provider" placeholder="资产引用来源标识"
+            :disabled="createPending || createSession?.phase === 'unknown'"
+            @blur="touched.finding_key = touched.asset_ref = true"
+          />
+        </el-form-item>
+        <el-form-item label="资产外部 ID" :error="touched.asset_ref ? registration.errors.asset_ref : undefined">
+          <el-input
+            v-model="draft.asset_ref_external_id" data-testid="registration-asset-external-id" placeholder="资产在来源中的外部标识"
+            :disabled="createPending || createSession?.phase === 'unknown'"
+            @blur="touched.finding_key = touched.asset_ref = true"
           />
         </el-form-item>
         <el-form-item label="说明">

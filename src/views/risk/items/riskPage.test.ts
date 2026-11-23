@@ -210,6 +210,7 @@ function footerButtons(node: VNode | undefined): VNode[] {
 
 const registrationDraft = {
   title: '合成漏洞', description: '', org_id: '91001', affected_org_id: '', owner_user_id: '',
+  finding_key: '', asset_ref_provider: '', asset_ref_external_id: '',
 }
 
 it('菜单组件路径可由现有解析器识别', () => {
@@ -281,6 +282,7 @@ it('登记提交携带原号与 expected_revision "0"，成功后关闭并刷新
 
   harness.page.draft.value = {
     title: '合成漏洞', description: '说明', org_id: '91001', affected_org_id: '91002', owner_user_id: '92002',
+    finding_key: '', asset_ref_provider: '', asset_ref_external_id: '',
   }
   await harness.page.submitRegistration()
   expect(harness.writer.create).toHaveBeenCalledTimes(1)
@@ -297,11 +299,84 @@ it('登记提交携带原号与 expected_revision "0"，成功后关闭并刷新
   expect(refresh).toHaveBeenCalledTimes(1)
 })
 
-it('响应未知保留原号：关闭重开回填，重投使用同一操作号与同一输入', async () => {
+it('人工登记成对提交 finding_key 与资产引用，并可沿正常 UI 依次接核实、责任确认与派单预览', async () => {
+  const harness = setup(['risk:manage'])
+  const refresh = vi.fn()
+  harness.page.table.value = { refresh }
+  harness.page.openRegistration()
+  // 成对缺一不可：仅填发现键不提交
+  harness.page.draft.value = { ...registrationDraft, finding_key: 'SYN-FINDING-001' }
+  await harness.page.submitRegistration()
+  expect(harness.writer.create).not.toHaveBeenCalled()
+
+  harness.page.draft.value = {
+    ...registrationDraft,
+    finding_key: 'SYN-FINDING-001', asset_ref_provider: 'synthetic-cmdb', asset_ref_external_id: 'asset-9',
+  }
+  const createdRef = { id: '9007199254740999', human_key: 'RISK-SYNTHETIC-NEW', revision: '1' }
+  harness.writer.create.mockResolvedValueOnce({ risk: createdRef, status: 'new', receipt_ref: receiptOf('op-01', 'create', 'new') })
+  await harness.page.submitRegistration()
+  expect(harness.writer.create.mock.calls[0][0]).toEqual({
+    operation_id: 'op-01', title: '合成漏洞', description: '', org_id: '91001',
+    expected_revision: '0', attributes: {},
+    finding_key: 'SYN-FINDING-001', asset_ref: { provider: 'synthetic-cmdb', external_id: 'asset-9' },
+  })
+  expect(refresh).toHaveBeenCalledTimes(1)
+
+  // 正常 UI 工作流：登记后的行沿现有入口接核实（保存 assessment_note）
+  harness.reader.list.mockResolvedValue({ items: [{ ...row, risk: createdRef }], total: 1 })
+  await harness.page.fetchPage({ page: 1, page_size: 20 })
+  harness.page.openAssess({ ...row, risk: createdRef })
+  harness.page.assessForm.level = 'high'
+  harness.page.assessForm.note = ' 登记后台账核实 '
+  await harness.page.submitAssess()
+  expect(harness.writer.assess.mock.calls[0][0]).toMatchObject({
+    id: createdRef.id, expected_revision: '1', level: 'high', assessment_note: '登记后台账核实',
+  })
+
+  // 责任确认
+  harness.page.openAssign({ ...row, risk: createdRef })
+  harness.page.assignForm.owner = '92002'
+  harness.page.assignForm.reason = '台账核实后确认'
+  await harness.page.submitAssign()
+  expect(harness.writer.assign.mock.calls[0][0]).toMatchObject({
+    id: createdRef.id, owner_user_id: '92002', reason: '台账核实后确认',
+  })
+
+  // 派单：登记→核实→责任后的行可勾选并带原目标打开预览
+  harness.page.dispatchTarget.orgId = '9223372036854775807'
+  harness.page.dispatchTarget.typeCode = 'synthetic_remediation'
+  harness.page.selectDispatchRisk({ ...row, risk: createdRef, owner_user_id: '92002', dispatch_blockers: [] }, true)
+  harness.page.openDispatch()
+  expect(harness.page.dispatchVisible.value).toBe(true)
+  expect(harness.page.dispatchInput.value).toEqual({
+    items: [{ risk_id: createdRef.id, expected_revision: '1' }],
+    target_org_id: '9223372036854775807', target_type_code: 'synthetic_remediation',
+  })
+})
+
+it('登记表单呈现发现键与资产引用成对输入并绑定草稿', () => {
+  const harness = setup(['risk:manage'])
+  harness.page.openRegistration()
+  const dialog = harness.dialogByTitle('登记风险')!
+  const inputs = findNodes(dialog, node => node.type === components.ElInput)
+  // 标题/组织/受影响组织/责任人/发现键/资产 provider/资产外部 ID/说明
+  expect(inputs).toHaveLength(8)
+  harness.page.draft.value = { ...registrationDraft, finding_key: 'SYN-FINDING-001' }
+  const dialogAfter = harness.dialogByTitle('登记风险')!
+  const items = findNodes(dialogAfter, node => node.type === components.ElFormItem)
+  const labeled = items.map(node => nodeText((node.props as Record<string, unknown>)?.label))
+  expect(labeled).toContain('发现键')
+  expect(labeled).toContain('资产 provider')
+  expect(labeled).toContain('资产外部 ID')
+})
+
+it('响应未知保留原号：关闭重开回填（含成对字段），重投使用同一操作号与同一输入', async () => {
   const harness = setup(['risk:manage'])
   harness.writer.create.mockRejectedValueOnce(networkError())
   const submitted = {
     title: '合成漏洞', description: '说明', org_id: '91001', affected_org_id: '91002', owner_user_id: '92002',
+    finding_key: 'SYN-FINDING-001', asset_ref_provider: 'synthetic-cmdb', asset_ref_external_id: 'asset-9',
   }
   harness.page.draft.value = submitted
   await harness.page.submitRegistration()
@@ -313,7 +388,10 @@ it('响应未知保留原号：关闭重开回填，重投使用同一操作号�
   expect(harness.page.draft.value).toEqual(submitted)
   await harness.page.submitRegistration()
   expect(harness.writer.create).toHaveBeenCalledTimes(2)
-  expect(harness.writer.create.mock.calls[1][0]).toEqual(harness.writer.create.mock.calls[0][0])
+  expect(harness.writer.create.mock.calls[1][0]).toEqual({
+    ...harness.writer.create.mock.calls[0][0],
+    finding_key: 'SYN-FINDING-001', asset_ref: { provider: 'synthetic-cmdb', external_id: 'asset-9' },
+  })
   expect(harness.writer.create.mock.calls[1][0].operation_id).toBe('op-01')
 })
 

@@ -33,11 +33,19 @@ type Page = {
   resultGroups: Ref<any[]>
   statusElement: Ref<{ focus(): void } | null>
   previewButton: Ref<{ $el: { focus(): void } } | null>
+  finished: Ref<boolean>
+  priorResults: Ref<{ operationId: string; status: string; groups: any[] }[]>
+  repreviewInput: Ref<{ items: { risk_id: string; expected_revision: string }[]; target_org_id: string; target_type_code: string } | null>
+  failedRepreviewAvailable: Ref<boolean>
+  boundInput: Ref<any>
+  resultSummary: Ref<string>
   preview(): Promise<void>
   submit(): Promise<void>
   retry(): Promise<void>
   inspect(): Promise<void>
   startNext(): void
+  startFailedRepreview(): boolean
+  cancelFailedRepreview(): void
   savedOperation: Ref<string>
   verificationNote: Ref<string>
   displayDetails: Ref<any[]>
@@ -511,4 +519,244 @@ it('当前无工单读取权限时不呈现预览票、组票和逐项票的可�
   const result = body.find(n => n.props?.['data-testid'] === 'dispatch-results')
   expect(nodes(result.children.ticket({ row: page.resultGroups.value[0] })).some(n => n.props?.['data-testid'] === 'authorized-ticket')).toBe(false)
   expect(nodes(result.children.items({ row: page.resultGroups.value[0] })).some(n => n.props?.['data-testid'] === 'authorized-item-ticket')).toBe(false)
+})
+
+describe('确定失败组展示与显式重预览', () => {
+  const nodes = (node: any): any[] => !node || typeof node !== 'object' ? [] : [node, ...(Array.isArray(node) ? node.flatMap(nodes) : Array.isArray(node.children) ? node.children.flatMap(nodes) : [])]
+  const textOf = (node: any): string => {
+    if (Array.isArray(node)) return node.map(textOf).join('')
+    if (node == null || typeof node !== 'object') return typeof node === 'string' || typeof node === 'number' ? String(node) : ''
+    const children = node.children
+    if (typeof children === 'string') return children
+    if (typeof children === 'function') {
+      try { return textOf(children()) } catch { return '' }
+    }
+    if (Array.isArray(children)) return children.map(textOf).join('')
+    if (children && typeof children === 'object') {
+      return Object.values(children as Record<string, unknown>).map(value => {
+        if (typeof value !== 'function') return textOf(value)
+        try { return textOf((value as () => unknown)()) } catch { return '' }
+      }).join('')
+    }
+    return ''
+  }
+  const bodyText = (props: any, page: any) => {
+    const body = nodes((renderPage(source, page, props).children as any).default())
+    return { body, text: body.map(textOf).join(' ') }
+  }
+  const footer = (props: any, page: any) => nodes((renderPage(source, page, props).children as any).footer())
+
+  it('parent failed 为终态：文案展示已失败与逐组原因，可关闭并开始下一次，不再提供续办', async () => {
+    const { api, page, props } = fixture()
+    api.applyDispatch.mockImplementationOnce(async input => ({ ...input, status: 'failed', groups: [
+      { group_key: 'group-u', status: 'failed', items: [{ risk_id: '102', result: 'denied', reason: 'dispatch_forbidden' }] },
+      { group_key: 'group-v', status: 'failed', items: [{ risk_id: '103', result: 'conflict', reason: 'revision_conflict' }] },
+    ] }))
+    await page.preview()
+    page.confirmed.value = true
+    await page.submit()
+    expect(page.result.value.status).toBe('failed')
+    expect(page.finished.value).toBe(true)
+    expect(page.dismissLocked.value).toBe(false)
+    expect(page.resultSummary.value).toContain('已失败')
+    const { text } = bodyText(props, page)
+    expect(text).toContain('已失败')
+    const buttons = footer(props, page)
+    expect(buttons.some((n: any) => n.props?.['data-testid'] === 'dispatch-resume')).toBe(false)
+    const startNext = buttons.find((n: any) => n.props?.onClick === page.startNext)
+    expect(startNext).toBeDefined()
+    expect(startNext.props.disabled).toBe(false)
+    expect(textOf(startNext)).toContain('开始下一次派单')
+  })
+
+  it('partial 混合组：既有成功与确定失败同展示，parent 文案按部分确定结果提示', async () => {
+    const { api, page } = fixture()
+    api.applyDispatch.mockImplementationOnce(async input => ({ ...input, status: 'partial', groups: [
+      { group_key: 'group-u', status: 'completed', ticket: { id: '201', ref: 'T-201' }, items: [{ risk_id: '9007199254740993', result: 'created' }] },
+      { group_key: 'group-v', status: 'failed', items: [{ risk_id: '103', result: 'denied', reason: 'dispatch_forbidden' }] },
+    ] }))
+    await page.preview()
+    page.confirmed.value = true
+    await page.submit()
+    expect(page.resultGroups.value.map(g => g.status)).toEqual(['completed', 'failed'])
+    expect(page.finished.value).toBe(false)
+    expect(page.resultSummary.value).toContain('部分组已有确定结果')
+  })
+
+  it('失败项显式重预览：归档原操作号与原结果（剥票引用），按失败子集与原目标预览，确认前不写入', async () => {
+    const { api, page } = fixture()
+    api.applyDispatch.mockImplementationOnce(async input => ({ ...input, status: 'partial', groups: [
+      { group_key: 'group-u', status: 'completed', ticket: { id: '201', ref: 'T-201' }, items: [
+        { risk_id: '9007199254740993', result: 'created' }, { risk_id: '102', result: 'linked' },
+      ] },
+      { group_key: 'group-v', status: 'failed', items: [{ risk_id: '103', result: 'denied', reason: 'dispatch_forbidden' }] },
+    ] }))
+    await page.preview()
+    page.confirmed.value = true
+    await page.submit()
+    const original = { ...page.attempt.value! }
+    expect(page.failedRepreviewAvailable.value).toBe(true)
+
+    expect(page.startFailedRepreview()).toBe(true)
+    // 禁止自动重投：归档与预览路径不触发任何 POST 写入
+    expect(api.applyDispatch).toHaveBeenCalledTimes(1)
+    expect(page.priorResults.value).toHaveLength(1)
+    expect(page.priorResults.value[0].operationId).toBe(original.operation_id)
+    expect(page.priorResults.value[0].groups[0].ticket).toBeUndefined()
+    expect(page.priorResults.value[0].groups[0].items[0].result).toBe('created')
+    expect(page.attempt.value).toBeNull()
+    expect(page.result.value).toBeNull()
+    expect(api.planDispatch).toHaveBeenLastCalledWith({
+      items: [{ risk_id: '103', expected_revision: '9' }],
+      target_org_id: '9007199254740995', target_type_code: 'synthetic_remediation',
+    })
+    expect(page.confirmed.value).toBe(false)
+
+    // 新预览走既有确认流：显式勾选后才生成新操作号提交
+    await page.submit()
+    expect(api.applyDispatch).toHaveBeenCalledTimes(1)
+    page.confirmed.value = true
+    await page.submit()
+    expect(api.applyDispatch).toHaveBeenCalledTimes(2)
+    expect(page.attempt.value!.operation_id).not.toBe(original.operation_id)
+    expect(page.attempt.value!.plan_id).toBe(planA().plan_id)
+    expect(page.priorResults.value).toHaveLength(1)
+  })
+
+  it('重预览子集被归档后旧成功组仍随原结果展示，模板出现重预览入口', async () => {
+    const { api, page, props } = fixture()
+    api.applyDispatch.mockImplementationOnce(async input => ({ ...input, status: 'failed', groups: [
+      { group_key: 'group-u', status: 'completed', items: [{ risk_id: '9007199254740993', result: 'created' }] },
+      { group_key: 'group-v', status: 'failed', items: [{ risk_id: '103', result: 'invalid', reason: 'risk_invalid' }] },
+    ] }))
+    await page.preview()
+    page.confirmed.value = true
+    await page.submit()
+    page.startFailedRepreview()
+    await settle()
+    const { text } = bodyText(props, page)
+    expect(text).toContain('原操作号')
+    expect(text).toContain('已完成')
+    expect(text).toContain('确定失败风险')
+    expect(footer(props, page).some((n: any) => n.props?.['data-testid'] === 'dispatch-repreview-cancel')).toBe(true)
+  })
+
+  it('缺失组仍未知时重预览展示警示，归档条目注明原操作不再由本弹窗续办', async () => {
+    const { api, page, props } = fixture()
+    api.applyDispatch.mockImplementationOnce(async input => ({ ...input, status: 'pending', groups: [
+      { group_key: 'group-v', status: 'failed', items: [{ risk_id: '103', result: 'denied', reason: 'dispatch_forbidden' }] },
+    ] }))
+    await page.preview()
+    page.confirmed.value = true
+    await page.submit()
+    page.startFailedRepreview()
+    await settle()
+    expect(page.priorResults.value[0].status).toBe('pending')
+    const { text } = bodyText(props, page)
+    expect(text).toContain('未完成组')
+    expect(text).toContain('不再对原操作续办')
+  })
+
+  it('重预览守卫：失败风险缺原始版本映射则不请求；结果待核查或在途不可入口', async () => {
+    const { api, page } = fixture()
+    api.applyDispatch.mockImplementationOnce(async input => ({ ...input, status: 'failed', groups: [
+      { group_key: 'group-v', status: 'failed', items: [{ risk_id: '103', result: 'denied', reason: 'dispatch_forbidden' }] },
+    ] }))
+    await page.preview()
+    page.confirmed.value = true
+    await page.submit()
+    page.boundInput.value = { items: [], target_org_id: '9007199254740995', target_type_code: 'synthetic_remediation' }
+    expect(page.startFailedRepreview()).toBe(false)
+    expect(page.error.value).toContain('原始版本')
+    expect(api.planDispatch).toHaveBeenCalledTimes(1)
+
+    // 恢复映射后可入口
+    page.boundInput.value = { items: [{ risk_id: '103', expected_revision: '9' }], target_org_id: '9007199254740995', target_type_code: 'synthetic_remediation' }
+    expect(page.startFailedRepreview()).toBe(true)
+  })
+
+  it('结果待核查（uncertain）时不可重预览，不归档未知原号', async () => {
+    const { api, page } = fixture()
+    api.applyDispatch.mockRejectedValueOnce(httpError(503))
+    await page.preview()
+    page.confirmed.value = true
+    await page.submit()
+    expect(page.uncertain.value).toBe(true)
+    expect(page.failedRepreviewAvailable.value).toBe(false)
+    expect(page.startFailedRepreview()).toBe(false)
+    expect(page.priorResults.value).toHaveLength(0)
+    expect(api.planDispatch).toHaveBeenCalledTimes(1)
+  })
+
+  it('无失败组时不提供重预览；开始下一次清除子集恢复全集预览', async () => {
+    const { api, page } = fixture()
+    api.applyDispatch.mockImplementationOnce(async input => ({ ...input, status: 'completed', groups: [
+      { group_key: 'group-u', status: 'completed', items: [{ risk_id: '9007199254740993', result: 'created' }] },
+    ] }))
+    await page.preview()
+    page.confirmed.value = true
+    await page.submit()
+    expect(page.failedRepreviewAvailable.value).toBe(false)
+    page.startNext()
+    expect(page.attempt.value).toBeNull()
+    expect(page.repreviewInput.value).toBeNull()
+    await page.preview()
+    expect(api.planDispatch).toHaveBeenLastCalledWith({
+      items: [{ risk_id: '9007199254740993', expected_revision: '7' }, { risk_id: '102', expected_revision: '8' }, { risk_id: '103', expected_revision: '9' }],
+      target_org_id: '9007199254740995', target_type_code: 'synthetic_remediation',
+    })
+  })
+
+  it('取消重预览返回全集已选，归档原号与结果保留', async () => {
+    const { api, page, props } = fixture()
+    api.applyDispatch.mockImplementationOnce(async input => ({ ...input, status: 'failed', groups: [
+      { group_key: 'group-v', status: 'failed', items: [{ risk_id: '103', result: 'denied', reason: 'dispatch_forbidden' }] },
+    ] }))
+    await page.preview()
+    page.confirmed.value = true
+    await page.submit()
+    const original = { ...page.attempt.value! }
+    page.startFailedRepreview()
+    await settle()
+    page.cancelFailedRepreview()
+    expect(page.repreviewInput.value).toBeNull()
+    expect(page.plan.value).toBeNull()
+    expect(page.priorResults.value.map(entry => entry.operationId)).toEqual([original.operation_id])
+    await page.preview()
+    expect(api.planDispatch).toHaveBeenLastCalledWith(expect.objectContaining({
+      items: props.items, target_org_id: '9007199254740995', target_type_code: 'synthetic_remediation',
+    }))
+  })
+
+  it('重预览会话关闭重开保留子集原号继续核查，终态后开始下一次回到全集', async () => {
+    const { api, page, props } = fixture()
+    api.applyDispatch.mockImplementationOnce(async input => ({ ...input, status: 'failed', groups: [
+      { group_key: 'group-v', status: 'failed', items: [{ risk_id: '103', result: 'denied', reason: 'dispatch_forbidden' }] },
+    ] }))
+    await page.preview()
+    page.confirmed.value = true
+    await page.submit()
+    const original = { ...page.attempt.value! }
+    page.startFailedRepreview()
+    await settle()
+    page.confirmed.value = true
+    await page.submit()
+    const subsetAttempt = { ...page.attempt.value! }
+    expect(subsetAttempt.operation_id).not.toBe(original.operation_id)
+    props.modelValue = false
+    props.modelValue = true
+    expect(page.attempt.value).toEqual(subsetAttempt)
+    expect(page.repreviewInput.value).not.toBeNull()
+    // 子集提交已成终态（completed）：关闭重开不重投，续办按钮不可用
+    expect(api.applyDispatch.mock.calls.map(c => c[0])).toEqual([original, subsetAttempt])
+    expect(page.finished.value).toBe(true)
+    await page.retry()
+    expect(api.applyDispatch).toHaveBeenCalledTimes(2)
+
+    page.startNext()
+    expect(page.repreviewInput.value).toBeNull()
+    await page.preview()
+    const lastCall = api.planDispatch.mock.calls.at(-1)![0]
+    expect(lastCall.items).toHaveLength(3)
+  })
 })

@@ -180,6 +180,30 @@ describe('风险派单 API', () => {
     expect(result.groups[0]).not.toHaveProperty('ticket')
   })
 
+  it('apply 接受 parent failed 并逐组保留确定失败结果', async () => {
+    respond({
+      operation_id: applyInput.operation_id, plan_id: applyInput.plan_id, status: 'failed',
+      groups: [
+        { group_key: 'synthetic-group', status: 'completed', items: [{ risk_id: '9007199254740993', result: 'created' }] },
+        { group_key: 'synthetic-other-group', status: 'failed', items: [{ risk_id: '9007199254740995', result: 'denied', reason: 'dispatch_forbidden' }] },
+      ],
+    })
+    await expect(applyDispatch(applyInput)).resolves.toEqual({
+      operation_id: applyInput.operation_id, plan_id: applyInput.plan_id, status: 'failed',
+      groups: [
+        { group_key: 'synthetic-group', status: 'completed', items: [{ risk_id: '9007199254740993', result: 'created' }] },
+        { group_key: 'synthetic-other-group', status: 'failed', items: [{ risk_id: '9007199254740995', result: 'denied', reason: 'dispatch_forbidden' }] },
+      ],
+    })
+    expect(adapter).toHaveBeenCalledTimes(1)
+  })
+
+  it('apply 拒绝未知 parent 状态，failed 之外仍不放宽', async () => {
+    respond({ ...applyInput, status: 'success', groups: [] })
+    await expect(applyDispatch(applyInput)).rejects.toThrow('派单结果状态无效')
+    expect(adapter).toHaveBeenCalledTimes(1)
+  })
+
   it.each([
     ['missing operation ID', { operation_id: undefined, plan_id: applyInput.plan_id, status: 'completed', groups: [] }],
     ['missing plan ID', { operation_id: applyInput.operation_id, status: 'completed', groups: [] }],
@@ -224,7 +248,7 @@ describe('风险派单 API', () => {
     expect(config.headers['X-Request-ID']).toMatch(/^req-[0-9a-f]{32}$/)
   })
 
-  it.each(['pending', 'partial', 'completed'])('GET 接受 %s 且将 null groups 归一为空数组', async status => {
+  it.each(['pending', 'partial', 'completed', 'failed'])('GET 接受 %s 且将 null groups 归一为空数组', async status => {
     respond({ operation_id: applyInput.operation_id, plan_id: applyInput.plan_id, status, groups: null })
     await expect(getDispatchOperation(applyInput.operation_id)).resolves.toEqual({
       operation_id: 'original-operation', plan_id: applyInput.plan_id, status, groups: [],

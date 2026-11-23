@@ -61,10 +61,12 @@ export interface DispatchGroupOutcome {
   items: DispatchItemOutcome[]
 }
 
+/** parent 状态：completed=全部组确定完成；failed=全部组确定失败（B2 P1 新增）；
+ * partial=既有成功与确定失败混合；pending=尚有缺失组（缺失组结果未知） */
 export interface DispatchResult {
   operation_id: string
   plan_id: string
-  status: 'pending' | 'partial' | 'completed'
+  status: 'pending' | 'partial' | 'completed' | 'failed'
   groups: DispatchGroupOutcome[]
 }
 
@@ -140,7 +142,7 @@ export async function planDispatch(input: DispatchPlanInput): Promise<DispatchPl
 function normalizeDispatchResult(data: DispatchResultWire, operationId: string): DispatchResult {
   assertResponseStrings(data.operation_id, data.plan_id)
   if (data.operation_id !== operationId) throw new Error('派单响应操作号不一致，请按原操作号核对')
-  if (!['pending', 'partial', 'completed'].includes(data.status)) throw new Error('派单结果状态无效，请按原操作号核对')
+  if (!['pending', 'partial', 'completed', 'failed'].includes(data.status)) throw new Error('派单结果状态无效，请按原操作号核对')
   return {
     ...data,
     groups: normalizeList(data.groups).map(group => {
