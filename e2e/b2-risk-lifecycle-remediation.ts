@@ -114,7 +114,10 @@ async function readTicketCommand(options: {
     operation_id: outcome.operation_id, ticket_id: before.ticket_id,
     expected_ticket_revision: before.ticket_revision, definition_version: before.definition_version, ...input,
   })
-  expect(outcome.items).toEqual([])
+  expect(outcome.items).toEqual(before.items.map(item => ({
+    link_id: item.link_id, risk_id: item.risk_id, link_revision: item.link_revision, risk_revision: item.risk_revision,
+    proposal_version: item.proposal_version, resolution_version: '0', result: 'applied',
+  })))
   expect(BigInt(outcome.ticket_revision)).toBeGreaterThan(BigInt(before.ticket_revision))
   await expect(dialog.getByRole('status')).toContainText(outcome.operation_id)
   await expect(dialog.getByRole('status')).toContainText('已取得本次操作回执')
