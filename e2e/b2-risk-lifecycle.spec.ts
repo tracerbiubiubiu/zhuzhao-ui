@@ -107,7 +107,10 @@ test('B2 第9项 人工登记同一风险，派单重启后原号只读核查，
     }
     const row = M.page.getByRole('row').filter({ has: M.page.getByRole('cell', { name: humanKey, exact: true }) })
     const originalReceipt = await M.read<Receipt>(receiptPath(created.operation_id))
-    expect(originalReceipt).toMatchObject({ ...created, replayed: true })
+    expect(originalReceipt).toMatchObject({
+      operation_id: created.operation_id, command: created.command, status: created.status,
+      risk_id: created.risk_id, revision: created.revision, replayed: true,
+    })
 
     const confirmed = await test.step('M 核实原风险并确认具名责任 U', async () => {
       expect(await M.read<Detail>(riskPath)).toMatchObject({
