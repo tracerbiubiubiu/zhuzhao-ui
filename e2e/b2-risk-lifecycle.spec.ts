@@ -172,7 +172,7 @@ test('B2 第9项 人工登记同一风险，派单重启后原号只读核查，
 
     const readerWrites = observeBusinessWrites(X.page)
     await test.step('X 读取具名风险且无写入口', async () => {
-      expect(await findRisk(X.page, origin, humanKey)).toMatchObject({ total: 1, items: [{ risk: confirmed.risk, owner_user_id: U.userId }] })
+      expect(await findRisk(X.page, origin, sample.title)).toMatchObject({ total: 1, items: [{ risk: confirmed.risk, owner_user_id: U.userId }] })
       const readerRow = X.page.getByRole('row').filter({ has: X.page.getByRole('cell', { name: humanKey, exact: true }) })
       await expect(X.page.getByRole('button', { name: '登记风险', exact: true })).toHaveCount(0)
       await expect(X.page.getByRole('button', { name: '预览派单', exact: true })).toHaveCount(0)
