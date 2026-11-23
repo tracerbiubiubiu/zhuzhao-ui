@@ -20,9 +20,9 @@ import type { RiskPostBody } from './contracts'
 
 export type RemediationState = 'open' | 'pending_verify' | 'rejected' | 'pending_acceptance' | 'resolved'
 /** 回执逐项结果（service 层常量）：待复测确认/已生效/已打回/冲突未生效 */
-export type RemediationItemResult = 'pending_confirmation' | 'applied' | 'rejected' | 'conflict'
+export type RemediationItemResult = 'pending_confirmation' | 'applied' | 'rejected' | 'conflict' | 'reworked'
 export type RemediationDecision = 'approve' | 'reject'
-export type RemediationAction = 'finish' | 'review' | 'accept_request' | 'accept_decision' | 'assign_handler' | 'accept_assignment'
+export type RemediationAction = 'finish' | 'review' | 'accept_request' | 'accept_decision' | 'accept_rework' | 'assign_handler' | 'accept_assignment'
 
 export interface RemediationContextItemDto {
   link_id: string
@@ -37,6 +37,8 @@ export interface RemediationContextItemDto {
   pending_acceptance_id?: string
   pending_acceptance_revision?: string
   pending_acceptance_recoverable?: boolean
+  expired_acceptance_id?: string
+  expired_acceptance_revision?: string
   submissions?: RemediationSubmissionDto[]
 }
 
@@ -147,7 +149,7 @@ export interface RemediationEvidenceSource {
 
 const maxInt64 = '9223372036854775807'
 const REMEDIATION_STATES = ['open', 'pending_verify', 'rejected', 'pending_acceptance', 'resolved'] as const
-const ITEM_RESULTS = ['pending_confirmation', 'applied', 'rejected', 'conflict'] as const
+const ITEM_RESULTS = ['pending_confirmation', 'applied', 'rejected', 'conflict', 'reworked'] as const
 const MEASURES_NOTE_MAX = 16000
 const EVIDENCE_MAX = 50
 const EVIDENCE_REF_MAX = 1000
@@ -282,6 +284,8 @@ function isContextItem(value: unknown): value is RemediationContextItemDto {
     && (value.can_manage_risk === undefined || typeof value.can_manage_risk === 'boolean')
     && optionalDecimal(value.pending_acceptance_id) && optionalDecimal(value.pending_acceptance_revision)
     && (value.pending_acceptance_recoverable === undefined || typeof value.pending_acceptance_recoverable === 'boolean')
+    && ((value.expired_acceptance_id === undefined && value.expired_acceptance_revision === undefined)
+      || (isDecimalId(value.expired_acceptance_id) && isDecimalId(value.expired_acceptance_revision)))
     && (value.submissions === undefined || (Array.isArray(value.submissions) && value.submissions.every(isSubmission)))
     && isBoundedText(value.title, Number.MAX_SAFE_INTEGER)
 }

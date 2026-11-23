@@ -30,6 +30,7 @@ type Page = {
   canAssign: Ref<boolean>; canAcceptAssignment: Ref<boolean>; canRequestAcceptance: Ref<boolean>; canDecideAcceptance: Ref<boolean>; canInspect: Ref<boolean>
   canStartNext: Ref<boolean>
   submitAssign(): Promise<void>; submitAcceptAssignment(): Promise<void>; submitRequestAcceptance(): Promise<void>; submitDecideAcceptance(): Promise<void>
+  submitReworkAcceptance(): Promise<void>
   inspect(): Promise<void>; startNext(): Promise<void>; close(): void
   inspectRejected(record: Page['rejectedAttempts']['value'][number]): Promise<void>
 }
@@ -37,7 +38,7 @@ function fixture() {
   const inspectOperation = vi.fn<(operationId: string) => Promise<commands.RemediationCommandOutcome>>()
   const props = reactive({
     modelValue: true, current: current() as commands.RemediationCommandContext | null,
-    permissions: { canAssign: true, canAcceptAssignment: true, canRequestAcceptance: true, canDecideAcceptance: true },
+    permissions: { canAssign: true, canAcceptAssignment: true, canRequestAcceptance: true, canDecideAcceptance: true, canReworkAcceptance: false },
     assignedTo: '501', currentActorId: '501', inspectOperation, canRead: true,
     refreshContext: undefined as (() => Promise<void>) | undefined, ticketActions: undefined as InstanceAction[] | undefined,
     customDataPatch: undefined as Record<string, unknown> | undefined, comment: undefined as string | undefined,
@@ -48,6 +49,7 @@ function fixture() {
     acceptRemediationAssignmentApi: vi.fn().mockResolvedValue(outcome()),
     requestRemediationAcceptanceApi: vi.fn().mockResolvedValue(outcome({ acceptance_id: '902', acceptance_revision: '1', acceptance_status: 'pending' })),
     decideRemediationAcceptanceApi: vi.fn().mockResolvedValue(outcome({ acceptance_id: '901', acceptance_revision: '4', acceptance_status: 'approved' })),
+    reworkRemediationAcceptanceApi: vi.fn().mockResolvedValue(outcome({ acceptance_id: '901', acceptance_revision: '4', acceptance_status: 'reworked' })),
   }
   let generation = 1
   const { page, lifecycle } = setupPage<Page>(source, {
@@ -77,6 +79,27 @@ const node = (tree: any, id: string) => nodes(tree).find(n => n.props?.['data-te
 const visibleText = (tree: any) => nodes(tree).map(n => typeof n.children === 'string' ? n.children : '').join(' ')
 
 describe('整改命令独立权限与请求', () => {
+  it('按原批准和各对象修订接续到期事项，并继续按原号查询未明结果', async () => {
+    const { page, props, api } = fixture()
+    props.current!.status = 'in_progress'
+    Object.assign(props.current!.items[1]!, { remediation_state: 'resolved', expired_acceptance_id: '901', expired_acceptance_revision: '4' })
+    page.selectedLinkId.value = '302'
+    page.reason.value = '接受已到期，重新整改'
+    await page.submitReworkAcceptance()
+    expect(api.reworkRemediationAcceptanceApi).not.toHaveBeenCalled()
+    props.permissions.canReworkAcceptance = true
+    api.reworkRemediationAcceptanceApi.mockRejectedValueOnce(new Error('传输中断'))
+    await page.submitReworkAcceptance()
+    expect(api.reworkRemediationAcceptanceApi).toHaveBeenCalledExactlyOnceWith({
+      operation_id: key, ticket_id: ticketId, expected_ticket_revision: '41', definition_version: '7',
+      risk_id: '102', expected_risk_revision: '12', link_id: '302', expected_link_revision: '22',
+      acceptance_id: '901', expected_acceptance_revision: '4', reason: '接受已到期，重新整改',
+    })
+    props.inspectOperation.mockResolvedValue(outcome({ acceptance_id: '901', acceptance_revision: '4', acceptance_status: 'reworked' }))
+    await page.inspect()
+    expect(props.inspectOperation).toHaveBeenCalledExactlyOnceWith(key)
+    expect(page.result.value?.acceptance_status).toBe('reworked')
+  })
   it('允许风险责任人重新申请已失效的待接受项', async () => {
     const { page, api, props } = fixture()
     requestDraft(page)

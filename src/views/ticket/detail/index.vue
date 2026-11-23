@@ -172,6 +172,8 @@ const riskCommandPermissions = computed(() => {
       && current.items.some(item => item.is_risk_owner),
     canDecideAcceptance: hasRiskAction('accept_decision') && activeReview
       && current.items.some(item => item.can_manage_risk && !item.is_risk_owner && !!item.pending_acceptance_id),
+    canReworkAcceptance: hasRiskAction('accept_rework') && activeReview
+      && current.items.some(item => item.can_manage_risk && !!item.expired_acceptance_id),
   }
 })
 async function refreshRiskWorkflowContext() {

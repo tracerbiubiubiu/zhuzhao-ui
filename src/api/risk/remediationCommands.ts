@@ -18,6 +18,8 @@ export interface RemediationCommandItem {
   pending_acceptance_id?: string
   pending_acceptance_revision?: string
   pending_acceptance_recoverable?: boolean
+  expired_acceptance_id?: string
+  expired_acceptance_revision?: string
   proposal_version?: string
 }
 
@@ -35,6 +37,7 @@ export interface RemediationCommandPermissions {
   canAcceptAssignment: boolean
   canRequestAcceptance: boolean
   canDecideAcceptance: boolean
+  canReworkAcceptance?: boolean
 }
 
 export interface RemediationCommandCommon {
@@ -67,6 +70,16 @@ export interface DecideRemediationAcceptanceInput extends RemediationCommandComm
   reason: string
 }
 
+export interface ReworkRemediationAcceptanceInput extends RemediationCommandCommon {
+  risk_id: string
+  expected_risk_revision: string
+  link_id: string
+  expected_link_revision: string
+  acceptance_id: string
+  expected_acceptance_revision: string
+  reason: string
+}
+
 export interface RemediationCommandOutcomeItem {
   link_id: string
   risk_id: string
@@ -74,7 +87,7 @@ export interface RemediationCommandOutcomeItem {
   risk_revision: string
   proposal_version: string
   resolution_version: string
-  result: 'pending_confirmation' | 'applied' | 'rejected' | 'conflict'
+  result: 'pending_confirmation' | 'applied' | 'rejected' | 'conflict' | 'reworked'
 }
 
 /** 对齐 handler riskWorkflowOutcome；分派/接单的 items 可以为空。 */
@@ -89,7 +102,7 @@ export interface RemediationCommandOutcome {
   items: RemediationCommandOutcomeItem[]
   acceptance_id?: string
   acceptance_revision?: string
-  acceptance_status?: 'pending' | 'approved' | 'rejected' | 'superseded' | 'expired'
+  acceptance_status?: 'pending' | 'approved' | 'rejected' | 'superseded' | 'expired' | 'reworked'
   terminal_allowed: boolean
 }
 
@@ -183,7 +196,7 @@ function isOutcomeItem(value: unknown): value is RemediationCommandOutcomeItem {
   return isRecord(value) && isDecimal(value.link_id) && isDecimal(value.risk_id)
     && isDecimal(value.link_revision) && isDecimal(value.risk_revision)
     && isDecimal(value.proposal_version, true) && isDecimal(value.resolution_version, true)
-    && typeof value.result === 'string' && ['pending_confirmation', 'applied', 'rejected', 'conflict'].includes(value.result)
+    && typeof value.result === 'string' && ['pending_confirmation', 'applied', 'rejected', 'conflict', 'reworked'].includes(value.result)
 }
 
 /** POST 与挂载方注入的 GET 均须绑定原 K 和原票，不能把异号或错票当成功。 */
@@ -196,7 +209,7 @@ export function validateRemediationCommandOutcome(value: unknown, operationId: s
       .some(key => value[key] !== undefined && !isDecimal(value[key]))
     || (value.status !== undefined && !isText(value.status))
     || (value.acceptance_status !== undefined && (typeof value.acceptance_status !== 'string'
-      || !['pending', 'approved', 'rejected', 'superseded', 'expired'].includes(value.acceptance_status)))) {
+      || !['pending', 'approved', 'rejected', 'superseded', 'expired', 'reworked'].includes(value.acceptance_status)))) {
     throw new Error('整改命令回执格式异常或与原操作号、工单不一致')
   }
   return value as unknown as RemediationCommandOutcome
@@ -261,4 +274,23 @@ export async function decideRemediationAcceptanceApi(input: DecideRemediationAcc
     expected_risk_revision: input.expected_risk_revision, decision: input.decision, reason: input.reason,
   } satisfies RiskPostBody<'/api/v1/risk-items/remediation-accept-decision'>, silent)
   return validateRemediationCommandOutcome(value, body.operation_id, body.ticket_id)
+}
+
+export async function reworkRemediationAcceptanceApi(input: ReworkRemediationAcceptanceInput): Promise<RemediationCommandOutcome> {
+  const fields = ['risk_id', 'expected_risk_revision', 'link_id', 'expected_link_revision', 'acceptance_id', 'expected_acceptance_revision', 'reason']
+  const body = commonWire(input, fields)
+  assertDecimal(input.risk_id, '风险 ID')
+  assertDecimal(input.expected_risk_revision, '预期风险修订')
+  assertDecimal(input.link_id, '资产关联 ID')
+  assertDecimal(input.expected_link_revision, '预期关联修订')
+  assertDecimal(input.acceptance_id, '原批准 ID')
+  assertDecimal(input.expected_acceptance_revision, '预期原批准修订')
+  if (!isText(input.reason)) throw new Error('到期接续理由不能为空')
+  const data: unknown = await request.post('/api/v1/risk-items/remediation-accept-rework', {
+    ...body, risk_id: input.risk_id, expected_risk_revision: input.expected_risk_revision,
+    link_id: input.link_id, expected_link_revision: input.expected_link_revision,
+    acceptance_id: input.acceptance_id, expected_acceptance_revision: input.expected_acceptance_revision,
+    reason: input.reason,
+  }, silent)
+  return validateRemediationCommandOutcome(data, body.operation_id, body.ticket_id)
 }

@@ -5,9 +5,11 @@ import UserPicker from '@/components/UserPicker/index.vue'
 import {
   acceptRemediationAssignmentApi, assignRemediationHandlerApi, decideRemediationAcceptanceApi,
   newRemediationCommandId, requestRemediationAcceptanceApi, validateRemediationCommandOutcome,
+  reworkRemediationAcceptanceApi,
   type AssignRemediationHandlerInput, type DecideRemediationAcceptanceInput,
   type RemediationCommandCommon, type RemediationCommandContext, type RemediationCommandOutcome,
   type RemediationCommandPermissions, type RequestRemediationAcceptanceInput,
+  type ReworkRemediationAcceptanceInput,
 } from '@/api/risk/remediationCommands'
 import { getSessionGeneration } from '@/common/auth/tokenStorage'
 import { apiErrorMessage } from '@/utils/apiError'
@@ -38,8 +40,8 @@ const emit = defineEmits<{
   operation: [value: { operation_id: string; ticket_id: string; kind: CommandKind }]
   result: [value: RemediationCommandOutcome]
 }>()
-type CommandKind = 'assign' | 'accept-assignment' | 'request-acceptance' | 'decide-acceptance'
-type CommandInput = RemediationCommandCommon | AssignRemediationHandlerInput | RequestRemediationAcceptanceInput | DecideRemediationAcceptanceInput
+type CommandKind = 'assign' | 'accept-assignment' | 'request-acceptance' | 'decide-acceptance' | 'rework-acceptance'
+type CommandInput = RemediationCommandCommon | AssignRemediationHandlerInput | RequestRemediationAcceptanceInput | DecideRemediationAcceptanceInput | ReworkRemediationAcceptanceInput
 interface Attempt { kind: CommandKind; input: CommandInput; actorId: string }
 interface RejectedAttempt { attempt: Attempt; message: string; result: RemediationCommandOutcome | null; error: string }
 const assignedToUserId = ref('')
@@ -55,7 +57,8 @@ const busy = ref(false)
 const error = ref('')
 const sessionInvalid = ref(false)
 const receiptReadDenied = ref(false)
-const form = ref<{ command: 'claim' | 'decision'; action: InstanceAction } | null>(null)
+type FormCommand = 'claim' | 'decision' | 'rework'
+const form = ref<{ command: FormCommand; action: InstanceAction } | null>(null)
 const live = ref(true)
 const session = getSessionGeneration()
 let epoch = 0
@@ -119,6 +122,11 @@ const canRequestAcceptance = computed(() => ready.value && props.permissions.can
   && requestTarget.value && reasonValid.value && !!validUntil.value && Number.isFinite(Date.parse(validUntil.value)) && Date.parse(validUntil.value) > Date.now())
 const canDecideAcceptance = computed(() => ready.value && props.permissions.canDecideAcceptance === true
   && decisionTarget.value && reasonValid.value && ['approve', 'reject'].includes(decision.value))
+const canReworkAcceptance = computed(() => ready.value && props.permissions.canReworkAcceptance === true
+  && (props.current?.status === 'pending_verify' || props.current?.status === 'in_progress')
+  && selectedItem.value?.can_manage_risk === true && selectedItem.value.remediation_state === 'resolved'
+  && positiveDecimal(selectedItem.value.expired_acceptance_id)
+  && positiveDecimal(selectedItem.value.expired_acceptance_revision) && reasonValid.value)
 function isCurrentAttempt(original: Attempt) {
   return props.current?.ticket_id === original.input.ticket_id && props.currentActorId === original.actorId
 }
@@ -141,7 +149,7 @@ function contextCoversResult(c: RemediationCommandContext, sent: Attempt, r: Rem
   if (!decimalAtLeast(c.ticket_revision, r.ticket_revision)) return false
   if (c.ticket_revision !== sent.input.expected_ticket_revision) return true
   // A risk acceptance may only advance the selected risk and link.
-  return (sent.kind === 'request-acceptance' || sent.kind === 'decide-acceptance')
+  return (sent.kind === 'request-acceptance' || sent.kind === 'decide-acceptance' || sent.kind === 'rework-acceptance')
     && r.items.length > 0 && r.items.every(item => c.items.some(current => current.link_id === item.link_id
       && decimalAtLeast(current.link_revision, item.link_revision) && decimalAtLeast(current.risk_revision, item.risk_revision)))
 }
@@ -255,7 +263,22 @@ async function finishDecision(input?: TransitionActionInput) {
     expected_risk_revision: item.risk_revision, decision: decision.value as 'approve' | 'reject', reason: reason.value,
   }), decideRemediationAcceptanceApi)
 }
-function requestForm(command: 'claim' | 'decision', to: string): boolean {
+async function submitReworkAcceptance() {
+  if (!checkSession() || !canReworkAcceptance.value) return
+  if (props.current?.status === 'pending_verify' && requestForm('rework', 'in_progress')) return
+  await finishRework()
+}
+async function finishRework(input?: TransitionActionInput) {
+  if (!canReworkAcceptance.value) return
+  const item = selectedItem.value!
+  await send('rework-acceptance', () => ({
+    ...commonInput(input), risk_id: item.risk_id, expected_risk_revision: item.risk_revision,
+    link_id: item.link_id, expected_link_revision: item.link_revision,
+    acceptance_id: item.expired_acceptance_id!, expected_acceptance_revision: item.expired_acceptance_revision!,
+    reason: reason.value,
+  }), reworkRemediationAcceptanceApi)
+}
+function requestForm(command: FormCommand, to: string): boolean {
   if (props.ticketActions === undefined) return false
   const action = props.ticketActions.find(item => item.to === to && item.expectedRevision === props.current?.ticket_revision
     && item.definitionVersion === props.current?.definition_version)
@@ -277,7 +300,8 @@ async function confirmForm(input: TransitionActionInput) {
     return
   }
   if (pending.command === 'claim') await finishClaim(input)
-  else await finishDecision(input)
+  else if (pending.command === 'decision') await finishDecision(input)
+  else await finishRework(input)
 }
 function markReceiptReadDenied(error: unknown) {
   if (!disposed && session === getSessionGeneration()
@@ -346,7 +370,7 @@ async function startNext() {
   }
 }
 function close() { epoch++; emit('update:modelValue', false) }
-const acceptanceStatusText: Record<string, string> = { pending: '待审批', approved: '已批准', rejected: '已拒绝', superseded: '已失效', expired: '已到期' }
+const acceptanceStatusText: Record<string, string> = { pending: '待审批', approved: '已批准', rejected: '已拒绝', superseded: '已失效', expired: '已到期', reworked: '已恢复整改' }
 </script>
 
 <template>
@@ -385,6 +409,10 @@ const acceptanceStatusText: Record<string, string> = { pending: '待审批', app
               <el-radio value="approve">批准</el-radio><el-radio value="reject">拒绝</el-radio>
             </el-radio-group>
             <el-button class="mt-2" data-testid="remediation-command-decision" :disabled="!canDecideAcceptance" @click="submitDecideAcceptance">提交审批</el-button>
+          </template>
+          <template v-if="permissions.canReworkAcceptance && selectedItem?.expired_acceptance_id">
+            <p>原批准 {{ selectedItem.expired_acceptance_id }} 已到期。继续办理会保留原批准与证据。</p>
+            <el-button class="mt-2" data-testid="remediation-command-rework" :disabled="!canReworkAcceptance" @click="submitReworkAcceptance">恢复本项整改</el-button>
           </template>
         </section>
       </div>

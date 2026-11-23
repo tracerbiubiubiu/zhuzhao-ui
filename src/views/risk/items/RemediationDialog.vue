@@ -471,7 +471,7 @@ const stateTagType: Record<string, 'primary' | 'warning' | 'danger' | 'success' 
   open: 'primary', pending_verify: 'warning', rejected: 'danger', pending_acceptance: 'info', resolved: 'success',
 }
 const resultText: Record<string, string> = {
-  pending_confirmation: '已提交待复测', applied: '已生效', rejected: '已打回', conflict: '冲突未生效',
+  pending_confirmation: '已提交待复测', applied: '已生效', rejected: '已打回', conflict: '冲突未生效', reworked: '已恢复整改',
 }
 </script>
 
