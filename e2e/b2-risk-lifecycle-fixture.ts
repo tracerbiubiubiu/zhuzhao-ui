@@ -52,7 +52,7 @@ export async function withLifecycleActors<T>(browser: Browser, fixture: Fixture,
     const account = fixture.accounts[role]
     const storage = role === 'P' ? fixture.storage : undefined
     const context = await browser.newContext({
-      baseURL: origin, serviceWorkers: 'block', viewport: { width: 1440, height: 900 }, locale: 'zh-CN',
+      baseURL: origin, serviceWorkers: 'block', viewport: { width: 1440, height: 900 }, locale: 'zh-CN', timezoneId: 'UTC',
     })
     contexts.push(context)
     context.setDefaultTimeout(10_000)
