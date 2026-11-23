@@ -75,13 +75,14 @@ async function openPlan({ page, origin, ownerId, target }: Options, view: RiskVi
   await page.getByRole('menuitem', { name: '风险列表', exact: true }).click()
   await expect(page).toHaveURL(/#\/risks$/)
   const search = page.getByPlaceholder('标题或编号')
+  const query = view.title.split(' ').at(-1)!
   const [listResponse] = await Promise.all([
     page.waitForResponse(response => {
       const url = new URL(response.url())
       return response.request().method() === 'GET' && url.origin === origin
-        && url.pathname === risksPath && url.searchParams.get('q') === risk.human_key
+        && url.pathname === risksPath && url.searchParams.get('q') === query
     }),
-    search.fill(risk.human_key),
+    search.fill(query),
   ])
   const list = await browserData<{ items: RiskView[] }>(listResponse)
   expect(list.items.filter(item => item.risk.id === risk.id)).toEqual([
