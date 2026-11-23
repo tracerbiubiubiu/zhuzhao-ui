@@ -316,8 +316,8 @@ function verifyCreate(): Promise<void> | undefined {
 // ─── 核实风险（定级/策略/期限；仅 new|assessed 行开放） ───
 const assessVisible = ref(false)
 const assessTarget = ref<ActionTarget | null>(null)
-const assessForm = reactive<{ level: RiskLevel | '', note: string, treatment: RiskTreatment, deadline: Date | null }>({
-  level: '', note: '', treatment: 'mitigate', deadline: null,
+const assessForm = reactive<{ level: RiskLevel | '', note: string, treatment: RiskTreatment, deadline: Date | null, dispatchBasisValidUntil: Date | null }>({
+  level: '', note: '', treatment: 'mitigate', deadline: null, dispatchBasisValidUntil: null,
 })
 
 function resetAssessForm() {
@@ -325,6 +325,7 @@ function resetAssessForm() {
   assessForm.note = ''
   assessForm.treatment = 'mitigate'
   assessForm.deadline = null
+  assessForm.dispatchBasisValidUntil = null
 }
 
 function hydrateAssessForm(input: AssessInput) {
@@ -332,6 +333,7 @@ function hydrateAssessForm(input: AssessInput) {
   assessForm.note = input.assessment_note
   assessForm.treatment = input.treatment
   assessForm.deadline = input.deadline ? new Date(input.deadline) : null
+  assessForm.dispatchBasisValidUntil = input.dispatch_basis_valid_until ? new Date(input.dispatch_basis_valid_until) : null
 }
 
 function openAssess(row: RiskViewDto) {
@@ -361,6 +363,7 @@ function buildAssessInput(): AssessInput | null {
     assessment_note: assessForm.note.trim(),
     treatment: assessForm.treatment,
     ...(assessForm.deadline && { deadline: assessForm.deadline.toISOString() }),
+    ...(assessForm.dispatchBasisValidUntil && { dispatch_basis_valid_until: assessForm.dispatchBasisValidUntil.toISOString() }),
   }
 }
 
@@ -707,14 +710,14 @@ onScopeDispose(clearReads)
             :disabled="createPending || createSession?.phase === 'unknown'" @blur="touched.owner_user_id = true"
           />
         </el-form-item>
-        <el-form-item label="发现键" :error="touched.finding_key ? registration.errors.finding_key : undefined">
+        <el-form-item label="漏洞标识" :error="touched.finding_key ? registration.errors.finding_key : undefined">
           <el-input
             v-model="draft.finding_key" data-testid="registration-finding-key" placeholder="与资产引用成对填写"
             :disabled="createPending || createSession?.phase === 'unknown'"
             @blur="touched.finding_key = touched.asset_ref = true"
           />
         </el-form-item>
-        <el-form-item label="资产 provider" :error="touched.asset_ref ? registration.errors.asset_ref : undefined">
+        <el-form-item label="资产来源" :error="touched.asset_ref ? registration.errors.asset_ref : undefined">
           <el-input
             v-model="draft.asset_ref_provider" data-testid="registration-asset-provider" placeholder="资产引用来源标识"
             :disabled="createPending || createSession?.phase === 'unknown'"
@@ -788,6 +791,10 @@ onScopeDispose(clearReads)
             v-model="assessForm.note" type="textarea" :rows="3"
             :disabled="assessPending || assessSession?.phase === 'unknown'"
           />
+        </el-form-item>
+        <el-form-item label="派单依据有效期">
+          <el-date-picker v-model="assessForm.dispatchBasisValidUntil" type="datetime" placeholder="可选"
+            :disabled="assessPending || assessSession?.phase === 'unknown'" class="!w-full" />
         </el-form-item>
       </el-form>
       <template #footer>

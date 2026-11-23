@@ -366,8 +366,8 @@ it('登记表单呈现发现键与资产引用成对输入并绑定草稿', () =
   const dialogAfter = harness.dialogByTitle('登记风险')!
   const items = findNodes(dialogAfter, node => node.type === components.ElFormItem)
   const labeled = items.map(node => nodeText((node.props as Record<string, unknown>)?.label))
-  expect(labeled).toContain('发现键')
-  expect(labeled).toContain('资产 provider')
+  expect(labeled).toContain('漏洞标识')
+  expect(labeled).toContain('资产来源')
   expect(labeled).toContain('资产外部 ID')
 })
 

@@ -156,6 +156,7 @@ export interface RiskAssessCommand {
   treatment: RiskTreatment
   /** 可选；首次写入即 init_deadline，缺省按级别策略带出 */
   deadline?: string
+  dispatch_basis_valid_until?: string
 }
 
 export interface RiskAssignCommand {
