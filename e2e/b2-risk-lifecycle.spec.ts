@@ -6,7 +6,7 @@ import { verifyLifecycleRestartDirectory } from './b2-risk-dispatch-restart'
 import { dispatchB2LifecycleRisk } from './b2-risk-lifecycle-dispatch'
 import { loadLifecycleFixture, withLifecycleActors } from './b2-risk-lifecycle-fixture'
 import { runRiskLifecycleRemediation } from './b2-risk-lifecycle-remediation'
-import { isOperationId, observeBusinessWrites } from './b2-risk-remediation-fixture'
+import { observeBusinessWrites } from './b2-risk-remediation-fixture'
 
 const risksPath = '/api/v1/risk-items'
 const receiptPath = (id: string) => `${risksPath}/operations/${id}`
@@ -55,7 +55,7 @@ async function mutateRisk(dialog: Locator, origin: string, button: string, comma
   ])
   const body = response.request().postDataJSON() as { operation_id: string }
   expect(body).toMatchObject(input)
-  expect(isOperationId(body.operation_id), `${command} 须由页面产生操作号`).toBe(true)
+  expect(body.operation_id, `${command} 须由页面产生风险操作号`).toMatch(/^[0-9a-f]{32}$/)
   const result = await browserData<Mutation>(response)
   const { risk, receipt_ref: receipt } = result
   expect(risk.id).toMatch(/^[1-9]\d*$/)
