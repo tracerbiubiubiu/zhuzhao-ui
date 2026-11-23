@@ -620,7 +620,7 @@ function outcomeResultText(row: RemediationOutcomeItemDto): string {
             :context="{ purpose: 'assign', ticketId }" :active="handoffFormActive" data-testid="remediation-handoff-picker" />
           <label for="remediation-handoff-reason">交接理由</label>
           <el-input id="remediation-handoff-reason" v-model="handoffReason" type="textarea" :rows="2" maxlength="2000" show-word-limit
-            placeholder="交接理由（必填，服务端按 UTF-8 字节 ≤2000 校验）" data-testid="remediation-handoff-reason" name="handoff-reason" />
+            placeholder="填写交接理由" data-testid="remediation-handoff-reason" name="handoff-reason" />
           <p v-if="handoffReason.trim() && !handoffReasonValid" class="remediation-meta">交接理由需非空且不超过 2000 字节（约 666 个中文字符），当前不可提交。</p>
         </section>
       </template>

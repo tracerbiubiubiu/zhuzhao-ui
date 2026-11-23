@@ -180,10 +180,10 @@ function deriveMenuRows(): MenuRow[] {
       })
     }
 
-    // 形态 C（单行 INSERT…SELECT，parent 由 FROM menus <alias> WHERE <alias>.code = 'x' 给出）：
+    // 形态 C（单行 INSERT…SELECT，FROM menus 可以省略别名）：
     // 按列名映射 SELECT 列表——页面行与按钮行两用（000048 system_setting 是 menu_type=2 页面且别名 m，
     // 原实现只认别名 p 且一律记为按钮，该页三段未进期望名单）
-    const formC = /INSERT INTO menus\s*\(([^)]+)\)\s*SELECT\s+([^;]*?)\s+FROM menus (\w+) WHERE \3\.code = '([^']+)'[^;]*;/g
+    const formC = /INSERT INTO menus\s*\(([^)]+)\)\s*SELECT\s+([^;]*?)\s+FROM menus(?: (\w+))? WHERE (?:\3\.)?code = '([^']+)'[^;]*;/g
     for (const m of sql.matchAll(formC)) {
       const cols = m[1].split(',').map((c) => c.trim())
       const cells = splitTopLevel(m[2])
