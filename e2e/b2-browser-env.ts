@@ -3,12 +3,17 @@ import { fileURLToPath } from 'node:url'
 import type { BrowserContext, Page, TestInfo } from '@playwright/test'
 import { uiLogin } from './ui'
 
+const item9Spec = 'b2-risk-lifecycle.spec.ts'
+
 export const b2BrowserSpecCounts = {
   'b2-risk-registration.spec.ts': 2,
   'b2-risk-dispatch.spec.ts': 3,
   'b2-risk-remediation.spec.ts': 3,
+  [item9Spec]: 1,
 }
 
+export const item9Only = process.env.B2_BROWSER_ITEM9_ONLY === '1'
+export const selectedB2BrowserSpecCounts = item9Only ? { [item9Spec]: 1 } : b2BrowserSpecCounts
 export const b2BrowserSetup = fileURLToPath(new URL('./b2-risk-dispatch-restart.ts', import.meta.url))
 
 const sharedDevPorts = new Set(['4000', '33333', '18080', '18081'])

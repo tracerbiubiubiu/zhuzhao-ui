@@ -3,6 +3,7 @@ import { access, readdir, readFile, realpath, rename, stat, writeFile } from 'no
 import { isAbsolute, join, relative, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { expect } from '@playwright/test'
+import { item9Only, requiredB2Env } from './b2-browser-env'
 
 type Checkpoint = {
   operationId: string
@@ -34,7 +35,9 @@ type Restarted = {
   before: Snapshot
 }
 
-export async function verifyRestartDirectory(dir = process.env.B2_RISK_DISPATCH_RESTART_DIR): Promise<string> {
+export async function verifyRestartDirectory(
+  dir = process.env.B2_RISK_DISPATCH_RESTART_DIR, key = 'B2_RISK_DISPATCH_RESTART_DIR',
+): Promise<string> {
   try {
     if (!dir || !isAbsolute(dir)) throw new Error('relative')
     const path = await realpath(dir)
@@ -46,19 +49,27 @@ export async function verifyRestartDirectory(dir = process.env.B2_RISK_DISPATCH_
     if ((await readdir(path)).length !== 0) throw new Error('not empty')
     return path
   } catch {
-    throw new Error('B2_RISK_DISPATCH_RESTART_DIR 需为仓库外、本轮执行用户独占且可读写的空目录')
+    throw new Error(`${key} 需为仓库外、本轮执行用户独占且可读写的空目录`)
   }
 }
 
+export function verifyLifecycleRestartDirectory(): Promise<string> {
+  const key = 'B2_RISK_LIFECYCLE_RESTART_DIR'
+  return verifyRestartDirectory(requiredB2Env(key), key)
+}
+
 // Playwright loads the config again in each worker; emptiness only applies
-// before the run and before the restart case creates its first handoff marker.
+// before the run and before each restart case creates its first handoff marker.
 export default async function verifyB2RestartFixture(): Promise<void> {
-  await verifyRestartDirectory()
+  const lifecycle = await verifyLifecycleRestartDirectory()
+  if (!item9Only && lifecycle === await verifyRestartDirectory()) {
+    throw new Error('第 7 项与第 9 项须使用不同的重启交接目录')
+  }
 }
 
 /** 独占运行器在 committed 事件后、停 Core 前独立读取 PG；保留同一数据库和制品。
  * 真正完成停机、启动、就绪检查后写 restarted。原页面 GET 后再按同一边界读取 PG，写 readback。
- * 快照覆盖这组三风险/票和原操作的全部命中项。riskHistory 取派单事件，ticketHistory 取首次建单及分派动作。
+ * 快照覆盖本次派单涉及的风险、工单和原操作的全部命中项。riskHistory 取派单事件，ticketHistory 取首次建单及分派动作。
  * 意图 key 是候选的稳定业务去重键。数组按稳定标识排序，错误与凭据留运行器本地。 */
 async function publish(dir: string, event: string, operationId: string, data: object) {
   const file = join(dir, `${event}.${operationId}.json`)
@@ -90,22 +101,23 @@ function distinctIds(ids: string[], count: number) {
   for (const id of ids) expect(id).toMatch(/\S/)
 }
 
-function verifyCommittedSnapshot(snapshot: Snapshot, checkpoint: Checkpoint) {
+function verifyCommittedSnapshot(snapshot: Snapshot, checkpoint: Checkpoint, coverage: { groups: number; risks: number }) {
   const { groups, operationId, actorId } = checkpoint
-  expect(groups).toHaveLength(2)
+  expect(groups).toHaveLength(coverage.groups)
+  distinctIds(groups.flatMap(group => group.riskIds), coverage.risks)
   expect(snapshot.parentOperationIds).toEqual([operationId])
   expect(snapshot.ticketIds.slice().sort()).toEqual(groups.map(group => group.ticketId).sort())
-  expect(snapshot.groupReceipts).toHaveLength(2)
+  expect(snapshot.groupReceipts).toHaveLength(coverage.groups)
   expect(snapshot.groupReceipts).toEqual(expect.arrayContaining(groups.map(({ riskIds: _riskIds, ...receipt }) => receipt)))
-  distinctIds(snapshot.activeLinks.map(link => link.id), 3)
+  distinctIds(snapshot.activeLinks.map(link => link.id), coverage.risks)
   expect(snapshot.activeLinks).toEqual(expect.arrayContaining(groups.flatMap(group => group.riskIds.map(riskId =>
     expect.objectContaining({ riskId, ticketId: group.ticketId, ownerId: group.ownerId }),
   ))))
-  distinctIds(snapshot.riskHistory.map(event => event.id), 3)
+  distinctIds(snapshot.riskHistory.map(event => event.id), coverage.risks)
   expect(snapshot.riskHistory).toEqual(expect.arrayContaining(groups.flatMap(group => group.riskIds.map(riskId =>
     expect.objectContaining({ riskId, operationId }),
   ))))
-  distinctIds(snapshot.ticketHistory.map(event => event.id), 4)
+  distinctIds(snapshot.ticketHistory.map(event => event.id), 2 * coverage.groups)
   expect(snapshot.ticketHistory).toEqual(expect.arrayContaining(groups.flatMap(({ ticketId }) => [
     expect.objectContaining({ ticketId, action: 'created', actorId }),
     expect.objectContaining({ ticketId, action: 'assigned', actorId }),
@@ -114,7 +126,7 @@ function verifyCommittedSnapshot(snapshot: Snapshot, checkpoint: Checkpoint) {
   distinctIds(snapshot.requiredIntents.map(intent => intent.key), snapshot.requiredIntents.length)
 }
 
-export async function confirmDispatchRestart(dir: string, checkpoint: Checkpoint) {
+export async function confirmDispatchRestart(dir: string, checkpoint: Checkpoint, coverage = { groups: 2, risks: 3 }) {
   const { operationId, planId } = checkpoint
   await publish(dir, 'committed', operationId, checkpoint)
   const restarted = await readEvent<Restarted>(dir, 'restarted', operationId)
@@ -123,7 +135,7 @@ export async function confirmDispatchRestart(dir: string, checkpoint: Checkpoint
   expect(restarted.beforeInstance).toMatch(/\S/)
   expect(restarted.afterInstance).toMatch(/\S/)
   expect(restarted.afterInstance).not.toBe(restarted.beforeInstance)
-  verifyCommittedSnapshot(restarted.before, checkpoint)
+  verifyCommittedSnapshot(restarted.before, checkpoint, coverage)
   return restarted
 }
 
