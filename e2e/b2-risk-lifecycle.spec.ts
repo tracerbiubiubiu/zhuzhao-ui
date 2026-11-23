@@ -177,11 +177,19 @@ test('B2 第9项 人工登记同一风险，派单重启后原号只读核查，
       expect(await browserData<Detail>(response)).toMatchObject({ view: { ...fields, risk: confirmed.risk, owner_user_id: U.userId } })
       await expect(X.page.getByRole('dialog', { name: '风险详情', exact: true })
         .getByText(`${sample.asset_ref.provider} / ${sample.asset_ref.external_id}`, { exact: true })).toBeVisible()
+      const denied = await X.client(`${risksPath}/dispatch-plan`, {
+        method: 'POST',
+        body: { items: [{ risk_id: riskId, expected_revision: confirmed.risk.revision }],
+          target_org_id: target.org_id, target_type_code: target.type_code },
+      })
+      expect(denied.status).toBe(403)
+      expect((await M.read<Detail>(riskPath)).view.risk).toEqual(confirmed.risk)
     })
 
     const dispatch = await test.step('M 派原风险，Core 重启后原页面只读核查派单原号', () => dispatchB2LifecycleRisk({
       page: M.page, origin, actorId: M.userId, ownerId: U.userId, riskId, target, restartDir, read: M.read,
     }))
+    expect(dispatch.riskRefs).toEqual([{ id: riskId, ref: humanKey }])
     const final = await runRiskLifecycleRemediation({ dispatcher: M, handler: P, owner: U, ticketId: dispatch.ticket.id,
       riskId, definitionVersion: target.definition_version })
     await test.step('回读原风险、原票关单与只读访问的最终事实', async () => {
@@ -194,6 +202,8 @@ test('B2 第9项 人工登记同一风险，派单重启后原号只读核查，
         description: sample.description })
       expect(await X.read<Detail>(riskPath)).toMatchObject({ view: { ...fields, risk: detail.view.risk, status: 'closed' } })
       expect(await M.read<Receipt>(receiptPath(created.operation_id))).toEqual(originalReceipt)
+      expect(await M.read(dispatch.operationPath)).toEqual(dispatch.result)
+      expect(await M.read(`/api/v1/tickets/${dispatch.ticket.id}`)).toMatchObject({ human_key: dispatch.ticket.ref })
       expect(readerWrites).toHaveLength(0)
     })
   })

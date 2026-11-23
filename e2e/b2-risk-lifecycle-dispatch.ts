@@ -160,7 +160,7 @@ async function readCommitted(
 }
 
 /** 从正常入口派发刚登记的风险，完成同窗口原号查回与独立 PG 核对。 */
-export async function dispatchB2LifecycleRisk(options: Options): Promise<{ ticket: TicketRef; operationId: string; linkId: string }> {
+export async function dispatchB2LifecycleRisk(options: Options) {
   const { page, origin, actorId, ownerId, riskId, restartDir } = options
   expect(origin).toBe(loadB2Endpoints().ui)
   expect(ownerId).not.toBe(actorId)
@@ -243,6 +243,7 @@ export async function dispatchB2LifecycleRisk(options: Options): Promise<{ ticke
       }],
     }, { groups: 1, risks: 1 })
     const operationPath = `${operationsPath}${encodeURIComponent(operationId)}`
+    expect(restarted.before.ticketRefs).toEqual([{ id: group.ticket.id, ref: group.ticket.ref }])
     const lookups = await observeB2RiskRequests(page, { method: 'GET', url: `${origin}${operationPath}` }, async () => {
       await dialog.getByTestId('dispatch-inspect').click()
       await expect(dialog.getByRole('status')).toContainText('只读核查成功，未续建')
@@ -268,7 +269,8 @@ export async function dispatchB2LifecycleRisk(options: Options): Promise<{ ticke
     expect(requests.map(request => [request.method(), new URL(request.url()).pathname])).toEqual([
       ['POST', planPath], ['POST', applyPath], ['GET', operationPath],
     ])
-    return { ticket: group.ticket, operationId, linkId: restarted.before.activeLinks[0]!.id }
+    return { ticket: group.ticket, operationId, operationPath, result, linkId: restarted.before.activeLinks[0]!.id,
+      riskRefs: restarted.before.riskRefs }
   } finally {
     page.off('request', observe)
   }

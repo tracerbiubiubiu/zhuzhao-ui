@@ -19,6 +19,8 @@ type Snapshot = {
   parentOperationIds: string[]
   groupReceipts: { groupKey: string; groupOperationId: string; ticketId: string; ownerId: string; ownerOrgId: string }[]
   ticketIds: string[]
+  ticketRefs?: { id: string; ref: string }[]
+  riskRefs?: { id: string; ref: string }[]
   activeLinks: { id: string; riskId: string; ticketId: string; ownerId: string }[]
   riskHistory: { id: string; riskId: string; operationId: string }[]
   ticketHistory: { id: string; ticketId: string; action: 'created' | 'assigned'; actorId: string }[]
@@ -61,9 +63,13 @@ export function verifyLifecycleRestartDirectory(): Promise<string> {
 // Playwright loads the config again in each worker; emptiness only applies
 // before the run and before each restart case creates its first handoff marker.
 export default async function verifyB2RestartFixture(): Promise<void> {
-  const lifecycle = await verifyLifecycleRestartDirectory()
-  if (!item9Only && lifecycle === await verifyRestartDirectory()) {
-    throw new Error('第 7 项与第 9 项须使用不同的重启交接目录')
+  if (item9Only) {
+    await verifyLifecycleRestartDirectory()
+    if (!/^sha256:[a-f0-9]{64}$/.test(requiredB2Env('B2_EXPECTED_CORE_DIGEST'))) {
+      throw new Error('第 9 项需要固定的 Core 镜像 ID')
+    }
+  } else {
+    await verifyRestartDirectory()
   }
 }
 
@@ -124,6 +130,21 @@ function verifyCommittedSnapshot(snapshot: Snapshot, checkpoint: Checkpoint, cov
   ])))
   distinctIds(snapshot.requiredIntents.map(intent => intent.id), snapshot.requiredIntents.length)
   distinctIds(snapshot.requiredIntents.map(intent => intent.key), snapshot.requiredIntents.length)
+  if (item9Only) {
+    const schedules = snapshot.requiredIntents.filter(intent => intent.id.startsWith('assignment:'))
+    expect(schedules).toHaveLength(coverage.groups)
+    for (const group of groups) {
+      expect(schedules).toContainEqual(expect.objectContaining({
+        key: expect.stringMatching(new RegExp('^' + group.ticketId + ':1:')),
+      }))
+    }
+    expect(snapshot.ticketRefs).toEqual(groups.map(group => ({
+      id: group.ticketId, ref: expect.stringMatching(/\S/),
+    })))
+    expect(snapshot.riskRefs).toEqual(groups.flatMap(group => group.riskIds.map(id => ({
+      id, ref: expect.stringMatching(/\S/),
+    }))))
+  }
 }
 
 export async function confirmDispatchRestart(dir: string, checkpoint: Checkpoint, coverage = { groups: 2, risks: 3 }) {
@@ -132,6 +153,7 @@ export async function confirmDispatchRestart(dir: string, checkpoint: Checkpoint
   const restarted = await readEvent<Restarted>(dir, 'restarted', operationId)
   expect(restarted).toMatchObject({ operationId, planId, ready: true })
   expect(restarted.coreArtifact).toMatch(/\S/)
+  if (item9Only) expect(restarted.coreArtifact).toBe(requiredB2Env('B2_EXPECTED_CORE_DIGEST'))
   expect(restarted.beforeInstance).toMatch(/\S/)
   expect(restarted.afterInstance).toMatch(/\S/)
   expect(restarted.afterInstance).not.toBe(restarted.beforeInstance)

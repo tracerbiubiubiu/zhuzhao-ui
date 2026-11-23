@@ -9,13 +9,14 @@ const listOnly = process.argv.includes('--list')
 let baseURL: string | undefined
 if (!listOnly || process.env.B2_BROWSER_PREFLIGHT === '1') {
   baseURL = loadB2Endpoints().ui
-  if (!item9Only) {
+  if (item9Only) {
+    loadLifecycleFixture()
+  } else {
     b2Account('B2_RISK_REGISTRATION_ADMIN', { allowSeed: true })
     dispatchAccount()
     loadRemediationFixture()
     loadDispatchFixture()
   }
-  loadLifecycleFixture()
   if (listOnly) await verifyB2RestartFixture()
 }
 

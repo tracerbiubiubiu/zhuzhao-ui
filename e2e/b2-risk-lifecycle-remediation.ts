@@ -156,6 +156,14 @@ async function uploadSyntheticEvidence(handler: LifecycleActor, ticketId: string
   expect(attachments).toEqual([expect.objectContaining({
     file_name: fileName, object_key: pre.object_key, evidence_version: expect.stringMatching(/\S/),
   })])
+  const downloadPath = '/api/v1/files/' + pre.object_key.split('/').map(encodeURIComponent).join('/')
+  const download = await page.request.get(downloadPath, { maxRedirects: 0 })
+  try {
+    expect(download.status()).toBe(200)
+    expect(await download.body()).toEqual(buffer)
+  } finally {
+    await download.dispose()
+  }
   return { fileName, evidence: { kind: 'file', ref: pre.object_key, version: attachments[0]!.evidence_version! } }
 }
 
