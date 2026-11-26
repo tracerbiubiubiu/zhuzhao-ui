@@ -595,6 +595,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/extensions/reference-assets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Query the reference asset directory */
+        get: operations["referenceAssetListV1"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/files/{key}": {
         parameters: {
             query?: never;
@@ -7379,6 +7396,23 @@ export interface components {
             ref?: string;
             version?: string;
         };
+        "github_com_tracerbiubiubiu_zhuzhao_pkg_referencequery.Failure": {
+            reason?: string;
+            retry_after_ms?: number;
+        };
+        "github_com_tracerbiubiubiu_zhuzhao_pkg_referencequery.QueryPage": {
+            complete?: boolean;
+            fetched_at?: string;
+            items?: {
+                [key: string]: unknown;
+            }[];
+            mapping_version?: string;
+            next_cursor?: string;
+            observed_at?: string;
+            source_id?: string;
+            source_revision?: string;
+            warnings?: string[];
+        };
         "internal_handler.DeleteAttachmentInput": {
             object_key: string;
             /** @example 0 */
@@ -7621,4 +7655,81 @@ export interface components {
     pathItems: never;
 }
 export type $defs = Record<string, never>;
-export type operations = Record<string, never>;
+export interface operations {
+    referenceAssetListV1: {
+        parameters: {
+            query?: {
+                /** @description Organization filter */
+                owner_org_refs?: string[];
+                /** @description Device status filter */
+                status?: string[];
+                /** @description Fields to return */
+                requested_fields?: string[];
+                /** @description Page size (1 to 50) */
+                limit?: number;
+                /** @description Cursor for the same query and session */
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["github_com_tracerbiubiubiu_zhuzhao_pkg_referencequery.QueryPage"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["github_com_tracerbiubiubiu_zhuzhao_pkg_referencequery.Failure"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["github_com_tracerbiubiubiu_zhuzhao_pkg_referencequery.Failure"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["github_com_tracerbiubiubiu_zhuzhao_pkg_referencequery.Failure"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["github_com_tracerbiubiubiu_zhuzhao_pkg_referencequery.Failure"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["github_com_tracerbiubiubiu_zhuzhao_pkg_referencequery.Failure"];
+                };
+            };
+        };
+    };
+}
