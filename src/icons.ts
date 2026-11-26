@@ -6,11 +6,13 @@ import clipboardCheckOutline from '@iconify-icons/mdi/clipboard-check-outline'
 import bookAlphabet from '@iconify-icons/mdi/book-alphabet'
 import account from '@iconify-icons/mdi/account'
 import accountMultiple from '@iconify-icons/mdi/account-multiple'
+import alertOutline from '@iconify-icons/mdi/alert-outline'
 import callSplit from '@iconify-icons/mdi/call-split'
 import cart from '@iconify-icons/mdi/cart'
 import check from '@iconify-icons/mdi/check'
 import chevronDoubleLeft from '@iconify-icons/mdi/chevron-double-left'
 import chevronDoubleRight from '@iconify-icons/mdi/chevron-double-right'
+import clipboardAlertOutline from '@iconify-icons/mdi/clipboard-alert-outline'
 import clipboardList from '@iconify-icons/mdi/clipboard-list'
 import close from '@iconify-icons/mdi/close'
 import cog from '@iconify-icons/mdi/cog'
@@ -28,6 +30,7 @@ import helpCircle from '@iconify-icons/mdi/help-circle'
 import helpCircleOutline from '@iconify-icons/mdi/help-circle-outline'
 import home from '@iconify-icons/mdi/home'
 import keyOutline from '@iconify-icons/mdi/key-outline'
+import magnifyScan from '@iconify-icons/mdi/magnify-scan'
 import menu from '@iconify-icons/mdi/menu'
 import menuOpen from '@iconify-icons/mdi/menu-open'
 import playlistCheck from '@iconify-icons/mdi/playlist-check'
@@ -57,11 +60,13 @@ export const icons = {
   'mdi:book-alphabet': bookAlphabet,
   'mdi:account': account,
   'mdi:account-multiple': accountMultiple,
+  'mdi:alert-outline': alertOutline,
   'mdi:call-split': callSplit,
   'mdi:cart': cart,
   'mdi:check': check,
   'mdi:chevron-double-left': chevronDoubleLeft,
   'mdi:chevron-double-right': chevronDoubleRight,
+  'mdi:clipboard-alert-outline': clipboardAlertOutline,
   'mdi:clipboard-list': clipboardList,
   'mdi:close': close,
   'mdi:cog': cog,
@@ -79,6 +84,7 @@ export const icons = {
   'mdi:help-circle-outline': helpCircleOutline,
   'mdi:home': home,
   'mdi:key-outline': keyOutline,
+  'mdi:magnify-scan': magnifyScan,
   'mdi:menu': menu,
   'mdi:menu-open': menuOpen,
   'mdi:message-text': messageText,
@@ -132,7 +138,10 @@ export const MENU_ICON_MAP: Readonly<Record<string, string>> = {
   'audit-log': 'mdi:file-document-outline',
   // phase5：000067 情报查询（建行时漏登记——侧栏曾静默空白）；
   // 000072 消息中心 icon 'message' 随 000078 删行退役（消息中心改常量路由+铃铛入口，不再有菜单行）
-  intel: 'mdi:shield-account',
+  intel: 'mdi:magnify-scan',
+  // 000089 风险域
+  risk: 'mdi:alert-outline',
+  'risk-list': 'mdi:clipboard-alert-outline',
 }
 
 const warnedMenuIcons = new Set<string>()

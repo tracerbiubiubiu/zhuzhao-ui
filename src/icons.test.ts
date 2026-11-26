@@ -56,7 +56,7 @@ describe('视图内直写图标名', () => {
   })
 })
 
-/** 主仓菜单种子 icon 裸名全集（000002/000010/000018/000022/000024/000025/000034/000067/000073——新迁移加菜单须同步；
+/** 主仓菜单种子 icon 裸名全集（000002/000010/000018/000022/000024/000025/000034/000067/000073/000089——新迁移加菜单须同步；
  *  2026-10-25 补 intel：000067/000072 建行时两处漏登记，侧栏图标静默空白两段无人察觉；000072 的 message 随 000078 删行退役——
  *  本清单与 MENU_ICON_MAP 均手工维护，派生化挂账 G-24） */
 const SEED_ICON_NAMES = [
@@ -65,7 +65,7 @@ const SEED_ICON_NAMES = [
   'task', 'task-list',
   'al', 'al-data', 'al-types',
   'audit-log', 'dict', 'notification',
-  'intel',
+  'intel', 'risk', 'risk-list',
 ]
 
 describe('菜单图标映射表', () => {
@@ -81,6 +81,11 @@ describe('菜单图标映射表', () => {
       const registered = icons as unknown as Record<string, unknown>
       expect(registered[target], `映射目标 "${target}" 未注册`).toBeDefined()
     }
+  })
+
+  it('情报查询与角色管理、风险目录与列表各有可区分的图标', () => {
+    expect(resolveMenuIcon('intel')).not.toBe(resolveMenuIcon('role'))
+    expect(resolveMenuIcon('risk')).not.toBe(resolveMenuIcon('risk-list'))
   })
 
   it('未知 icon 裸名走 warn-once 返回原值（不阻断渲染链）', () => {
