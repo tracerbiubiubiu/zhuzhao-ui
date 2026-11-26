@@ -1480,6 +1480,49 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/operations/receipt": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 按原操作号或幂等键核查两条 IAM 改权命令的本地提交结果 */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description 原操作号，与 idempotency_key 二选一 */
+                    operation_id?: string;
+                    /** @description 原幂等键 */
+                    idempotency_key?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["response.Response"] & {
+                            data?: components["schemas"]["github_com_tracerbiubiubiu_zhuzhao_internal_model.IAMReceipt"];
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/orgs/members/list": {
         parameters: {
             query?: never;
@@ -2991,7 +3034,12 @@ export interface paths {
         post: {
             parameters: {
                 query?: never;
-                header?: never;
+                header?: {
+                    /** @description 改权原键，重试必须保持原输入 */
+                    "Idempotency-Key"?: string;
+                    /** @description 原操作号，可替代 Idempotency-Key */
+                    "X-Operation-ID"?: string;
+                };
                 path?: never;
                 cookie?: never;
             };
@@ -3005,6 +3053,8 @@ export interface paths {
                 /** @description OK */
                 200: {
                     headers: {
+                        /** @description 原操作号 */
+                        "X-Operation-ID"?: string;
                         [name: string]: unknown;
                     };
                     content: {
@@ -5219,7 +5269,9 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": components["schemas"]["response.Response"];
+                        "application/json": components["schemas"]["response.Response"] & {
+                            data?: components["schemas"]["github_com_tracerbiubiubiu_zhuzhao_internal_model.Ticket"];
+                        };
                     };
                 };
             };
@@ -5924,7 +5976,12 @@ export interface paths {
         post: {
             parameters: {
                 query?: never;
-                header?: never;
+                header?: {
+                    /** @description 改权原键，重试必须保持原输入 */
+                    "Idempotency-Key"?: string;
+                    /** @description 原操作号，可替代 Idempotency-Key */
+                    "X-Operation-ID"?: string;
+                };
                 path?: never;
                 cookie?: never;
             };
@@ -5938,6 +5995,8 @@ export interface paths {
                 /** @description OK */
                 200: {
                     headers: {
+                        /** @description 原操作号 */
+                        "X-Operation-ID"?: string;
                         [name: string]: unknown;
                     };
                     content: {
@@ -6514,6 +6573,15 @@ export interface components {
             source_severity?: components["schemas"]["github_com_tracerbiubiubiu_zhuzhao_internal_model.RiskSourceSeverity"];
             valid_until?: string;
         };
+        "github_com_tracerbiubiubiu_zhuzhao_internal_model.IAMReceipt": {
+            changed?: boolean;
+            command?: string;
+            local_policy_projection?: string;
+            operation_id?: string;
+            status?: string;
+            /** @example 0 */
+            target_id?: string;
+        };
         "github_com_tracerbiubiubiu_zhuzhao_internal_model.LoginRequest": {
             captcha?: string;
             /**
@@ -6866,6 +6934,60 @@ export interface components {
             /** @description kv 行当前版本（回传 expected_version 用） */
             version?: number;
         };
+        "github_com_tracerbiubiubiu_zhuzhao_internal_model.Ticket": {
+            /** @example 0 */
+            assigned_to?: string;
+            assignee_name?: string;
+            assignee_no?: string;
+            created_at?: string;
+            /** @example 0 */
+            created_by?: string;
+            /**
+             * @description 姓名回填（W4 随批件，03 S9：列表/详情处理人列 N+1 消除）——repo 层批量反查
+             *     users 非库列（db:"-"）；real_name 空回退 username，软删用户不回填（omitempty 隐去）。
+             *     结构化消歧（2026-10-13 展示统一批）：*_no = 工号独立字段（非合并串），前端
+             *     UserNameText 统一渲染「人名(工号)」三态降级。
+             *     四字段统一值类型 + omitempty（2026-10-14 契约审计 B3：原 Assignee 系 *string
+             *     与 Created 系形态不对称——空工号时一侧字段消失一侧出 ""；「有指派」语义由
+             *     AssignedTo 承载，回填组无需 tri-state）
+             */
+            created_by_name?: string;
+            created_by_no?: string;
+            custom_data?: number[];
+            definition_ref?: components["schemas"]["github_com_tracerbiubiubiu_zhuzhao_internal_model.TicketDefinitionRef"];
+            definition_resolution?: string;
+            /** @example 0 */
+            definition_version?: string;
+            description?: string;
+            /**
+             * @description EscalationSupervisor 催办上级·人工指定（S10 B10-4——E-1 拍定：人工指定为
+             *     基线 > HR manager_id 为进阶[dd §31]；Create/Assign 可填可改）
+             * @example 0
+             */
+            escalation_supervisor_id?: string;
+            /** @description TK-yyyymmdd-NNNN */
+            human_key?: string;
+            /** @example 0 */
+            id?: string;
+            /** @example 0 */
+            org_id?: string;
+            /** @description ltree 路径 */
+            org_path?: string;
+            priority?: number;
+            /** @example 0 */
+            revision?: string;
+            sla_due_at?: string;
+            status?: string;
+            /**
+             * @description StatusChangedAt 进入当前状态时刻（S10 B10-4——E-2 拍定 a 案：UpdateStatusTx
+             *     咽喉同写，节点停留时长数据源；存量回填=updated_at 近似）
+             */
+            status_changed_at?: string;
+            task_runs?: components["schemas"]["github_com_tracerbiubiubiu_zhuzhao_internal_model.TicketTaskRun"][];
+            title?: string;
+            type_code?: string;
+            updated_at?: string;
+        };
         "github_com_tracerbiubiubiu_zhuzhao_internal_model.TicketActionCollectField": {
             key?: string;
             required?: boolean;
@@ -6948,6 +7070,20 @@ export interface components {
             field_key?: string;
             id?: string;
             message?: string;
+        };
+        "github_com_tracerbiubiubiu_zhuzhao_internal_model.TicketTaskRun": {
+            action?: string;
+            completed_at?: string;
+            created_at?: string;
+            definition_hash?: string;
+            node?: string;
+            operation_id?: string;
+            reason?: string;
+            result?: Record<string, never>;
+            status?: string;
+            task_id?: string;
+            /** @example 0 */
+            ticket_revision?: string;
         };
         "github_com_tracerbiubiubiu_zhuzhao_internal_model.TicketTypeFieldInput": {
             field_key: string;

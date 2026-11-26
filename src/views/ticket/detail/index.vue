@@ -95,6 +95,34 @@ const tagsQuery = useQuery({
 const typesQuery = useQuery({ queryKey: ['ticket', 'types'], queryFn: listTicketTypesApi })
 
 const ticket = computed(() => ticketQuery.isSuccess.value ? ticketQuery.data.value?.row : undefined)
+const taskRuns = computed(() => ticketReadScope.value && userStore.hasPermission('ticket:read')
+  ? ticket.value?.task_runs ?? [] : [])
+const taskActionLabels = new Map([
+  ['ticket.evidence.report.generate', '工单证据摘要'],
+  ['activelist.document.update', '更新活动清单'],
+  ['activelist.document.get', '读取活动清单'],
+])
+const taskStatusLabels = new Map([
+  ['pending', '待提交确认'],
+  ['queued', '已受理'],
+  ['running', '执行中'],
+  ['held', '暂缓执行'],
+  ['failed_no_effect', '执行失败'],
+  ['succeeded', '已完成'],
+])
+const taskReasonLabels = new Map([
+  ['ticket_authorization_revoked', '原操作人已无此工单任务的执行权限'],
+  ['report_input_unavailable', '无法读取生成摘要所需的工单证据'],
+  ['document_authorization_revoked', '原操作人已无活动清单的所需权限'],
+  ['document_unavailable_or_not_authorized', '目标数据不可用或当前无权访问'],
+  ['document_input_rejected', '活动清单拒绝了本次操作'],
+  ['document_input_invalid', '活动清单输入无效'],
+  ['invalid_document_update', '清单更新条件无效'],
+  ['document_version_conflict', '清单数据版本已变化，本次未写入'],
+  ['document_outcome_unconfirmed', '清单结果待核实，请刷新查询原任务'],
+  ['execution_expired', '执行期限已过'],
+  ['task_delivery_canceled', '任务投递已取消，未执行'],
+])
 const ticketDefinition = computed(() => ticketQuery.isSuccess.value ? ticketQuery.data.value?.definition : undefined)
 const canWriteTicket = computed(() => canQueryTicket.value && !!ticket.value && ticketDefinition.value?.resolution !== 'degraded')
 const typeLabel = computed(
@@ -839,6 +867,45 @@ function onRelationInput(event: Event) {
       <el-alert v-if="riskWorkflowNotice" :title="riskWorkflowNotice" type="warning" :closable="false" class="mt-2" />
     </el-card>
 
+
+    <section v-if="taskRuns.length" aria-labelledby="ticket-task-results-heading" data-testid="ticket-task-results">
+      <el-card shadow="hover" class="mb-4">
+        <template #header>
+          <div class="flex items-center justify-between gap-2 flex-wrap">
+            <h2 id="ticket-task-results-heading" class="m-0 text-base font-semibold">任务结果</h2>
+            <el-button size="small" :loading="ticketQuery.isFetching.value" data-testid="ticket-task-results-refresh"
+              @click="ticketQuery.refetch()">刷新任务结果</el-button>
+          </div>
+        </template>
+        <ul class="m-0 list-none p-0" aria-live="polite" :aria-busy="ticketQuery.isFetching.value">
+          <li v-for="run in taskRuns" :key="run.operation_id" class="border-0 border-b border-solid border-[var(--el-border-color-lighter)] py-3 last:border-b-0">
+            <div class="flex items-center gap-2 flex-wrap">
+              <h3 class="m-0 text-sm font-semibold">{{ taskActionLabels.get(run.action) ?? '工单任务' }}</h3>
+              <el-tag size="small" :type="run.status === 'succeeded' ? 'success' : run.status === 'failed_no_effect' ? 'danger' : 'info'">
+                {{ run.reason === 'document_outcome_unconfirmed' ? '结果待核实' : taskStatusLabels.get(run.status) ?? '状态待核实' }}
+              </el-tag>
+            </div>
+            <template v-if="run.status === 'succeeded' && run.result">
+              <p v-if="'report_profile' in run.result" class="my-2 text-sm">
+                已提交证据字段 {{ run.result.submitted_field_count }} 项，{{ run.result.has_comment ? '已附说明' : '未附说明' }}
+              </p>
+              <p v-else class="my-2 text-sm">
+                清单数据版本 {{ run.result.document_revision }}{{ run.result.noop ? '，数据已是目标值' : '' }}
+              </p>
+            </template>
+            <p v-if="run.reason" class="my-2 text-sm">{{ taskReasonLabels.get(run.reason) ?? '原因暂不可用' }}</p>
+            <dl class="mt-2 mb-0 flex flex-wrap gap-x-4 gap-y-1 text-xs text-[var(--el-text-color-secondary)]">
+              <div><dt class="inline">来源节点 </dt><dd class="m-0 inline">{{ STATUS_LABEL[run.node] ?? run.node }}</dd></div>
+              <div><dt class="inline">原工单版本 </dt><dd class="m-0 inline">{{ run.ticket_revision }}</dd></div>
+              <div><dt class="inline">创建时间 </dt><dd class="m-0 inline">{{ formatTime(run.created_at) }}</dd></div>
+              <div v-if="run.completed_at"><dt class="inline">完成时间 </dt><dd class="m-0 inline">{{ formatTime(run.completed_at) }}</dd></div>
+              <div class="min-w-0 break-all"><dt class="inline">操作号 </dt><dd class="m-0 inline">{{ run.operation_id }}</dd></div>
+              <div class="min-w-0 break-all"><dt class="inline">任务号 </dt><dd class="m-0 inline">{{ run.task_id }}</dd></div>
+            </dl>
+          </li>
+        </ul>
+      </el-card>
+    </section>
 
     <el-card shadow="hover" class="mb-4">
       <template #header><span class="font-semibold">描述</span></template>
