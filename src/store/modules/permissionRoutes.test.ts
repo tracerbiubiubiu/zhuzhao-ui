@@ -10,6 +10,7 @@ import {
 } from '@/store/modules/permissionRoutes'
 import { Layout, pathResolve } from '@/utils/routerHelper'
 import { hasOneShowingChild } from '@/components/Menu/helper'
+import { icons } from '@/icons'
 
 /** 造菜单节点的便捷函数（默认可见、无子） */
 const menu = (over: Partial<RouteMenuNode> & Pick<RouteMenuNode, 'code' | 'name' | 'menu_type' | 'path'>): RouteMenuNode => ({
@@ -107,6 +108,35 @@ describe('resolveChildPath —— 子为绝对路径直接用', () => {
 })
 
 describe('侧栏渲染契约——hasOneShowingChild + pathResolve', () => {
+  const assignmentRules = menu({
+    code: 'ticket_assignment_rules', name: '分派规则', menu_type: 2,
+    path: '/tickets/rules', component: 'ticket/rules/index', icon: 'setting', sort_order: 4,
+  })
+
+  it('工单管理的类型配置和分派规则使用不同的离线图标', () => {
+    const [ticket] = buildRoutes([
+      menu({
+        code: 'ticket_manage', name: '工单管理', menu_type: 1, path: '/tickets',
+        children: [
+          menu({
+            code: 'ticket_type_manage', name: '类型配置', menu_type: 2,
+            path: '/tickets/types', component: 'ticket/type/index', icon: 'setting', sort_order: 3,
+          }),
+          assignmentRules,
+        ],
+      }),
+    ])
+
+    const menuIcons = ticket.children?.map(({ meta }) => meta.icon)
+    expect(menuIcons).toEqual(['mdi:tune', 'mdi:call-split'])
+    for (const icon of menuIcons ?? []) expect(icons).toHaveProperty(String(icon))
+  })
+
+  it('分派规则沿用服务端下发的自定义图标', () => {
+    const [route] = buildRoutes([{ ...assignmentRules, icon: 'mdi:account-group' }])
+    expect(route.meta.icon).toBe('mdi:account-group')
+  })
+
   it('顶层页面包 Layout 后渲染为可点叶子，index === menu.path', () => {
     const route = buildRoutes([
       menu({ code: 'audit_log', name: '审计日志', menu_type: 2, path: '/audit', component: 'system/menu/index' }),
