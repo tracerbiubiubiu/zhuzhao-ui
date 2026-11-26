@@ -87,7 +87,7 @@ const isPageLike = (menu: RouteMenuNode): boolean => isPage(menu) || (isDirector
 
 function toMeta(menu: RouteMenuNode): Record<string, unknown> {
   // icon 种子值（裸名）经集中映射表解析（01 §1）——离线 iconify 对未注册名零渲染
-  return { title: menu.name, icon: resolveMenuIcon(menu.icon), hidden: !menu.visible }
+  return { title: menu.name, icon: resolveMenuIcon(menu.icon, menu.code), hidden: !menu.visible }
 }
 
 /**

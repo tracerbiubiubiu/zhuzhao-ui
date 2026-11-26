@@ -6,6 +6,7 @@ import clipboardCheckOutline from '@iconify-icons/mdi/clipboard-check-outline'
 import bookAlphabet from '@iconify-icons/mdi/book-alphabet'
 import account from '@iconify-icons/mdi/account'
 import accountMultiple from '@iconify-icons/mdi/account-multiple'
+import callSplit from '@iconify-icons/mdi/call-split'
 import cart from '@iconify-icons/mdi/cart'
 import check from '@iconify-icons/mdi/check'
 import chevronDoubleLeft from '@iconify-icons/mdi/chevron-double-left'
@@ -56,6 +57,7 @@ export const icons = {
   'mdi:book-alphabet': bookAlphabet,
   'mdi:account': account,
   'mdi:account-multiple': accountMultiple,
+  'mdi:call-split': callSplit,
   'mdi:cart': cart,
   'mdi:check': check,
   'mdi:chevron-double-left': chevronDoubleLeft,
@@ -128,7 +130,7 @@ export const MENU_ICON_MAP: Readonly<Record<string, string>> = {
   'al-types': 'mdi:tag-outline',
   // 000025 audit 域
   'audit-log': 'mdi:file-document-outline',
-  // phase5：000067 情报查询（建行时漏登记——侧栏曾静默空白）；000073 分派规则复用 setting；
+  // phase5：000067 情报查询（建行时漏登记——侧栏曾静默空白）；
   // 000072 消息中心 icon 'message' 随 000078 删行退役（消息中心改常量路由+铃铛入口，不再有菜单行）
   intel: 'mdi:shield-account',
 }
@@ -139,7 +141,9 @@ const warnedMenuIcons = new Set<string>()
  * 种子 icon 值解析：裸名（种子形态）查映射表；已 namespaced（mdi:*）与未知值直通
  * （未知仅 warn 一次——离线 iconify 对未注册名零渲染，静默漏映射极难发现）。
  */
-export function resolveMenuIcon(name: string): string {
+export function resolveMenuIcon(name: string, menuCode?: string): string {
+  // 000073 与类型配置共用 setting，仅为分派规则区分默认图标。
+  if (menuCode === 'ticket_assignment_rules' && name === 'setting') return 'mdi:call-split'
   if (!name) return ''
   if (name.includes(':')) return name
   const mapped = MENU_ICON_MAP[name]
