@@ -280,6 +280,7 @@ export interface TicketCommentRow {
   /** 作者回填（2026-10-13 展示统一批）：姓名+工号独立字段，UserNameText 渲染 */
   created_by_name?: string
   created_by_no?: string
+  evidence_version?: string
 }
 
 /** 评论列表（无分页——01 §8-W4：详情页「全部展示+条数上限提示」，勿假设 page/total） */

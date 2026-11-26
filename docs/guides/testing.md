@@ -18,7 +18,7 @@ CI的`changes`先跑分类器/聚合器、文档检查器和参考检查器的�
 
 ## 完整档运行命令
 
-以下是当前已实现的六件门禁；其中test:e2e仍是关键真实栈验收，先按[开发与联调](development.md)确认服务、迁移/种子和独占窗口。大量合成mock是已确认的新开发/测试前提，工具和状态样本扩围尚待U02/U07实施；本次文档修订没有新增命令或把真实栈改成mock。在UI根目录运行：
+以下是当前已实现的六件门禁。标准 `test:e2e` 使用真实栈，先按[开发与联调](development.md)确认服务、迁移、种子和独占窗口。大量合成 mock 是已确认的新开发与测试前提，工具和状态样本扩围尚待 U02/U07 实施。在 UI 根目录运行：
 
 ```bash
 pnpm lint
@@ -32,6 +32,8 @@ pnpm gate
 ```
 
 ESLint是纯检查，修复用lint:fix后重跑。E2E使用[playwright.config.ts](../../playwright.config.ts)，workers=1、当前默认retries=1；默认门禁有重试时必须披露实际首轮失败/重试/跳过，不能写成零重试。CI范围见[ci.yml](../../.github/workflows/ci.yml)，E2E当前由本地真栈承接；未推送/未执行的远端CI不写通过。
+
+标准浏览器入口当前发现 36 个 spec、55 条用例，含 B2 第 4–5 项 D01/D02。运行 `pnpm test:e2e --list` 可核对发现范围。标准入口保留全局建号和一次重试。在独占候选栈已预启动 UI 时，可设 `E2E_USE_PRESTARTED_UI=1` 并显式注入本轮 `E2E_BASE_URL` 与 `E2E_API_BASE`，由候选 UI 代理指向同轮 Core，Playwright 直接使用它。完整组合用 `E2E_REQUIRE_COMPLETE=1 pnpm gate` 核对 55 条最终均通过。严格入口在全局建号前核对独占 PostgreSQL 容器标签与数据库身份，并拒绝整条跳过、步骤跳过及历史回读缺失。S17 必须可访问本轮 PG，W5 使用下述真实输入。
 
 ### 开发期已接受的依赖公告
 
@@ -53,6 +55,44 @@ ESLint是纯检查，修复用lint:fix后重跑。E2E使用[playwright.config.ts
 正向spec不模拟worker或callback；只在已核自有PG中造数/精确清理自己的marker，结束时经正式API停用本例手动定义。定义/运行/准入事实随独占栈保留至候选收据封存和精确回收，不直接改TR SQLite删除历史。Playwright附件只记录task ID、终态和效果布尔值，不记录登录口令或token。浏览器旅程、单元指导逻辑和既有组合恢复收据分别计数，未执行的新spec不能记为通过。
 
 本次新增守卫先证明目标缺陷能使它变红，再还原并跑正向；局部绿不等价完整适用组合。完整适用门禁未绿不得标记完成，网络/环境失败保留原结果并说明影响。人工与agent验证用专属E000002+，禁止改E000001；仅既定acceptance/globalSetup幂等例外流及break-glass复原按主仓runbook执行。
+
+## B2 第 6–8 项专用真实栈门禁
+
+[专用配置](../../playwright.b2.config.ts)发现 3 个 spec、8 条用例。登记 2 条，派单 3 条，整改与复测 3 条。`pnpm test:e2e:b2 --list` 无需夹具环境，核对 2/3/3 清单。`pnpm test:e2e:b2 --preflight` 另核对本轮变量、夹具结构和文件归属，服务连接和浏览器均留给实跑。`pnpm test:e2e:b2` 连接预启动的独占真栈并运行全套。它使用单 worker、零重试、无全局建号和自动服务启动，入口拒绝筛选，缺失、跳过或未执行的用例均失败。
+
+第 9 项使用独立入口 `B2_BROWSER_ITEM9_ONLY=1 pnpm test:e2e:b2`，追加 `--list` 或 `--preflight` 可核对单条用例及参数。使用下文定义的同轮独占 UI、Core 和 PG，以及必需的独占 `B2_RISK_STORAGE_ORIGIN`。通过 `B2_RISK_LIFECYCLE_{M,U,P,X,T}_NO` 和对应 `_PASSWORD` 注入五个准备好的非种子合成账号。T 只持有普通工单读权，用于核对该工单的历史整改证据范围。目标取 `B2_RISK_LIFECYCLE_ORG_ID`、`B2_RISK_LIFECYCLE_TYPE_CODE`、`B2_RISK_LIFECYCLE_DEFINITION_VERSION`，发布规则应包含分派、接单、带办理说明的送复测和带 `synthetic_review_mark` 的复测关单。准备人可建立组织、规则和账号，风险和工单由浏览器现场创建。
+
+第 9 项使用本轮空的 `B2_RISK_LIFECYCLE_RESTART_DIR` 与固定 `B2_EXPECTED_CORE_DIGEST`，沿用下文重启交接协议。分组快照此次应含一张票和一条风险。独立读回应包含风险编号、工单编号和该票首代接单提醒的调度事实。实际通知入箱按送达发生单独记证。
+
+两组适用时，在各自私有环境内串行执行，两个退出码均为 0 才通过。以下示例使用已预启动的标准候选 UI。各子 shell 的变量由本轮资源所有者注入，凭据与交接件留在本机私有范围。
+
+```bash
+(
+  # 注入标准组独占栈的环境
+  E2E_USE_PRESTARTED_UI=1 E2E_REQUIRE_COMPLETE=1 pnpm gate
+) && (
+  # 注入专项独占栈、角色与夹具的环境
+  pnpm test:e2e:b2 --preflight && pnpm test:e2e:b2
+)
+```
+
+### 专项栈与夹具准备
+
+- **服务边界** `E2E_BASE_URL`、`E2E_API_BASE` 分别是同轮候选 UI 和 Core 的纯 HTTP origin，显式使用 `127.0.0.1` 或 `[::1]` 与各自的独占端口，避开共享开发栈。若需要浏览器上传，额外提供 `B2_RISK_STORAGE_ORIGIN` 指向本轮专用存储，使用第三个独占回环端口，否则应给主链路和丢响应两票预置可见、带 `evidence_version` 的合成附件。由资源所有者确认构建身份、已迁移的专属数据面和 UI 的实际代理目标。
+- **浏览器出站** 请求拦截限定初始请求的 origin，独立 Core 请求拒绝 HTTP 重定向。Playwright 的路由拦截只处理重定向链起点。实跑时由资源所有者在隔离网络中限制浏览器仅能访问本轮 UI 和可选存储，并确认候选代理不向其他 origin 重定向。
+- **登记（第 6 项）** `B2_RISK_REGISTRATION_ADMIN_NO` 与 `B2_RISK_REGISTRATION_ADMIN_PASSWORD` 是已就绪的准备账号，须能直接登录并创建合成角色、用户和菜单绑定。用例先确认 UI 网关和 Core 识别同一个准备账号，再自建专属组织与 M/U/P/X 夹具。种子账号如用于准备，其自身凭据和权限保持原值。
+- **派单（第 7 项）** `B2_RISK_DISPATCH_NO` 与 `B2_RISK_DISPATCH_PASSWORD` 是有目标权限的合成非种子派单账号。`B2_RISK_DISPATCH_FIXTURE` 指向仓库外、执行用户拥有且仅其可写的绝对 JSON 文件。`target` 提供 `org_id`、`type_code`、`definition_version`，指向可用组织和已发布整改类型。`risks` 和 `restart` 各是独立 A/B/C 三条，另有单条 `ownerless`，共七个不同风险。每条给出十进制字符串 `risk_id` 和现势 `expected_revision`。每组 A/B/C 同漏洞、同组织、标题有共同可搜索前缀、资产各异、已核实且有等级和期限。A/B 同一具名负责人，C 为另一人，两人不同于派单账号且都有主部门。`ownerless` 仅缺负责人。旧 `account` 字段可省略，保留时只接受 `operator` 或 `viewer`，实际账号始终由环境变量提供。
+- **整改（第 8 项）** 注入三组 `B2_REMEDIATION_{P,U,X}_NO` 与对应 `_PASSWORD`，分别是办理人、现势风险责任人、拥有入口及目标读权但无当前写职责的成员。三张工单互不重叠，`B2_REMEDIATION_TICKET_ID` 主链路至少两个 `open` 资产，`B2_REMEDIATION_DROP_TICKET_ID` 丢响应链路至少一个 `open` 资产。两票都须处于 `in_progress`、由 P 办理，U 是所有资产的现势责任人。`B2_REMEDIATION_VERIFY_TICKET_ID` 续测票同时有 `pending_verify` 与 `resolved` 资产，由 U 复测待复测项。工单绑定的发布定义在办理时提供「办理说明」，复测时提供 `Synthetic review mark` 字段，且 P/U/X 的菜单、数据读取范围和动作权限匹配场景。
+
+### 派单重启交接
+
+`B2_RISK_DISPATCH_RESTART_DIR` 指向仓库外、本轮执行用户独占的绝对空目录。资源所有者运行外部协作者并监视交接件，使用临时文件写完后原子发布。顺序按原操作号 `K` 关联。
+
+1. 原页面转发一次派单写入并截断浏览器响应。专项确认服务端已提交后发布 `committed.<K>.json`，含 `operationId`、`planId`、`planHash`、`actorId` 和分组、风险、工单、负责人信息。协作者收到后立即独立读取 PG，保存停机前快照。
+2. 协作者真正停止并启动 Core，沿用同一制品、同一 PG，保持 UI 和原浏览器页面在位。新实例就绪后发布 `restarted.<K>.json`，提供 `operationId`、`planId`、`coreArtifact`、不同的 `beforeInstance`/`afterInstance`、`ready: true` 与停机前快照 `before`。
+3. 同一个页面按 `K` 发只读 GET，完成独立回读后发布 `looked-up.<K>.json`。协作者收到后再从同一 PG 读取，发布 `readback.<K>.json`，提供 `operationId`、`planId`、`coreArtifact`、`afterInstance` 与 `snapshot`。两份快照按稳定标识排序，覆盖原操作、分组回执、工单、活跃关联、风险及工单历史，以及必要通知意图，专项逐项比较。
+
+所有写入用例使用本轮合成数据。归档本轮退出状态、用例结论及 `.codex/b2-browser-results/` 中的整改阶段 JSON 后再复跑，专项实跑会重置自身输出。复验前重新准备受影响的风险、工单和空交接目录，保留首次失败及后续复验结果。清单和预检只提供发现与输入证据，真实栈结果以标准 55 条和专项 8 条的实跑收据为准。
 
 ## 测试先行与单维护者审阅
 
