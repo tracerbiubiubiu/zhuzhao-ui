@@ -67,10 +67,32 @@ export async function listTicketsApi(
   return data as unknown as { list: TicketRow[]; total: number }
 }
 
+type TicketDetailWire = NonNullable<
+  paths['/api/v1/tickets/{id}']['get']['responses'][200]['content']['application/json']['data']
+>
+type TicketTaskRunWire = NonNullable<TicketDetailWire['task_runs']>[number]
+
+export type TicketTaskRun = Required<Pick<TicketTaskRunWire,
+  'operation_id' | 'task_id' | 'action' | 'ticket_revision' | 'definition_hash' | 'node' | 'status' | 'created_at'
+>> & Pick<TicketTaskRunWire, 'reason' | 'completed_at'> & {
+  result?: {
+    report_profile: string
+    submitted_field_count: number
+    has_comment: boolean
+  } | {
+    document_revision: string
+    noop: boolean
+  }
+}
+
+export interface TicketDetail extends TicketRow {
+  task_runs?: TicketTaskRun[]
+}
+
 /** 工单详情（静态路由 /tickets/:id 消费——W4 详情批扩评论/备注/流转） */
-export async function getTicketApi(id: string, config?: Pick<AxiosRequestConfig, '_silentError'>): Promise<TicketRow> {
+export async function getTicketApi(id: string, config?: Pick<AxiosRequestConfig, '_silentError'>): Promise<TicketDetail> {
   const data = await request.get(`/api/v1/tickets/${id}`, config)
-  return data as unknown as TicketRow
+  return data as unknown as TicketDetail
 }
 
 /** 工单类型（列表筛选下拉/发起表单 schema 拉取——operator 经 ticket_list 页面行共享 GET） */

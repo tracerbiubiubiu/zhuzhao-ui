@@ -281,3 +281,71 @@ it('风险读取失效后已打开的普通分派和确认回调不能发出写�
   expect(f.assignApi).not.toHaveBeenCalled()
   expect(f.deleteApi).not.toHaveBeenCalled()
 })
+
+it('原工单展示冻结版本的任务回执并从详情刷新', async () => {
+  const f = fixture()
+  f.queries.detail.data.value = f.detail('52')
+  f.queries.detail.data.value.row.task_runs = [
+    {
+      operation_id: 'sample-operation-report', task_id: 'b3_report_task',
+      action: 'ticket.evidence.report.generate', ticket_revision: '9007199254740993',
+      definition_hash: 'synthetic-hash', node: 'assigned', status: 'succeeded',
+      created_at: '2026-11-26T03:20:00Z', completed_at: '2026-11-26T03:21:00Z',
+      result: { report_profile: 'evidence_summary_v1', submitted_field_count: 0, has_comment: false },
+    },
+    {
+      operation_id: 'sample-operation-update', task_id: 'b3_update_task',
+      action: 'activelist.document.update', ticket_revision: '50',
+      definition_hash: 'synthetic-hash', node: 'in_progress', status: 'succeeded',
+      created_at: '2026-11-26T03:22:00Z', completed_at: '2026-11-26T03:23:00Z',
+      result: { document_revision: '9007199254740995', noop: true },
+    },
+  ]
+
+  const card = render(f).find(n => n.props?.['data-testid'] === 'ticket-task-results')
+  expect(card).toBeDefined()
+  const contents = nodes(card)
+  const text = contents.map(n => typeof n.children === 'string' ? n.children : '').join(' ')
+  expect(text).toContain('工单证据摘要')
+  expect(text).toContain('已提交证据字段 0 项')
+  expect(text).toContain('未附说明')
+  expect(text).toContain('清单数据版本 9007199254740995')
+  expect(text).toContain('数据已是目标值')
+  expect(text).toContain('9007199254740993')
+  expect(text).toContain('b3_report_task')
+  expect(contents.some(n => n.type === 'a' || n.props?.to || n.props?.href)).toBe(false)
+  const refresh = contents.find(n => n.props?.['data-testid'] === 'ticket-task-results-refresh')
+  await refresh.props.onClick()
+  expect(f.queries.detail.refetch).toHaveBeenCalledOnce()
+  expect(f.queries['risk-workflow'].refetch).not.toHaveBeenCalled()
+})
+
+it('任务失败显示友好原因，旧票和失去当前读权时隐藏任务结果', () => {
+  const f = fixture()
+  const resultNodes = () => render(f).find(n => n.props?.['data-testid'] === 'ticket-task-results')
+  expect(resultNodes()).toBeUndefined()
+  f.queries.detail.data.value.row.task_runs = [
+    {
+      operation_id: 'revoked-operation', task_id: 'b3_revoked_task',
+      action: 'ticket.evidence.report.generate', ticket_revision: '41',
+      definition_hash: 'synthetic-hash', node: 'assigned', status: 'held',
+      reason: 'ticket_authorization_revoked', created_at: '2026-11-26T03:20:00Z',
+    },
+    {
+      operation_id: 'future-operation', task_id: 'b3_future_task',
+      action: 'activelist.document.update', ticket_revision: '42',
+      definition_hash: 'synthetic-hash', node: 'assigned', status: 'failed_no_effect',
+      reason: 'unexpected-internal-description', created_at: '2026-11-26T03:20:00Z',
+    },
+  ]
+  const card = resultNodes()
+  expect(card).toBeDefined()
+  const text = nodes(card).map(n => typeof n.children === 'string' ? n.children : '').join(' ')
+  expect(text).toContain('暂缓执行')
+  expect(text).toContain('原操作人已无此工单任务的执行权限')
+  expect(text).toContain('执行失败')
+  expect(text).toContain('原因暂不可用')
+  expect(text).not.toContain('unexpected-internal-description')
+  f.user.read = false
+  expect(resultNodes()).toBeUndefined()
+})
