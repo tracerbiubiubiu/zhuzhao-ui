@@ -316,7 +316,7 @@ onActivated(() => {
 })
 type HandlingKind = TicketHandlingCommand['kind']
 const handling = createTransitionSubmission<TicketHandlingCommand>({ newKey: newTicketOperationKey, send: handleTicketApi })
-const handlingDialog = ref<{ kind: HandlingKind; revision: string; id: string } | null>(null)
+const handlingDialog = ref<{ kind: HandlingKind; revision: string; id: string; commentRequired: boolean } | null>(null)
 const handlingNotice = ref('')
 const handlingHidden = ref(false)
 const handlingTarget = ref('')
@@ -342,13 +342,19 @@ function openHandling(kind: HandlingKind) {
   if (!canUseOtherWrites.value || handlingDialog.value || def?.resolution !== 'exact' || !permittedHandling(kind)) return
   resetHandling()
   handlingNotice.value = ''
-  handlingDialog.value = { kind, revision: def.revision, id: ticketId.value }
+  handlingDialog.value = { kind, revision: def.revision, id: ticketId.value,
+    commentRequired: kind === 'withdraw' && actionsQuery.data.value?.capabilities?.withdrawCommentRequired === true }
 }
 function handlingCurrent() {
   const opened = handlingDialog.value
   const def = ticketDefinition.value
   return !!opened && opened.id === ticketId.value && def?.resolution === 'exact'
     && def.revision === opened.revision && permittedHandling(opened.kind)
+}
+function handlingInputReady() {
+  const opened = handlingDialog.value
+  return !!opened && (opened.kind !== 'transfer' || !!handlingTarget.value)
+    && (!opened.commentRequired || !!handlingComment.value.trim())
 }
 watch([ticketId, () => userStore.profile?.id], () => { resetHandling(); handlingNotice.value = '' }, { flush: 'sync' })
 watch(handlingCurrent, current => {
@@ -373,7 +379,7 @@ async function submitHandling() {
     resetHandling()
     return
   }
-  if (!replay && opened.kind === 'transfer' && !handlingTarget.value) return
+  if (!replay && !handlingInputReady()) return
   const body = { id: opened.id, expected_revision: opened.revision,
     ...(handlingComment.value.trim() ? { comment: handlingComment.value.trim() } : {}) }
   const accepted = replay ? await handling.retry() : await handling.submit(opened.kind === 'transfer'
@@ -1242,9 +1248,10 @@ function onRelationInput(event: Event) {
           <span v-if="handling.state.busy || handling.state.phase === 'unknown'">用户 #{{ handlingTarget }}</span>
           <UserPicker v-else v-model="handlingTarget" :context="{ purpose: 'transfer', ticketId }" :active="handlingCurrent()" />
         </el-form-item>
-        <el-form-item label="说明">
+        <el-form-item label="说明" :required="handlingDialog.commentRequired">
           <el-input v-model="handlingComment" type="textarea" :rows="3"
-            :disabled="handling.state.busy || handling.state.phase === 'unknown'" placeholder="可选说明" />
+            :disabled="handling.state.busy || handling.state.phase === 'unknown'"
+            :placeholder="handlingDialog.commentRequired ? '请填写撤回说明' : '可选说明'" />
         </el-form-item>
       </el-form>
       <el-alert v-if="handling.state.message" :title="handling.state.message" type="error" :closable="false" />
@@ -1252,7 +1259,7 @@ function onRelationInput(event: Event) {
         <el-button :disabled="handling.state.busy" @click="closeHandling">{{ handling.state.phase === 'unknown' ? '稍后核查' : '取消' }}</el-button>
         <el-button type="primary" :loading="handling.state.busy"
           :disabled="handling.state.phase === 'unknown' ? !userStore.hasPermission(`ticket:${handlingDialog.kind}`)
-            : !handlingCurrent() || (handlingDialog.kind === 'transfer' && !handlingTarget)"
+            : !handlingCurrent() || !handlingInputReady()"
           @click="submitHandling">{{ handling.state.phase === 'unknown' ? '原操作重试' : '确认' + handlingLabels[handlingDialog.kind] }}</el-button>
       </template>
     </el-dialog>

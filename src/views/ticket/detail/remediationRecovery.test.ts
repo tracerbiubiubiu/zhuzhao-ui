@@ -388,6 +388,20 @@ it('普通工单转办仅消费服务端能力，结果未知按原请求重试�
   expect(f.handle.mock.lastCall?.[0]).toEqual({ kind: 'withdraw', body: { id: '42', expected_revision: '41' } })
 })
 
+it('撤回规则要求说明时，空说明不能提交', async () => {
+  const f = fixture()
+  f.queries['risk-workflow'].data.value = undefined
+  f.user.hasPermission = () => true
+  f.queries.transitions.data.value.capabilities = { transfer: false, withdraw: true, withdrawCommentRequired: true }
+  f.page.openHandling('withdraw')
+  f.page.handlingComment.value = '   '
+  await f.page.submitHandling()
+  expect(f.handle).not.toHaveBeenCalled()
+  f.page.handlingComment.value = '合成撤回说明'
+  await f.page.submitHandling()
+  expect(f.handle).toHaveBeenCalledWith({ kind: 'withdraw', body: { id: '42', expected_revision: '41', comment: '合成撤回说明' } }, 'synthetic-key')
+})
+
 it('转办请求等待中离开页签，成功回包仍清除原操作并使对应工单失效', async () => {
   const f = fixture()
   f.queries['risk-workflow'].data.value = undefined

@@ -438,14 +438,18 @@ export async function exportTicketsApi(params: TicketListQuery): Promise<Blob> {
   return data as unknown as Blob
 }
 
+type TicketHandlingBody<K extends 'transfer' | 'withdraw'> =
+  paths[`/api/v1/tickets/${K}`]['post']['requestBody']['content']['application/json']
+type TicketHandlingResponse = components['schemas']['github_com_tracerbiubiubiu_zhuzhao_internal_model.TicketHandlingResult']
+
 export type TicketHandlingCommand =
-  | { kind: 'transfer'; body: { id: string; expected_revision: string; to_user_id: string; comment?: string } }
-  | { kind: 'withdraw'; body: { id: string; expected_revision: string; comment?: string } }
+  | { kind: 'transfer'; body: TicketHandlingBody<'transfer'> }
+  | { kind: 'withdraw'; body: TicketHandlingBody<'withdraw'> }
 
 export async function handleTicketApi(command: TicketHandlingCommand, operationId: string): Promise<void> {
   const result = await request.post(`/api/v1/tickets/${command.kind}`, command.body, {
     _silentError: true, headers: { 'Idempotency-Key': operationId },
-  }) as unknown as { id?: string; assigned_to?: string | null; revision?: string; status?: string } | null
+  }) as unknown as TicketHandlingResponse | null
   if (!result || result.id !== command.body.id || typeof result.revision !== 'string' || !/^[1-9]\d{0,18}$/.test(result.revision)
     || compareInt64Desc(result.revision, command.body.expected_revision) >= 0 || !result.status
     || (command.kind === 'transfer' ? result.assigned_to !== command.body.to_user_id : result.status !== 'cancelled')) {
@@ -454,11 +458,9 @@ export async function handleTicketApi(command: TicketHandlingCommand, operationI
 }
 
 export type TicketStatsGroup = 'status' | 'priority' | 'type_code'
-export interface TicketStats {
-  as_of: string
-  total: number
-  items: { key: string; count: number; in_progress_count: number; overdue_count: number; overdue_rate: number | null }[]
-}
+type GeneratedTicketStats = components['schemas']['github_com_tracerbiubiubiu_zhuzhao_internal_model.TicketStats']
+type TicketStatsItem = NonNullable<GeneratedTicketStats['items']>[number]
+export type TicketStats = Required<Omit<GeneratedTicketStats, 'items'>> & { items: Required<TicketStatsItem>[] }
 
 export async function getTicketStatsApi(params: TicketListQuery & { group_by: TicketStatsGroup }, signal?: AbortSignal): Promise<TicketStats> {
   const data = await request.get('/api/v1/tickets/stats', { params, signal, _silentError: true })

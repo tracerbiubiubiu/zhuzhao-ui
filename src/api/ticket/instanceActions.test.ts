@@ -115,3 +115,12 @@ it('仅采用与当前工单和修订配对的服务端专项动作布尔值', a
     expect((await getInstanceActionsApi('1', definition)).capabilities).toBeUndefined()
   }
 })
+
+it('保留已绑定撤回边的必填说明合同', async () => {
+  const definition = normalizeTicketDefinition(detail)
+  vi.mocked(request.get).mockResolvedValueOnce({
+    ticket_id: '1', revision: '12', actions: [],
+    capabilities: { transfer: false, withdraw: true, withdraw_comment_required: true },
+  } as never)
+  expect((await getInstanceActionsApi('1', definition)).capabilities).toMatchObject({ withdrawCommentRequired: true })
+})

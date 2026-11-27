@@ -19,17 +19,24 @@ test('工单转办丢回包后原号重试、撤回和同筛选统计导出', as
   const post = <T = unknown>(path: string, body: unknown, token = admin.token) =>
     mustData(api<T>('/api/v1/' + path, { method: 'POST', token, body }), path)
   let orgId = ''
+  let successorId = ''
+  const successor = { employeeNo: `E89${suffix.slice(-8)}`, password: `E2eHandling#${suffix}` }
   const tickets: string[] = []
   const members: string[] = []
   try {
     orgId = (await post<{ id: string }>('orgs', { code: 'h_' + suffix, name: '合成办理组 ' + suffix })).id
-    for (const user_id of [actorId, viewerId]) {
+    const roles = await mustData(api<Array<{ id: string; code: string }>>('/api/v1/roles', admin), '读取合成角色')
+    const operator = roles.find(role => role.code === 'operator')
+    expect(operator).toBeDefined()
+    successorId = (await post<{ id: string }>('users', { employee_no: successor.employeeNo, password: successor.password,
+      username: `e2e_handling_${suffix}`, role_ids: [operator!.id] })).id
+    for (const user_id of [actorId, viewerId, successorId]) {
       await post('orgs/members', { org_id: orgId, user_id, ticket_scope: 'group' })
       members.push(user_id)
     }
     await post('ticket-types/update', { code: type.code, states: ['open', 'assigned', 'closed', 'cancelled'],
       transitions: { open: ['assigned', 'closed', 'cancelled'], assigned: ['closed'] },
-      transition_meta: { 'open>cancelled': { roles: ['creator'] } } })
+      transition_meta: { 'open>cancelled': { roles: ['creator'], comment_required: true } } })
     await publishTicketType(admin.token, type.code)
     for (const title of ['转办', '撤回']) {
       tickets.push((await post<{ id: string }>('tickets', { type_code: type.code, org_id: orgId, title: title + suffix }, actor.token)).id)
@@ -42,8 +49,8 @@ test('工单转办丢回包后原号重试、撤回和同筛选统计导出', as
     await page.goto('/#/tickets/' + transfer)
     await page.getByTestId('btn-transfer').click()
     const transferDialog = page.getByRole('dialog', { name: '转办工单' })
-    await transferDialog.getByRole('combobox').fill(state.viewer.employeeNo)
-    await page.getByRole('option', { name: new RegExp(state.viewer.employeeNo) }).click()
+    await transferDialog.getByRole('combobox').fill(successor.employeeNo)
+    await page.getByRole('option', { name: new RegExp(successor.employeeNo) }).click()
     let sentKey = ''
     await page.route('**/api/v1/tickets/transfer', async route => {
       sentKey = route.request().headers()['idempotency-key'] ?? ''
@@ -60,13 +67,17 @@ test('工单转办丢回包后原号重试、撤回和同筛选统计导出', as
     expect(result.request().headers()['idempotency-key']).toBe(sentKey)
     expect(result.ok()).toBe(true)
     const row = (await result.json()).data
-    expect(row).toMatchObject({ id: transfer, assigned_to: viewerId, status: 'assigned' })
+    expect(row).toMatchObject({ id: transfer, assigned_to: successorId, status: 'assigned' })
     await expect(transferDialog).not.toBeVisible()
 
     await page.goto('/#/tickets/' + withdraw)
     await expect(page.getByTestId('btn-transfer')).toHaveCount(0)
     await page.getByTestId('btn-withdraw').click()
-    await page.getByRole('dialog', { name: '撤回工单' }).getByRole('button', { name: '确认撤回' }).click()
+    const withdrawDialog = page.getByRole('dialog', { name: '撤回工单' })
+    const confirmWithdraw = withdrawDialog.getByRole('button', { name: '确认撤回' })
+    await expect(confirmWithdraw).toBeDisabled()
+    await withdrawDialog.getByPlaceholder('请填写撤回说明').fill('合成撤回说明')
+    await confirmWithdraw.click()
     await expect(page.locator('.el-card').first().locator('.el-tag').first()).toHaveText('已撤回')
     await expect(page.getByTestId('btn-withdraw')).toHaveCount(0)
 
@@ -112,21 +123,26 @@ with zipfile.ZipFile(io.BytesIO(sys.stdin.buffer.read())) as book:
     expect(values.flat()).not.toContain('转办' + suffix)
 
     await page.evaluate(() => localStorage.clear())
-    await uiLogin(page, state.viewer.employeeNo, state.viewer.password)
+    await uiLogin(page, successor.employeeNo, successor.password)
     await page.waitForURL(/#\/home/)
     await page.goto('/#/tickets/' + transfer)
     await page.reload()
     await expect(page.getByText('转办' + suffix, { exact: false }).first()).toBeVisible()
-    await expect(page.getByTestId('btn-transfer')).toHaveCount(0)
     await expect(page.getByTestId('btn-withdraw')).toHaveCount(0)
+    await page.getByTestId('btn-transition-closed').click()
+    await expect(page.locator('.el-card').first().locator('.el-tag').first()).toHaveText('已关闭')
+    await page.evaluate(() => localStorage.clear())
+    await uiLogin(page, state.viewer.employeeNo, state.viewer.password)
+    await page.waitForURL(/#\/home/)
     await page.goto('/#/tickets?type_code=' + encodeURIComponent(type.code))
-    await expect(page.getByText('转办' + suffix, { exact: true })).toBeVisible()
+    await expect(page.getByText('转办' + suffix, { exact: true })).toHaveCount(0)
     await expect(page.getByText('撤回' + suffix, { exact: true })).toHaveCount(0)
 
   } finally {
     for (const id of tickets) await post('tickets/delete', { id })
     for (const user_id of members) await post('orgs/members/delete', { org_id: orgId, user_id })
     if (orgId) await post('orgs/delete', { org_id: orgId })
+    if (successorId) await post('users/delete', { user_id: successorId })
     await type.cleanup()
   }
 })

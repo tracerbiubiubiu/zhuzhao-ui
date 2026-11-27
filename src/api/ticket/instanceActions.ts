@@ -121,7 +121,7 @@ function normalizeAction(value: unknown, fields: Map<string, TicketTypeFieldDef>
 
 export async function getInstanceActionsApi(id: string, definition: TicketDefinition): Promise<{
   actions: InstanceAction[]
-  capabilities?: { transfer: boolean; withdraw: boolean }
+  capabilities?: { transfer: boolean; withdraw: boolean; withdrawCommentRequired?: boolean }
   fields: TicketTypeFieldDef[]
 }> {
   if (definition.resolution === 'degraded') return { actions: [], fields: [] }
@@ -152,7 +152,9 @@ export async function getInstanceActionsApi(id: string, definition: TicketDefini
   const caps = body.capabilities
   const capabilities = body.ticket_id === id && body.revision === definition.revision && isObject(caps)
     && typeof caps.transfer === 'boolean' && typeof caps.withdraw === 'boolean'
-    ? { transfer: caps.transfer, withdraw: caps.withdraw } : undefined
+    ? { transfer: caps.transfer, withdraw: caps.withdraw,
+      ...(caps.withdraw_comment_required === true && { withdrawCommentRequired: true }) }
+    : undefined
   return { actions, fields: [...fields.values()], capabilities }
 }
 
