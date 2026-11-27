@@ -18,6 +18,7 @@ function setup() {
     listMessageTemplatesApi: vi.fn().mockResolvedValue({ list: [] }),
     listMessageRulesApi: vi.fn().mockResolvedValue([]), listMessageLogsApi: vi.fn(),
     createMessageTemplateApi: vi.fn(), updateMessageTemplateApi: vi.fn(), upsertMessageRuleApi: vi.fn(),
+    previewMessageTemplateApi: vi.fn(),
   }
   const message = { success: vi.fn(), error: vi.fn() }
   const components = Object.fromEntries(['ElAlert', 'ElButton', 'ElCard', 'ElDialog', 'ElForm', 'ElFormItem', 'ElInput', 'ElOption', 'ElPagination', 'ElSelect', 'ElSwitch', 'ElTabPane', 'ElTable', 'ElTableColumn', 'ElTabs', 'ElTag', 'ElEmpty'].map(name => [name, { name }]))
@@ -153,5 +154,50 @@ describe.each(editors)('$label 保存绑定编辑会话', editor => {
     expect(page[editor.dialog].visible).toBe(false)
     expect(page[editor.dialog].loading).toBe(false)
     expect(message.success).not.toHaveBeenCalled()
+  })
+})
+
+describe('消息模板示例预览', () => {
+  it('只提交当前草稿的渲染字段，失败后在当前对话框内重试', async () => {
+    const { page, api } = setup()
+    api.previewMessageTemplateApi
+      .mockRejectedValueOnce(httpError(503, '示例渲染暂不可用'))
+      .mockResolvedValueOnce({ subject: '已渲染主题', body: '已渲染正文' })
+    page.openTplEdit(editors[0].first)
+    await page.requestTplPreview()
+    expect(page.tplPreview.error).toBe('示例渲染暂不可用')
+    expect(page.tplPreview.result).toBeNull()
+    await page.requestTplPreview()
+    expect(api.previewMessageTemplateApi).toHaveBeenLastCalledWith({
+      code: 'synthetic_a', channel: 'uip', subject: '合成主题 A', body: '合成正文 A',
+    })
+    expect(api.createMessageTemplateApi).not.toHaveBeenCalled()
+    expect(api.updateMessageTemplateApi).not.toHaveBeenCalled()
+    expect(page.tplPreview.error).toBe('')
+    expect(page.tplPreview.result).toEqual({ subject: '已渲染主题', body: '已渲染正文' })
+    expect(page.tplDialog.visible).toBe(true)
+  })
+
+  it('草稿修改和关闭重开均丢弃旧预览', async () => {
+    const { page, api } = setup()
+    const old = deferred()
+    api.previewMessageTemplateApi
+      .mockReturnValueOnce(old.promise)
+      .mockResolvedValueOnce({ subject: '新主题', body: '新正文' })
+    page.openTplCreate()
+    Object.assign(page.tplForm, { subject: '旧主题', body: '旧正文' })
+    const preview = page.requestTplPreview()
+    expect(api.previewMessageTemplateApi).toHaveBeenCalledWith({ channel: 'uip', subject: '旧主题', body: '旧正文' })
+    page.tplForm.subject = '新主题'
+    old.resolve({ subject: '旧主题', body: '旧正文' })
+    await preview
+    expect(page.tplPreview.result).toBeNull()
+    expect(page.tplPreview.loading).toBe(false)
+    await page.requestTplPreview()
+    expect(page.tplPreview.result?.subject).toBe('新主题')
+    page.setTplDialogVisible(false)
+    page.openTplEdit(editors[0].second)
+    expect(page.tplPreview.result).toBeNull()
+    expect(page.tplPreview.error).toBe('')
   })
 })

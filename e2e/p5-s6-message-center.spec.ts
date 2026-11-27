@@ -77,6 +77,29 @@ test('P5-S6：分派事件入站 → 铃铛未读 → 消息中心全部已读 �
     await expect(page.getByText('抱歉，您访问的页面不存在')).toHaveCount(0)
     const viewer = await mustData(apiLogin(state.viewer.employeeNo, state.viewer.password, 'p5-s6-v'), 'viewer API 登录')
     expect((await api('/api/v1/notifications/inbox?page=1&page_size=1', { token: viewer.access_token })).status, 'viewer inbox 须 200（selfService）').toBe(200)
+
+    const optionsPath = '/api/v1/me/notification-optouts'
+    const viewerHeader = { token: viewer.access_token }
+    const reviewEvent = { biz_type: 'ticket', event_action: 'ticket.review_requested' }
+    const readOptions = () => mustData(api<Array<{ biz_type: string; event_action: string }>>(optionsPath, viewerHeader), '读取本人通知偏好')
+    const matchesReview = (row: { biz_type: string; event_action: string }) =>
+      row.biz_type === reviewEvent.biz_type && row.event_action === reviewEvent.event_action
+    const original = await readOptions()
+    expect(original.some(row => row.biz_type === 'ticket' && row.event_action === '*'), '专用浏览器账号应支持单事件偏好').toBe(false)
+    const originalOptedOut = original.some(matchesReview)
+    try {
+      const option = page.getByRole('checkbox', { name: '退订工单待复核外送提醒' })
+      await expect(option).toBeEnabled()
+      await option.focus()
+      await page.keyboard.press('Space')
+      await expect.poll(async () => (await readOptions()).some(matchesReview)).toBe(!originalOptedOut)
+      await page.reload()
+      if (originalOptedOut) await expect(option).not.toBeChecked()
+      else await expect(option).toBeChecked()
+    } finally {
+      const restore = await api(optionsPath, { ...viewerHeader, method: 'POST', body: { ...reviewEvent, opt_out: originalOptedOut } })
+      expect(restore.env?.code, '恢复测试账号原通知偏好').toBe(0)
+    }
   } finally {
     await api('/api/v1/tickets/delete', { ...h, method: 'POST', body: { id: tid } }).catch(() => {})
   }
