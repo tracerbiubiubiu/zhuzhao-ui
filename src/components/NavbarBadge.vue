@@ -3,7 +3,7 @@
  * NavbarBadge 全局待办角标（S10 B10-3——10 号附录 A.4）：
  * 60s 轮询 GET /badges（sections 开放 map——未知 section 忽略向前兼容）；
  * 消息写操作失效 ['badge'] 后立即重取；后台仍按 60s 同步。
- * 待办跳工单列表 assignee=me + exclude_statuses=closed,rejected，与角标计数同口径。
+ * 待办跳工单列表 assignee=me + exclude_statuses=closed,rejected,cancelled，与角标计数同口径。
  * 请求错误沿用统一请求层提示；重取失败保留上次成功数据。
  */
 import { computed } from 'vue'
@@ -23,7 +23,7 @@ const todo = computed(() => typeof badges.data.value?.todo === 'number' ? badges
 const unread = computed(() => typeof badges.data.value?.unread === 'number' ? badges.data.value.unread : 0)
 
 function goTodo() {
-  void router.push({ path: '/tickets', query: { assignee: 'me', exclude_statuses: 'closed,rejected' } })
+  void router.push({ path: '/tickets', query: { assignee: 'me', exclude_statuses: 'closed,rejected,cancelled' } })
 }
 
 function goInbox() {

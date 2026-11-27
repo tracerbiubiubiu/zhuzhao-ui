@@ -10,7 +10,7 @@ test('F3：普通工单办理者选人不授用户管理读', async ({ page }) =
   const h = { token: login.env!.data.access_token }
   const orgs = await mustData(api<Array<{ id: string }>>('/api/v1/orgs', h), 'orgs')
   const orgId = orgs[0]!.id
-  const tt = await tempTicketType(h, 'e2e_f3')
+  const tt = await tempTicketType(h, 'e2e_f3', undefined, 'inherit')
   let roleId = ''; let userId = ''; let targetId = ''; let ticketId = ''
   const employeeNo = `F3${suffix}`
   const username = `f3_${suffix}`

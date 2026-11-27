@@ -2340,6 +2340,49 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/risk-items/false-positive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 关闭误报并记录限期抑制 */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            /** @description 误报、抑制期限及回执身份 */
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["github_com_tracerbiubiubiu_zhuzhao_internal_model.RiskFalsePositiveRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["response.Response"] & {
+                            data?: components["schemas"]["github_com_tracerbiubiubiu_zhuzhao_internal_model.RiskSuppressionActionResult"];
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/risk-items/ingest-receipts/{id}": {
         parameters: {
             query?: never;
@@ -3014,6 +3057,92 @@ export interface paths {
         };
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/risk-suppressions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 按主锚管理权限查询误报抑制 */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description 页码 */
+                    page?: number;
+                    /** @description 每页条数 */
+                    page_size?: number;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["response.Response"] & {
+                            data?: components["schemas"]["github_com_tracerbiubiubiu_zhuzhao_internal_model.RiskSuppressionList"];
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/risk-suppressions/remove": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 终止误报抑制 */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            /** @description 抑制及当前修订 */
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["github_com_tracerbiubiubiu_zhuzhao_internal_model.RiskSuppressionRemoveRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["response.Response"] & {
+                            data?: components["schemas"]["github_com_tracerbiubiubiu_zhuzhao_internal_model.RiskSuppressionActionResult"];
+                        };
+                    };
+                };
+            };
+        };
         delete?: never;
         options?: never;
         head?: never;
@@ -5054,11 +5183,11 @@ export interface paths {
         get: {
             parameters: {
                 query: {
-                    /** @description assign|cc|create-supervisor|rule-target */
+                    /** @description assign|transfer|cc|create-supervisor|rule-target */
                     purpose: string;
                     /** @description 2–50 characters */
                     q: string;
-                    /** @description Required for assign/cc */
+                    /** @description Required for assign/transfer/cc */
                     ticket_id?: string;
                     /** @description Required for create-supervisor/rule-target */
                     org_id?: string;
@@ -5174,6 +5303,69 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/tickets/stats": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 工单统计 */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description 标签 */
+                    tag?: string;
+                    /** @description 分组维度，默认 status */
+                    group_by?: "status" | "priority" | "type_code";
+                    /** @description 工单类型 */
+                    type_code?: string;
+                    /** @description 工单状态 */
+                    status?: string;
+                    /** @description 状态集合，逗号分隔，与status互斥（例assigned,in_progress） */
+                    statuses?: string;
+                    /** @description 排除状态集合，逗号分隔，与status/statuses互斥 */
+                    exclude_statuses?: string;
+                    /** @description 优先级（1紧急/2高/3中/4低） */
+                    priority?: number;
+                    /** @description 处理人过滤，仅支持 me（当前用户——工作台待办/已办卡数据源） */
+                    assignee?: string;
+                    /** @description 创建人过滤，仅支持 me（当前用户，「我发起的」） */
+                    created_by?: string;
+                    /** @description 标题关键字（子串匹配；纯数字时同时精确匹配工单 ID） */
+                    keyword?: string;
+                    /** @description 创建日期起（YYYY-MM-DD，UTC 切日，含当日） */
+                    created_from?: string;
+                    /** @description 创建日期止（YYYY-MM-DD，UTC 切日，含当日） */
+                    created_to?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["response.Response"] & {
+                            data?: components["schemas"]["github_com_tracerbiubiubiu_zhuzhao_internal_model.TicketStats"];
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/tickets/tags": {
         parameters: {
             query?: never;
@@ -5246,6 +5438,52 @@ export interface paths {
                     };
                     content: {
                         "application/json": components["schemas"]["response.Response"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tickets/transfer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 转办工单 */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description 幂等键 */
+                    "Idempotency-Key": string;
+                };
+                path?: never;
+                cookie?: never;
+            };
+            /** @description 转办请求 */
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["github_com_tracerbiubiubiu_zhuzhao_internal_model.TicketTransferRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["response.Response"] & {
+                            data?: components["schemas"]["github_com_tracerbiubiubiu_zhuzhao_internal_model.TicketHandlingResult"];
+                        };
                     };
                 };
             };
@@ -5334,6 +5572,52 @@ export interface paths {
                     };
                     content: {
                         "application/json": components["schemas"]["response.Response"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tickets/withdraw": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 撤回工单 */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description 幂等键 */
+                    "Idempotency-Key": string;
+                };
+                path?: never;
+                cookie?: never;
+            };
+            /** @description 撤回请求 */
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["github_com_tracerbiubiubiu_zhuzhao_internal_model.TicketWithdrawRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["response.Response"] & {
+                            data?: components["schemas"]["github_com_tracerbiubiubiu_zhuzhao_internal_model.TicketHandlingResult"];
+                        };
                     };
                 };
             };
@@ -6600,6 +6884,8 @@ export interface components {
             description?: string;
             is_active?: boolean;
             name: string;
+            read_policy?: string;
+            read_role_codes?: string[];
             states?: number[];
             transitions?: number[];
         };
@@ -6853,6 +7139,7 @@ export interface components {
             expected_revision: string;
             /** @example 0 */
             id: string;
+            identity_supplement?: components["schemas"]["github_com_tracerbiubiubiu_zhuzhao_internal_model.RiskIdentitySupplement"];
             level: string;
             operation_id: string;
             treatment: string;
@@ -6895,6 +7182,19 @@ export interface components {
             provider: string;
             version?: string;
         };
+        "github_com_tracerbiubiubiu_zhuzhao_internal_model.RiskFalsePositiveRequest": {
+            expected_revision: string;
+            /** @example 0 */
+            id: string;
+            operation_id: string;
+            reason: string;
+            suppression_valid_until: string;
+        };
+        "github_com_tracerbiubiubiu_zhuzhao_internal_model.RiskIdentitySupplement": {
+            asset_ref?: components["schemas"]["github_com_tracerbiubiubiu_zhuzhao_internal_model.RiskAssetRef"];
+            evidence_refs?: components["schemas"]["github_com_tracerbiubiubiu_zhuzhao_internal_model.RiskEvidenceRef"][];
+            finding_key?: string;
+        };
         "github_com_tracerbiubiubiu_zhuzhao_internal_model.RiskReceipt": {
             command?: string;
             created_at?: string;
@@ -6935,6 +7235,50 @@ export interface components {
         "github_com_tracerbiubiubiu_zhuzhao_internal_model.RiskSourceSeverity": {
             scheme?: string;
             value?: string;
+        };
+        "github_com_tracerbiubiubiu_zhuzhao_internal_model.RiskSuppressionActionResult": {
+            receipt_ref?: components["schemas"]["github_com_tracerbiubiubiu_zhuzhao_internal_model.RiskReceipt"];
+            risk?: components["schemas"]["github_com_tracerbiubiubiu_zhuzhao_internal_model.RiskRef"];
+            status?: string;
+            suppression?: components["schemas"]["github_com_tracerbiubiubiu_zhuzhao_internal_model.RiskSuppressionRef"];
+        };
+        "github_com_tracerbiubiubiu_zhuzhao_internal_model.RiskSuppressionList": {
+            items?: components["schemas"]["github_com_tracerbiubiubiu_zhuzhao_internal_model.RiskSuppressionView"][];
+            page?: number;
+            page_size?: number;
+            total?: number;
+        };
+        "github_com_tracerbiubiubiu_zhuzhao_internal_model.RiskSuppressionRef": {
+            /** @example 0 */
+            id?: string;
+            /** @example 0 */
+            revision?: string;
+            valid_until?: string;
+        };
+        "github_com_tracerbiubiubiu_zhuzhao_internal_model.RiskSuppressionRemoveRequest": {
+            expected_revision: string;
+            /** @example 0 */
+            id: string;
+            operation_id: string;
+            reason: string;
+        };
+        "github_com_tracerbiubiubiu_zhuzhao_internal_model.RiskSuppressionView": {
+            active?: boolean;
+            created_at?: string;
+            /** @example 0 */
+            created_by?: string;
+            ended_at?: string;
+            /** @example 0 */
+            ended_by?: string;
+            ended_reason?: string;
+            /** @example 0 */
+            id?: string;
+            reason?: string;
+            /** @example 0 */
+            revision?: string;
+            /** @example 0 */
+            risk_id?: string;
+            valid_until?: string;
         };
         "github_com_tracerbiubiubiu_zhuzhao_internal_model.RiskWorkflowContext": {
             allowed_actions?: string[];
@@ -7095,7 +7439,12 @@ export interface components {
         };
         "github_com_tracerbiubiubiu_zhuzhao_internal_model.TicketActionList": {
             actions?: components["schemas"]["github_com_tracerbiubiubiu_zhuzhao_internal_model.TicketAvailableAction"][];
+            capabilities?: components["schemas"]["github_com_tracerbiubiubiu_zhuzhao_internal_model.TicketHandlingCapabilities"];
             fields?: components["schemas"]["github_com_tracerbiubiubiu_zhuzhao_internal_model.PublishedTicketFormField"][];
+            /** @example 0 */
+            revision?: string;
+            /** @example 0 */
+            ticket_id?: string;
         };
         "github_com_tracerbiubiubiu_zhuzhao_internal_model.TicketAttachmentView": {
             created_at?: string;
@@ -7172,6 +7521,32 @@ export interface components {
             id?: string;
             message?: string;
         };
+        "github_com_tracerbiubiubiu_zhuzhao_internal_model.TicketHandlingCapabilities": {
+            transfer?: boolean;
+            withdraw?: boolean;
+            withdraw_comment_required?: boolean;
+        };
+        "github_com_tracerbiubiubiu_zhuzhao_internal_model.TicketHandlingResult": {
+            /** @example 0 */
+            assigned_to?: string | null;
+            /** @example 0 */
+            id?: string;
+            /** @example 0 */
+            revision?: string;
+            status?: string;
+        };
+        "github_com_tracerbiubiubiu_zhuzhao_internal_model.TicketStats": {
+            as_of?: string;
+            items?: components["schemas"]["github_com_tracerbiubiubiu_zhuzhao_internal_model.TicketStatsItem"][];
+            total?: number;
+        };
+        "github_com_tracerbiubiubiu_zhuzhao_internal_model.TicketStatsItem": {
+            count?: number;
+            in_progress_count?: number;
+            key?: string;
+            overdue_count?: number;
+            overdue_rate?: number | null;
+        };
         "github_com_tracerbiubiubiu_zhuzhao_internal_model.TicketTaskRun": {
             action?: string;
             completed_at?: string;
@@ -7186,6 +7561,12 @@ export interface components {
             /** @example 0 */
             ticket_revision?: string;
         };
+        "github_com_tracerbiubiubiu_zhuzhao_internal_model.TicketTransferRequest": {
+            comment?: string;
+            expected_revision: string;
+            id: string;
+            to_user_id: string;
+        };
         "github_com_tracerbiubiubiu_zhuzhao_internal_model.TicketTypeFieldInput": {
             field_key: string;
             field_label: string;
@@ -7197,6 +7578,11 @@ export interface components {
             required?: boolean;
             sort_order?: number;
             validate_regex?: string;
+        };
+        "github_com_tracerbiubiubiu_zhuzhao_internal_model.TicketWithdrawRequest": {
+            comment?: string;
+            expected_revision: string;
+            id: string;
         };
         "github_com_tracerbiubiubiu_zhuzhao_internal_model.TransitionTicketRequest": {
             comment?: string;

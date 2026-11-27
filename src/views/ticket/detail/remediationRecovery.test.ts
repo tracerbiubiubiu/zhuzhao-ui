@@ -30,15 +30,17 @@ function fixture() {
   const action = (revision = '41') => ({ id: 'claim', to: 'in_progress', title: '接单', fields: [], commentRequired: false,
     expectedRevision: revision, definitionVersion: '7',
   })
+  const invalidate = vi.fn()
+  const handle = vi.fn()
   const ticketApi = vi.fn().mockResolvedValue(row())
   const assignApi = vi.fn().mockResolvedValue(undefined)
   const deleteApi = vi.fn().mockResolvedValue(undefined)
   const confirm = vi.fn()
   const queries: Record<string, any> = {}
   const { page, lifecycle } = setupPage(source, {
-    '@/api/ticket': { STATUS_LABEL: {}, getTicketApi: ticketApi, assignTicketApi: assignApi, deleteTicketApi: deleteApi },
+    '@/api/ticket': { STATUS_LABEL: {}, getTicketApi: ticketApi, handleTicketApi: handle, assignTicketApi: assignApi, deleteTicketApi: deleteApi },
     '@/api/ticket/instanceActions': { normalizeTicketDefinition, getInstanceActionsApi: vi.fn(), transitionInstanceApi: vi.fn() },
-    '@/api/ticket/operationKey': { newTicketOperationKey: vi.fn() },
+    '@/api/ticket/operationKey': { newTicketOperationKey: () => 'synthetic-key' },
     '@/api/risk/remediation': { getRemediationContextApi: vi.fn(), getRemediationOperationApi: vi.fn() },
     '@/api/system/dict': { getDictItemsByCodeApi: vi.fn() },
     '@/common/auth/tokenStorage': { getSessionGeneration: () => session },
@@ -62,10 +64,10 @@ function fixture() {
         queries[name] = query
         return query
       },
-      useQueryClient: () => ({ invalidateQueries: vi.fn() }),
+      useQueryClient: () => ({ invalidateQueries: invalidate }),
     },
   }, props)
-  return { page, lifecycle, props, user, queries, detail, context, action, ticketApi, assignApi, deleteApi, confirm, changeSession: () => session++ }
+  return { page, lifecycle, props, user, queries, detail, context, action, ticketApi, handle, invalidate, assignApi, deleteApi, confirm, changeSession: () => session++ }
 }
 function nodes(input: any): any[] {
   if (Array.isArray(input)) return input.flatMap(nodes)
@@ -348,4 +350,71 @@ it('任务失败显示友好原因，旧票和失去当前读权时隐藏任务�
   expect(text).not.toContain('unexpected-internal-description')
   f.user.read = false
   expect(resultNodes()).toBeUndefined()
+})
+
+it('普通工单转办仅消费服务端能力，结果未知按原请求重试，撤回拒绝时刷新', async () => {
+  const f = fixture()
+  f.queries['risk-workflow'].data.value = undefined
+  const buttonFor = (kind: string) => render(f).find(n => n.props?.['data-testid'] === 'btn-' + kind)
+  expect(buttonFor('transfer')).toBeUndefined()
+  f.queries.transitions.data.value.capabilities = { transfer: true, withdraw: false }
+  expect(buttonFor('transfer')).toBeUndefined()
+  f.user.hasPermission = () => true
+  expect(buttonFor('transfer')).toBeTruthy()
+  expect(buttonFor('withdraw')).toBeUndefined()
+  buttonFor('transfer').props.onClick()
+  f.page.handlingTarget.value = '502'
+  f.page.handlingComment.value = '合成理由'
+  f.handle.mockRejectedValueOnce(new Error('响应丢失')).mockResolvedValueOnce(undefined)
+  await f.page.submitHandling()
+  f.page.handlingTarget.value = '503'
+  await f.page.submitHandling()
+  expect(f.handle.mock.calls).toEqual(Array.from({ length: 2 }, () => [
+    { kind: 'transfer', body: { id: '42', expected_revision: '41', to_user_id: '502', comment: '合成理由' } }, 'synthetic-key',
+  ]))
+  expect(f.page.handlingDialog.value).toBeNull()
+  f.queries.transitions.data.value.capabilities = { transfer: false, withdraw: true }
+  buttonFor('withdraw').props.onClick()
+  f.queries.transitions.data.value.capabilities.withdraw = false
+  await f.page.submitHandling()
+  expect(f.handle).toHaveBeenCalledTimes(2)
+  expect(f.page.handlingDialog.value).toBeNull()
+  f.queries.transitions.data.value.capabilities.withdraw = true
+  buttonFor('withdraw').props.onClick()
+  f.handle.mockRejectedValueOnce({ response: { status: 409, data: { code: 10006, message: '版本已变化' } } })
+  await f.page.submitHandling()
+  expect(f.page.handlingDialog.value).toBeNull()
+  expect(f.page.handlingNotice.value).toContain('版本已变化')
+  expect(f.handle.mock.lastCall?.[0]).toEqual({ kind: 'withdraw', body: { id: '42', expected_revision: '41' } })
+})
+
+it('撤回规则要求说明时，空说明不能提交', async () => {
+  const f = fixture()
+  f.queries['risk-workflow'].data.value = undefined
+  f.user.hasPermission = () => true
+  f.queries.transitions.data.value.capabilities = { transfer: false, withdraw: true, withdrawCommentRequired: true }
+  f.page.openHandling('withdraw')
+  f.page.handlingComment.value = '   '
+  await f.page.submitHandling()
+  expect(f.handle).not.toHaveBeenCalled()
+  f.page.handlingComment.value = '合成撤回说明'
+  await f.page.submitHandling()
+  expect(f.handle).toHaveBeenCalledWith({ kind: 'withdraw', body: { id: '42', expected_revision: '41', comment: '合成撤回说明' } }, 'synthetic-key')
+})
+
+it('转办请求等待中离开页签，成功回包仍清除原操作并使对应工单失效', async () => {
+  const f = fixture()
+  f.queries['risk-workflow'].data.value = undefined
+  f.user.hasPermission = () => true
+  f.queries.transitions.data.value.capabilities = { transfer: true, withdraw: false }
+  f.page.openHandling('transfer')
+  f.page.handlingTarget.value = '502'
+  const response = deferred()
+  f.handle.mockReturnValueOnce(response.promise)
+  const submit = f.page.submitHandling()
+  f.page.active.value = false
+  response.resolve(undefined)
+  await submit
+  expect(f.page.handlingDialog.value).toBeNull()
+  expect(f.invalidate).toHaveBeenCalledWith({ queryKey: ['ticket', 'detail', '42'] })
 })

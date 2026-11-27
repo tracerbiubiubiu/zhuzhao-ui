@@ -31,7 +31,7 @@ export default defineConfig({
   reporter: [
     ['list'],
     ...(requireComplete ? [['./e2e/required-browser-results.ts', {
-      expected: 55, listOnly, allowRetries: true,
+      expected: 56, listOnly, allowRetries: true,
     }] as const] : []),
     ...(jsonReport ? [['json', { outputFile: jsonReport }] as const] : []),
   ],

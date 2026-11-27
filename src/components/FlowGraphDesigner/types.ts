@@ -17,11 +17,9 @@ export const STATE_EDGE_TYPE = 'polyline'
  */
 export const START_STATE = 'open'
 /**
- * 终态约定：closed=后端唯一终态判定（service.go 三处 `Status == StatusClosed`——仅非终态可改/
- * 已关闭不可再关）；rejected=设计终态（API 不可达但列为六态之一）。终态允许有出边（默认图
- * closed/rejected → open 为重开边），故终态**按名约定**而非"无出边"——lint 规则的判据基础。
+ * closed/rejected 可有重开边，cancelled 是撤回专用终态。按状态名判断以免把普通死路当作终态。
  */
-export const TERMINAL_STATES: readonly string[] = ['closed', 'rejected']
+export const TERMINAL_STATES: readonly string[] = ['closed', 'rejected', 'cancelled']
 /** 状态码命名：标识符形态（与六默认态 snake_case 同构；JSON 源码模式不受此限） */
 export const STATE_NAME_RE = /^[A-Za-z][A-Za-z0-9_]*$/
 

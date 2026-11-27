@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import request from '@vea/request'
-import { addTicketCCApi, assignTicketApi, createTicketApi } from './index'
+import { addTicketCCApi, assignTicketApi, createTicketApi, handleTicketApi } from './index'
 import { compareInt64Desc } from '@/utils/int64'
 
 vi.mock('@vea/request', () => ({ default: { post: vi.fn() } }))
@@ -45,5 +45,19 @@ describe('ticket identity wire contract', () => {
     expect(['9007199254740992', '9007199254740993', '10', '9'].sort(compareInt64Desc))
       .toEqual(['9007199254740993', '9007199254740992', '10', '9'])
     expect(compareInt64Desc('9007199254740993', '9007199254740993')).toBe(0)
+  })
+})
+
+it('核对专用动作回执与原票和目标；响应不完整时保留未知结果', async () => {
+  const command = { kind: 'transfer' as const, body: { id: '41', expected_revision: '7', to_user_id: '9007199254740993' } }
+  const receipt = { id: '41', assigned_to: '9007199254740993', revision: '8', status: 'assigned' }
+  for (const invalid of [null, { ...receipt, id: '42' }, { ...receipt, assigned_to: 9007199254740992 }, { ...receipt, revision: '7' }]) {
+    vi.mocked(request.post).mockResolvedValueOnce(invalid as never)
+    await expect(handleTicketApi(command, 'synthetic-key')).rejects.toThrow()
+  }
+  vi.mocked(request.post).mockResolvedValueOnce(receipt as never)
+  await handleTicketApi(command, 'synthetic-key')
+  expect(request.post).toHaveBeenLastCalledWith('/api/v1/tickets/transfer', command.body, {
+    _silentError: true, headers: { 'Idempotency-Key': 'synthetic-key' },
   })
 })

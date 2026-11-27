@@ -30,7 +30,7 @@ test('S10/S11：详情评论/备注分层+关联判重+分派/关闭流+viewer �
   const admin = await apiLogin(state.admin.employeeNo, state.admin.password, 's10-setup')
   const h = { token: admin.env!.data.access_token } as const
   const orgId = ((await api('/api/v1/orgs', { token: h.token })).env!.data as Array<{ id: string }>)[0].id
-  const tt = await tempTicketType(h, 'e2e_s10')
+  const tt = await tempTicketType(h, 'e2e_s10', undefined, 'inherit')
   const ticketIds: string[] = []
   const mk = async (title: string, description?: string) => {
     const created = await mustData(api<{ id: string }>('/api/v1/tickets', {

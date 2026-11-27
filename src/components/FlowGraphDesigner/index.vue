@@ -42,7 +42,7 @@
     />
     <div class="fg-legend">
       <span><i class="fg-dot fg-dot--start" />open 起始态</span>
-      <span><i class="fg-dot fg-dot--terminal" />closed / rejected 终态</span>
+      <span><i class="fg-dot fg-dot--terminal" />closed / rejected / cancelled 终态</span>
       <span><i class="fg-dot fg-dot--normal" />其他状态</span>
       <span>open / assigned / closed 为内置保留态，缺失时无法保存</span>
     </div>
