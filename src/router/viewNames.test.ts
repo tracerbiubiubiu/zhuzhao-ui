@@ -36,7 +36,7 @@ function dirnameOf(u: string): string {
   return join(fileURLToPath(u), '..')
 }
 
-/** ─── SQL 解析（只认种子里实际用到的语句形态：INSERT 三形态 / UPDATE parent_id·visible / DELETE）─── */
+/** ─── SQL 解析（只认种子里实际用到的语句形态：INSERT 既有形态 / UPDATE parent_id·visible / DELETE）─── */
 
 interface MenuRow {
   code: string
@@ -180,10 +180,24 @@ function deriveMenuRows(): MenuRow[] {
       })
     }
 
+    // 104/106 的菜单种子用 CROSS JOIN 将按钮元组挂到同一父菜单。只在 SELECT
+    // 明确写入 menu_type=3 时按按钮计数，未知或页面投影必须显式支持。
+    const crossJoin = /INSERT INTO menus\s*\(([^)]+)\)\s*SELECT\s+([^;]*?)\s+FROM menus\s+(\w+)\s+CROSS JOIN\s*\(VALUES\s*([^;]*?)\)\s+(?:AS\s+)?\w+\s*\([^)]+\)\s+WHERE\s+\3\.code\s*=\s*'[^']+'[^;]*;/gi
+    for (const m of sql.matchAll(crossJoin)) {
+      const columns = m[1].split(',').map(c => c.trim().toLowerCase())
+      const menuType = splitTopLevel(m[2])[columns.indexOf('menu_type')]
+      expect(menuType, `${file} 的批量菜单仅支持明确的按钮投影，页面须按实际路由重放`).toBe('3')
+      const count = tuplesOf(m[4]).length
+      events.push({
+        at: m.index ?? 0,
+        run: () => { perFileActions.set(file, (perFileActions.get(file) ?? 0) + count) },
+      })
+    }
+
     // 形态 C（单行 INSERT…SELECT，FROM menus 可以省略别名）：
     // 按列名映射 SELECT 列表——页面行与按钮行两用（000048 system_setting 是 menu_type=2 页面且别名 m，
     // 原实现只认别名 p 且一律记为按钮，该页三段未进期望名单）
-    const formC = /INSERT INTO menus\s*\(([^)]+)\)\s*SELECT\s+([^;]*?)\s+FROM menus(?: (\w+))? WHERE (?:\3\.)?code = '([^']+)'[^;]*;/g
+    const formC = /INSERT INTO menus\s*\(([^)]+)\)\s*SELECT\s+([^;]*?)\s+FROM menus(?:\s+(\w+))?\s+WHERE\s+(?:\3\.)?code\s*=\s*'([^']+)'[^;]*;/g
     for (const m of sql.matchAll(formC)) {
       const cols = m[1].split(',').map((c) => c.trim())
       const cells = splitTopLevel(m[2])
