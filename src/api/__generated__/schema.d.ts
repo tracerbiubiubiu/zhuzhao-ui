@@ -1198,6 +1198,49 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/message-templates/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 预览消息模板 */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            /** @description 模板草稿 */
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["internal_handler.MessageTemplatePreviewRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "*/*": components["schemas"]["response.Response"] & {
+                            data?: components["schemas"]["internal_handler.MessageTemplatePreview"];
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/message-templates/update": {
         parameters: {
             query?: never;
@@ -1326,6 +1369,47 @@ export interface paths {
                 };
             };
         };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/notifications/delivery": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 查询本人的原投递状态 */
+        get: {
+            parameters: {
+                query: {
+                    /** @description 原投递 ID */
+                    delivery_id: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "*/*": components["schemas"]["response.Response"] & {
+                            data?: components["schemas"]["internal_handler.messageDeliveryResponse"];
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -7417,6 +7501,22 @@ export interface components {
             object_key: string;
             /** @example 0 */
             ticket_id: string;
+        };
+        "internal_handler.MessageTemplatePreview": {
+            body?: string;
+            subject?: string;
+        };
+        "internal_handler.MessageTemplatePreviewRequest": {
+            body: string;
+            channel: string;
+            code?: string;
+            subject: string;
+        };
+        "internal_handler.messageDeliveryResponse": {
+            delivery_id?: string;
+            reason?: string;
+            state?: string;
+            updated_at?: string;
         };
         "internal_handler.notificationIDReq": {
             /** @example 0 */

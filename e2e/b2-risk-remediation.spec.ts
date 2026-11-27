@@ -259,6 +259,63 @@ test('B2 第8项 P 提交初次证据、U 通过A打回B、P 只重提B、U 正�
         return { mutation, after, writes }
       })
 
+      await test.step('U 在消息中心查看原工单的待复核通知', async () => {
+        const [inbox] = await Promise.all([
+          U.page.waitForResponse(response => response.request().method() === 'GET'
+            && new URL(response.url()).pathname === '/api/v1/notifications/inbox'),
+          U.page.goto('/#/messages'),
+        ])
+        expect(inbox.status()).toBe(200)
+        type ReviewRow = { id: string; biz_id?: string; title: string; delivery_id?: string; read_at?: string }
+        const { data } = await inbox.json() as Envelope<{ list: ReviewRow[] }>
+        const notices = data.list.filter(row => row.biz_id === ticketId && row.title === '工单待复核')
+        expect(notices).toHaveLength(1)
+        const notice = notices[0]!
+        expect(notice.read_at).toBeFalsy()
+        const row = U.page.getByTestId(`msg-${notice.id}`)
+        await expect(row.getByRole('button', { name: '工单待复核' })).toBeVisible()
+        const expectedState = process.env.B2_REVIEW_DELIVERY_EXPECTED_STATE
+        if (expectedState !== undefined) {
+          const labels = new Map([
+            ['accepted', '已受理'], ['delivered', '已送达'], ['failed', '发送失败'],
+            ['unknown', '结果未知'], ['suppressed', '已抑制'],
+          ])
+          const label = labels.get(expectedState)
+          assert.ok(label, 'B2_REVIEW_DELIVERY_EXPECTED_STATE 须为本轮 mock 固定的可观察状态')
+          assert.ok(notice.delivery_id, '验外送状态时，通知必须包含原投递编号')
+          const original = notice.delivery_id
+          const readOriginal = async (trigger: () => Promise<void>) => {
+            const [response] = await Promise.all([
+              U.page.waitForResponse(candidate => {
+                const url = new URL(candidate.url())
+                return url.pathname === '/api/v1/notifications/delivery' && candidate.request().method() === 'GET'
+                  && url.searchParams.get('delivery_id') === original
+              }),
+              trigger(),
+            ])
+            expect(response.status()).toBe(200)
+            const { data } = await response.json() as Envelope<{ delivery_id: string; state: string }>
+            expect(data.delivery_id).toBe(original)
+            return data.state
+          }
+          const inspect = row.getByRole('button', { name: '查询投递状态' })
+          const first = await readOriginal(() => inspect.press('Enter'))
+          const drawer = U.page.getByRole('dialog', { name: '消息投递状态' })
+          if (first !== expectedState) {
+            await expect.poll(() => readOriginal(() => drawer.getByRole('button', { name: '查询原记录' }).click()), {
+              intervals: [500, 1000, 1500],
+              timeout: 20_000,
+            }).toBe(expectedState)
+          }
+          await expect(drawer.getByText(label, { exact: true })).toBeVisible()
+          await expect(drawer.getByText(original, { exact: true })).toBeVisible()
+          await U.page.keyboard.press('Escape')
+          await expect(drawer).toBeHidden()
+          await expect(row.locator('.msg-dot--unread')).toBeVisible()
+        }
+        phases.push({ phase: 'u-review-notice', notificationId: notice.id, deliveryId: notice.delivery_id, expectedState })
+      })
+
       await test.step('待复测态：无关成员复测写被拒绝且无回执', async () => {
         const readerContext = await readContext(X.client, ticketId)
         assert.ok(readerContext.items.every(item => item.remediation_state === 'pending_verify'))

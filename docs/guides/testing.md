@@ -83,6 +83,7 @@ ESLint是纯检查，修复用lint:fix后重跑。E2E使用[playwright.config.ts
 - **登记（第 6 项）** `B2_RISK_REGISTRATION_ADMIN_NO` 与 `B2_RISK_REGISTRATION_ADMIN_PASSWORD` 是已就绪的准备账号，须能直接登录并创建合成角色、用户和菜单绑定。用例先确认 UI 网关和 Core 识别同一个准备账号，再自建专属组织与 M/U/P/X 夹具。种子账号如用于准备，其自身凭据和权限保持原值。
 - **派单（第 7 项）** `B2_RISK_DISPATCH_NO` 与 `B2_RISK_DISPATCH_PASSWORD` 是有目标权限的合成非种子派单账号。`B2_RISK_DISPATCH_FIXTURE` 指向仓库外、执行用户拥有且仅其可写的绝对 JSON 文件。`target` 提供 `org_id`、`type_code`、`definition_version`，指向可用组织和已发布整改类型。`risks` 和 `restart` 各是独立 A/B/C 三条，另有单条 `ownerless`，共七个不同风险。每条给出十进制字符串 `risk_id` 和现势 `expected_revision`。每组 A/B/C 同漏洞、同组织、标题有共同可搜索前缀、资产各异、已核实且有等级和期限。A/B 同一具名负责人，C 为另一人，两人不同于派单账号且都有主部门。`ownerless` 仅缺负责人。旧 `account` 字段可省略，保留时只接受 `operator` 或 `viewer`，实际账号始终由环境变量提供。
 - **整改（第 8 项）** 注入三组 `B2_REMEDIATION_{P,U,X}_NO` 与对应 `_PASSWORD`，分别是办理人、现势风险责任人、拥有入口及目标读权但无当前写职责的成员。三张工单互不重叠，`B2_REMEDIATION_TICKET_ID` 主链路至少两个 `open` 资产，`B2_REMEDIATION_DROP_TICKET_ID` 丢响应链路至少一个 `open` 资产。两票都须处于 `in_progress`、由 P 办理，U 是所有资产的现势责任人。`B2_REMEDIATION_VERIFY_TICKET_ID` 续测票同时有 `pending_verify` 与 `resolved` 资产，由 U 复测待复测项。工单绑定的发布定义在办理时提供「办理说明」，复测时提供 `Synthetic review mark` 字段，且 P/U/X 的菜单、数据读取范围和动作权限匹配场景。
+- **复核通知** 主链路首次提交后，U 在真实消息中心核对该工单的站内通知。若本轮 Core 已接入独占的合成 HTTP 渠道，可设置 `B2_REVIEW_DELIVERY_EXPECTED_STATE` 为夹具承诺的状态（`accepted`、`delivered`、`failed`、`unknown` 或 `suppressed`）。浏览器按站内通知给出的原编号查询并核对显示，查询后站内通知仍为未读。
 
 ### 派单重启交接
 

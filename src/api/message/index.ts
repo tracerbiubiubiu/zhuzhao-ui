@@ -3,6 +3,7 @@
  * title/link 入站即渲染（读面零渲染逻辑）；深链=link 直跳。
  */
 import request from '@vea/request'
+import type { components, paths } from '@/api/__generated__/schema'
 
 /** 站内通知行（事件快照——读过即完；read_at 空=未读） */
 export interface NotificationRow {
@@ -14,6 +15,7 @@ export interface NotificationRow {
   link?: string
   created_at: string
   read_at?: string
+  delivery_id?: string
 }
 
 /** 收件箱分页（倒序） */
@@ -35,6 +37,34 @@ export async function markNotificationReadApi(id: string): Promise<void> {
 export async function markAllNotificationsReadApi(): Promise<number> {
   const data = await request.post('/api/v1/notifications/read-all', {})
   return ((data as unknown as { marked?: number })?.marked ?? 0)
+}
+
+type DeliveryQuery = paths['/api/v1/notifications/delivery']['get']['parameters']['query']
+type DeliveryResponse = components['schemas']['internal_handler.messageDeliveryResponse']
+export type NotificationDelivery = Required<Omit<DeliveryResponse, 'reason'>> & Pick<DeliveryResponse, 'reason'>
+
+export async function getNotificationDeliveryApi(deliveryId: string): Promise<NotificationDelivery> {
+  const params: DeliveryQuery = { delivery_id: deliveryId }
+  const data = await request.get('/api/v1/notifications/delivery', { params, _silentError: true }) as unknown as DeliveryResponse
+  const { delivery_id, state, updated_at, reason } = data ?? {}
+  if (typeof delivery_id !== 'string' || typeof state !== 'string' || typeof updated_at !== 'string') {
+    throw new Error('投递记录缺少必要字段')
+  }
+  return { delivery_id, state, updated_at, reason }
+}
+
+export interface NotificationOptout {
+  biz_type: string
+  event_action: string
+}
+
+export async function listNotificationOptoutsApi(): Promise<NotificationOptout[]> {
+  const data = await request.get('/api/v1/me/notification-optouts', { _silentError: true })
+  return data as unknown as NotificationOptout[]
+}
+
+export async function setNotificationOptoutApi(body: NotificationOptout & { opt_out: boolean }): Promise<void> {
+  await request.post('/api/v1/me/notification-optouts', body, { _silentError: true })
 }
 
 // ─── 管理面：模板/规则/发送日志（2026-10-31 自 system/notification 页收口——外部审计 M-2）───
@@ -77,6 +107,19 @@ export interface MessageLogQuery {
 export async function listMessageTemplatesApi(params: { page: number; page_size: number }): Promise<{ list: MessageTemplateRow[] }> {
   const data = await request.get('/api/v1/message-templates', { params, _silentError: true })
   return { list: (data as unknown as { list?: MessageTemplateRow[] })?.list ?? [] }
+}
+
+type PreviewRequest = paths['/api/v1/message-templates/preview']['post']['requestBody']['content']['application/json']
+type PreviewResponse = components['schemas']['internal_handler.MessageTemplatePreview']
+export type MessageTemplatePreview = Required<PreviewResponse>
+
+export async function previewMessageTemplateApi(body: PreviewRequest): Promise<MessageTemplatePreview> {
+  const data = await request.post('/api/v1/message-templates/preview', body, { _silentError: true }) as unknown as PreviewResponse
+  const { subject, body: renderedBody } = data ?? {}
+  if (typeof subject !== 'string' || typeof renderedBody !== 'string') {
+    throw new Error('模板预览缺少必要字段')
+  }
+  return { subject, body: renderedBody }
 }
 
 export async function createMessageTemplateApi(body: MessageTemplateRow): Promise<void> {

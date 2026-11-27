@@ -100,7 +100,7 @@
     </el-card>
 
     <!-- 模板编辑对话框（code 建后不可改；is_system 行不可入） -->
-    <el-dialog :model-value="tplDialog.visible" :close-on-click-modal="false" :title="tplDialog.isCreate ? '新建消息模板' : `编辑模板 ${tplForm.code}`" width="640px" @update:model-value="setTplDialogVisible">
+    <el-dialog :model-value="tplDialog.visible" :close-on-click-modal="false" :title="tplDialog.isCreate ? '新建消息模板' : `编辑模板 ${tplForm.code}`" width="min(640px, calc(100% - 24px))" @update:model-value="setTplDialogVisible">
       <el-form label-width="90px" :disabled="tplDialog.loading" @submit.prevent>
         <el-form-item label="标识" required>
           <el-input v-model="tplForm.code" :disabled="tplDialog.loading || !tplDialog.isCreate" placeholder="如 ticket_assigned_v2" maxlength="64" />
@@ -130,7 +130,24 @@
         </el-form-item>
       </el-form>
       <el-alert v-if="tplDialog.error" :title="tplDialog.error" type="error" show-icon :closable="false" />
+      <el-alert v-if="tplPreview.error" :title="tplPreview.error" type="error" :closable="false" class="mt-2" />
+      <div aria-live="polite" :aria-busy="tplPreview.loading">
+        <section v-if="tplPreview.result" aria-label="示例预览" class="mt-3">
+          <h3 class="text-sm font-semibold">示例预览</h3>
+          <dl class="m-0 max-h-[180px] overflow-y-auto whitespace-pre-wrap break-words text-sm">
+            <dt class="font-medium">主题</dt>
+            <dd class="m-0">{{ tplPreview.result.subject }}</dd>
+            <dt class="mt-2 font-medium">正文</dt>
+            <dd class="m-0">{{ tplPreview.result.body }}</dd>
+          </dl>
+        </section>
+      </div>
       <template #footer>
+        <el-button
+          :loading="tplPreview.loading"
+          :disabled="tplDialog.loading || !tplForm.subject || !tplForm.body"
+          @click="requestTplPreview"
+        >预览示例</el-button>
         <el-button @click="setTplDialogVisible(false)">取消</el-button>
         <el-button type="primary" :loading="tplDialog.loading" @click="submitTpl">{{ tplDialog.isCreate ? '创建' : '保存' }}</el-button>
       </template>
@@ -186,9 +203,9 @@
  * 规则语义：biz_type+event_action 唯一（一事件一规则）——同键保存=改绑模板/收件人；规则=开关与默认模板，
  * notify 动作可在 params.template 逐次覆盖（000079 起 ticket.action_notify 有种子默认路由）。
  */
-import { apiReadError } from '@/utils/apiError'
+import { apiErrorMessage, apiReadError } from '@/utils/apiError'
 import { formatDateTime } from '@/utils/datetime'
-import { computed, reactive, ref, onMounted, onActivated, onDeactivated, onScopeDispose } from 'vue'
+import { computed, reactive, ref, watch, onMounted, onActivated, onDeactivated, onScopeDispose } from 'vue'
 import { useTableFit } from '@vea/hooks'
 import {
   ElAlert, ElButton, ElCard, ElDialog, ElForm, ElFormItem, ElInput,
@@ -197,9 +214,9 @@ import {
   ElEmpty,
 } from 'element-plus'
 import {
-  listMessageTemplatesApi, createMessageTemplateApi, updateMessageTemplateApi, deleteMessageTemplateApi,
+  listMessageTemplatesApi, createMessageTemplateApi, updateMessageTemplateApi, deleteMessageTemplateApi, previewMessageTemplateApi,
   listMessageRulesApi, upsertMessageRuleApi, deleteMessageRuleApi, listMessageLogsApi,
-  type MessageTemplateRow, type MessageRuleRow,
+  type MessageTemplateRow, type MessageRuleRow, type MessageTemplatePreview,
 } from '@/api/message'
 
 // 顶层菜单页路由名=`${code}_page`（permissionRoutes）；原 'SystemNotification' 与路由名不符致 keep-alive 恒不命中
@@ -341,17 +358,45 @@ async function fetchLogs() {
 const tplDialog = reactive({ visible: false, loading: false, error: '', isCreate: true })
 const tplForm = reactive<MessageTemplateRow>({ code: '', name: '', channel: 'uip', biz_type: 'ticket', subject: '', body: '', enabled: true })
 let tplEditSession = 0
+let previewSeq = 0
+const tplPreview = reactive({ result: null as MessageTemplatePreview | null, loading: false, error: '' })
+
+function clearTplPreview() {
+  previewSeq++
+  tplPreview.result = null
+  tplPreview.loading = false
+  tplPreview.error = ''
+}
+watch(() => [tplForm.code, tplForm.channel, tplForm.subject, tplForm.body], clearTplPreview, { flush: 'sync' })
+
+async function requestTplPreview() {
+  if (!tplDialog.visible || tplDialog.loading || tplPreview.loading || readsPaused || !tplForm.subject || !tplForm.body) return
+  clearTplPreview()
+  const seq = previewSeq
+  tplPreview.loading = true
+  try {
+    const { code, channel, subject, body } = tplForm
+    const result = await previewMessageTemplateApi({ ...(code ? { code } : {}), channel, subject, body })
+    if (seq === previewSeq) tplPreview.result = result
+  } catch (error) {
+    if (seq === previewSeq) tplPreview.error = apiErrorMessage(error, '预览失败，请重试')
+  } finally {
+    if (seq === previewSeq) tplPreview.loading = false
+  }
+}
 
 function setTplDialogVisible(visible: boolean) {
   tplDialog.visible = visible
   if (!visible) {
     tplEditSession++
+    clearTplPreview()
     tplDialog.loading = false
   }
 }
 
 function openTplCreate() {
   tplEditSession++
+  clearTplPreview()
   tplDialog.loading = false
   Object.assign(tplForm, { code: '', name: '', channel: 'uip', biz_type: 'ticket', subject: '', body: '', enabled: true })
   tplDialog.error = ''
@@ -360,6 +405,7 @@ function openTplCreate() {
 }
 function openTplEdit(row: MessageTemplateRow) {
   tplEditSession++
+  clearTplPreview()
   tplDialog.loading = false
   Object.assign(tplForm, row)
   tplDialog.error = ''

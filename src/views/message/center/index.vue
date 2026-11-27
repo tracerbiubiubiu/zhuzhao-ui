@@ -5,18 +5,19 @@
  * 通知行=摘要+时间+深链（link 直跳）；单条点击即读+全部已读。
  * 待办 tab 数据源=S10 角标同源（assignee=me 列表——状态派生非快照）。
  */
-import { apiReadError } from '@/utils/apiError'
+import { apiErrorMessage, apiReadError } from '@/utils/apiError'
 import { formatDateTime } from '@/utils/datetime'
 import { compareInt64Desc } from '@/utils/int64'
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, onActivated, onDeactivated, onMounted, onScopeDispose, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import {
-  ElAlert, ElButton, ElCard, ElCheckbox, ElEmpty, ElMessage, ElPagination, ElTabPane, ElTabs, ElTag,
+  ElAlert, ElButton, ElCard, ElCheckbox, ElDrawer, ElEmpty, ElMessage, ElPagination, ElTabPane, ElTabs, ElTag,
 } from 'element-plus'
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
 import {
   listNotificationsApi, markAllNotificationsReadApi, markNotificationReadApi,
-  type NotificationRow,
+  getNotificationDeliveryApi, listNotificationOptoutsApi, setNotificationOptoutApi,
+  type NotificationDelivery, type NotificationRow,
 } from '@/api/message'
 import { listTicketsApi, STATUS_LABEL, type TicketListQuery, type TicketRow } from '@/api/ticket'
 
@@ -85,6 +86,97 @@ const inboxRows = computed(() => inboxError.value ? [] : inboxQuery.data.value?.
 const todoError = computed(() => todosQuery.isError.value ? apiReadError(todosQuery.error.value) : '')
 const todoRows = computed(() => todoError.value ? [] : todosQuery.data.value?.list ?? [])
 
+const deliveryStates = new Map([
+  ['pending', '待投递'], ['sending', '发送中'], ['accepted', '已受理'], ['delivered', '已送达'],
+  ['failed', '发送失败'], ['unknown', '结果未知'], ['suppressed', '已抑制'],
+])
+const delivery = reactive({ id: '', result: null as NotificationDelivery | null, loading: false, error: '' })
+const deliveryLabel = computed(() => delivery.result ? deliveryStates.get(delivery.result.state) ?? '状态未知' : '')
+let deliverySeq = 0
+
+function closeDelivery() {
+  deliverySeq++
+  Object.assign(delivery, { id: '', result: null, loading: false, error: '' })
+}
+
+async function openDelivery(id: string) {
+  if (!id) return
+  closeDelivery()
+  delivery.id = id
+  await loadDelivery()
+}
+
+async function loadDelivery() {
+  if (!delivery.id || delivery.loading) return
+  const id = delivery.id
+  const seq = ++deliverySeq
+  delivery.loading = true
+  delivery.error = ''
+  try {
+    const result = await getNotificationDeliveryApi(id)
+    if (seq !== deliverySeq) return
+    if (result?.delivery_id !== id) {
+      delivery.result = null
+      delivery.error = '投递记录与查询编号不一致'
+      return
+    }
+    delivery.result = result
+  } catch (error) {
+    if (seq === deliverySeq) {
+      delivery.result = null
+      delivery.error = apiReadError(error, '查询投递状态失败，请重试', '投递记录不可查看')
+    }
+  } finally {
+    if (seq === deliverySeq) delivery.loading = false
+  }
+}
+
+const reviewOptout = { biz_type: 'ticket', event_action: 'ticket.review_requested' }
+const reviewPreference = reactive({ ready: false, optedOut: false, allOptedOut: false, loading: false, saving: false, error: '' })
+let preferenceSeq = 0
+
+async function loadReviewPreference() {
+  if (reviewPreference.loading || reviewPreference.saving) return
+  const seq = ++preferenceSeq
+  Object.assign(reviewPreference, { ready: false, loading: true, error: '' })
+  try {
+    const entries = await listNotificationOptoutsApi()
+    if (seq !== preferenceSeq) return
+    reviewPreference.optedOut = entries.some(e => e.biz_type === reviewOptout.biz_type && e.event_action === reviewOptout.event_action)
+    reviewPreference.allOptedOut = entries.some(e => e.biz_type === reviewOptout.biz_type && e.event_action === '*')
+    reviewPreference.ready = true
+  } catch (error) {
+    if (seq === preferenceSeq) reviewPreference.error = apiReadError(error, '加载通知偏好失败，请重试')
+  } finally {
+    if (seq === preferenceSeq) reviewPreference.loading = false
+  }
+}
+
+async function setReviewPreference(optedOut: boolean) {
+  if (!reviewPreference.ready || reviewPreference.saving || reviewPreference.allOptedOut) return
+  const seq = ++preferenceSeq
+  Object.assign(reviewPreference, { saving: true, error: '' })
+  try {
+    await setNotificationOptoutApi({ ...reviewOptout, opt_out: optedOut })
+    if (seq === preferenceSeq) reviewPreference.optedOut = optedOut
+  } catch (error) {
+    if (seq === preferenceSeq) reviewPreference.error = apiErrorMessage(error, '保存通知偏好失败，请重试')
+  } finally {
+    if (seq === preferenceSeq) reviewPreference.saving = false
+  }
+}
+
+function clearDetails() {
+  closeDelivery()
+  preferenceSeq++
+  Object.assign(reviewPreference, { ready: false, optedOut: false, allOptedOut: false, loading: false, saving: false, error: '' })
+}
+
+onMounted(loadReviewPreference)
+onActivated(() => { if (!reviewPreference.ready) void loadReviewPreference() })
+onDeactivated(clearDetails)
+onScopeDispose(clearDetails)
+
 async function refresh() {
   await queryClient.invalidateQueries({ queryKey: ['message'] })
   await queryClient.invalidateQueries({ queryKey: ['badge'] })
@@ -113,11 +205,21 @@ const timeText = (t: string) => formatDateTime(t)
     <el-card shadow="never" class="fill-card">
       <el-tabs v-model="activeTab">
         <el-tab-pane :label="`通知${inboxQuery.data.value?.total ? `（${inboxQuery.data.value.total}）` : ''}`" name="notifications">
-          <div class="mb-2 flex items-center gap-2">
+          <div class="mb-2 flex flex-wrap items-center gap-2">
             <el-checkbox v-model="onlyUnread" @change="page.current = 1">仅未读</el-checkbox>
+            <el-checkbox
+              :model-value="reviewPreference.optedOut || reviewPreference.allOptedOut"
+              :disabled="!reviewPreference.ready || reviewPreference.saving || reviewPreference.allOptedOut"
+              @change="setReviewPreference($event === true)"
+            >退订工单待复核外送提醒</el-checkbox>
+            <span v-if="reviewPreference.allOptedOut" class="text-xs">工单外送通知已全部退订</span>
+            <span v-if="reviewPreference.saving" role="status" class="text-xs">正在保存偏好</span>
             <div class="flex-1" />
             <el-button size="small" data-testid="read-all" @click="readAll">全部已读</el-button>
           </div>
+          <el-alert v-if="reviewPreference.error" :title="reviewPreference.error" type="error" :closable="false" class="mb-2">
+            <el-button size="small" @click="loadReviewPreference">查询当前偏好</el-button>
+          </el-alert>
           <div v-loading="inboxQuery.isLoading.value" class="min-h-[300px]">
             <el-alert v-if="inboxError" :title="inboxError" type="error" :closable="false"><el-button size="small" @click="inboxQuery.refetch()">重试</el-button></el-alert>
             <div
@@ -128,8 +230,9 @@ const timeText = (t: string) => formatDateTime(t)
               :data-testid="`msg-${n.id}`"
               @click="openItem(n)"
             >
-              <span class="msg-dot" :class="{ 'msg-dot--unread': !n.read_at }" />
-              <span class="flex-1">{{ n.title }}</span>
+              <span class="msg-dot" :class="{ 'msg-dot--unread': !n.read_at }" aria-hidden="true" />
+              <button type="button" class="msg-title" @click.stop="openItem(n)">{{ n.title }}</button>
+              <el-button v-if="n.delivery_id" link type="primary" size="small" @click.stop="openDelivery(n.delivery_id)">查询投递状态</el-button>
               <el-tag v-if="n.biz_type" size="small" type="info" class="mr-2">{{ n.biz_type }}</el-tag>
               <span class="text-xs text-gray-400">{{ timeText(n.created_at) }}</span>
             </div>
@@ -165,6 +268,25 @@ const timeText = (t: string) => formatDateTime(t)
         </el-tab-pane>
       </el-tabs>
     </el-card>
+    <el-drawer
+      :model-value="!!delivery.id"
+      title="消息投递状态"
+      size="min(560px, 100vw)"
+      @update:model-value="!$event && closeDelivery()"
+    >
+      <el-alert v-if="delivery.error" :title="delivery.error" type="error" :closable="false" class="mb-2" />
+      <div role="status" :aria-busy="delivery.loading">
+        <p v-if="delivery.loading">正在查询原投递记录</p>
+        <dl v-else-if="delivery.result" class="m-0 grid grid-cols-[auto_minmax(0,1fr)] gap-2">
+          <dt>状态</dt><dd class="m-0 font-semibold">{{ deliveryLabel }}</dd>
+          <dt>投递编号</dt><dd class="m-0 break-all">{{ delivery.id }}</dd>
+          <dt>最近更新</dt><dd class="m-0">{{ timeText(delivery.result.updated_at) }}</dd>
+        </dl>
+        <p v-if="!delivery.loading && delivery.result?.state === 'accepted'">渠道已受理，等待送达凭证。</p>
+        <p v-if="!delivery.loading && delivery.result?.state === 'unknown'">暂时无法确认投递结果。</p>
+      </div>
+      <el-button class="mt-4" :loading="delivery.loading" @click="loadDelivery">查询原记录</el-button>
+    </el-drawer>
   </div>
 </template>
 
@@ -180,6 +302,22 @@ const timeText = (t: string) => formatDateTime(t)
 }
 .msg-row:hover { background: var(--el-fill-color-light); }
 .msg-row--unread { font-weight: 600; }
+.msg-title {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+  text-align: left;
+}
 .msg-dot { width: 8px; height: 8px; border-radius: 50%; background: transparent; flex-shrink: 0; }
 .msg-dot--unread { background: var(--el-color-danger); }
+@media (max-width: 600px) {
+  .msg-row { flex-wrap: wrap; }
+  .msg-title { flex-basis: calc(100% - 16px); }
+}
 </style>

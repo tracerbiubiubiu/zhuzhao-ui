@@ -44,7 +44,13 @@ function mountInboxPager(page: any) {
 function setup() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Infinity } } })
   clients.push(client)
-  const api = { listNotificationsApi: vi.fn().mockResolvedValue({ list: [{ id: 'first' }], total: 45 }) }
+  const api = {
+    listNotificationsApi: vi.fn().mockResolvedValue({ list: [{ id: 'first' }], total: 45 }),
+    getNotificationDeliveryApi: vi.fn(),
+    markNotificationReadApi: vi.fn(),
+    listNotificationOptoutsApi: vi.fn().mockResolvedValue([]),
+    setNotificationOptoutApi: vi.fn(),
+  }
   const { page } = setupPage(source, {
     'element-plus': elementPlus, 'vue-router': { useRouter: () => ({}) },
     '@/api/message': api, '@/api/ticket': {}, '@/utils/int64': { compareInt64Desc },
@@ -79,5 +85,65 @@ describe('消息中心非首页读取', () => {
       expect(api.listNotificationsApi.mock.lastCall).toEqual([{ page: 2, page_size: 20, unread: undefined }])
       expect(page.inboxError.value).toBe('')
     }
+  })
+})
+
+describe('工单复核通知', () => {
+  const notification = { id: '271', title: '工单待复核', delivery_id: 'delivery-synthetic-271', link: '/tickets/542' }
+  const receipt = { delivery_id: notification.delivery_id, updated_at: '2026-11-27T08:00:00Z' }
+
+  it('查原投递区分受理、未知和送达，查询不会标记站内消息已读', async () => {
+    const { page, api } = setup()
+    api.getNotificationDeliveryApi
+      .mockResolvedValueOnce({ ...receipt, state: 'accepted' })
+      .mockResolvedValueOnce({ ...receipt, state: 'unknown' })
+      .mockResolvedValueOnce({ ...receipt, state: 'delivered' })
+    await page.openDelivery(notification.delivery_id)
+    expect(page.deliveryLabel.value).toBe('已受理')
+    await page.loadDelivery()
+    expect(page.deliveryLabel.value).toBe('结果未知')
+    await page.loadDelivery()
+    expect(page.deliveryLabel.value).toBe('已送达')
+    expect(api.getNotificationDeliveryApi.mock.calls).toEqual(Array.from({ length: 3 }, () => [notification.delivery_id]))
+    expect(api.markNotificationReadApi).not.toHaveBeenCalled()
+  })
+
+  it('切换投递后旧响应不能替换当前状态，也不能显示不匹配的回执', async () => {
+    const { page, api } = setup()
+    const old = deferred()
+    api.getNotificationDeliveryApi
+      .mockReturnValueOnce(old.promise)
+      .mockResolvedValueOnce({ ...receipt, state: 'delivered' })
+    const previous = page.openDelivery(notification.delivery_id)
+    await page.openDelivery('delivery-synthetic-272')
+    expect(page.delivery.result).toBeNull()
+    expect(page.delivery.error).toBe('投递记录与查询编号不一致')
+    old.resolve({ ...receipt, state: 'accepted' })
+    await previous
+    expect(page.delivery.id).toBe('delivery-synthetic-272')
+    expect(page.delivery.result).toBeNull()
+  })
+
+  it('复核单事件偏好写入本人入口，更新失败保留原状态并展示原因', async () => {
+    const { page, api } = setup()
+    api.setNotificationOptoutApi
+      .mockRejectedValueOnce(httpError(503, '偏好暂不可用'))
+      .mockResolvedValueOnce(undefined)
+    await page.loadReviewPreference()
+    await page.setReviewPreference(true)
+    expect(page.reviewPreference.optedOut).toBe(false)
+    expect(page.reviewPreference.error).toBe('偏好暂不可用')
+    await page.setReviewPreference(true)
+    expect(page.reviewPreference.optedOut).toBe(true)
+    expect(api.setNotificationOptoutApi).toHaveBeenLastCalledWith({ biz_type: 'ticket', event_action: 'ticket.review_requested', opt_out: true })
+  })
+
+  it('现有全域退订覆盖复核偏好，单事件控件不能覆盖它', async () => {
+    const { page, api } = setup()
+    api.listNotificationOptoutsApi.mockResolvedValueOnce([{ biz_type: 'ticket', event_action: '*' }])
+    await page.loadReviewPreference()
+    expect(page.reviewPreference.allOptedOut).toBe(true)
+    await page.setReviewPreference(false)
+    expect(api.setNotificationOptoutApi).not.toHaveBeenCalled()
   })
 })
