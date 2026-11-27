@@ -121,6 +121,7 @@ function normalizeAction(value: unknown, fields: Map<string, TicketTypeFieldDef>
 
 export async function getInstanceActionsApi(id: string, definition: TicketDefinition): Promise<{
   actions: InstanceAction[]
+  capabilities?: { transfer: boolean; withdraw: boolean }
   fields: TicketTypeFieldDef[]
 }> {
   if (definition.resolution === 'degraded') return { actions: [], fields: [] }
@@ -148,7 +149,11 @@ export async function getInstanceActionsApi(id: string, definition: TicketDefini
   if (new Set(actions.map(action => action.to)).size !== actions.length) {
     throw new Error('可用动作包含重复目标，请联系管理员核查流程规则')
   }
-  return { actions, fields: [...fields.values()] }
+  const caps = body.capabilities
+  const capabilities = body.ticket_id === id && body.revision === definition.revision && isObject(caps)
+    && typeof caps.transfer === 'boolean' && typeof caps.withdraw === 'boolean'
+    ? { transfer: caps.transfer, withdraw: caps.withdraw } : undefined
+  return { actions, fields: [...fields.values()], capabilities }
 }
 
 export async function transitionInstanceApi(input: TransitionInstanceInput, operationId: string): Promise<void> {

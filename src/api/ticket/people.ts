@@ -2,7 +2,7 @@ import request from '@vea/request'
 import { assignmentId, assignmentRecord } from '@/api/system/assignmentPayload'
 
 export type TicketPeopleContext =
-  | { purpose: 'assign' | 'cc'; ticketId: string }
+  | { purpose: 'assign' | 'transfer' | 'cc'; ticketId: string }
   | { purpose: 'create-supervisor'; orgId: string; typeCode: string }
   | { purpose: 'rule-target'; orgId: string }
 

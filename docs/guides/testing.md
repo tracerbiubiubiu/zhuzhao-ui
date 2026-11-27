@@ -33,7 +33,7 @@ pnpm gate
 
 ESLint是纯检查，修复用lint:fix后重跑。E2E使用[playwright.config.ts](../../playwright.config.ts)，workers=1、当前默认retries=1；默认门禁有重试时必须披露实际首轮失败/重试/跳过，不能写成零重试。CI范围见[ci.yml](../../.github/workflows/ci.yml)，E2E当前由本地真栈承接；未推送/未执行的远端CI不写通过。
 
-标准浏览器入口当前发现 36 个 spec、55 条用例，含 B2 第 4–5 项 D01/D02。运行 `pnpm test:e2e --list` 可核对发现范围。标准入口保留全局建号和一次重试。在独占候选栈已预启动 UI 时，可设 `E2E_USE_PRESTARTED_UI=1` 并显式注入本轮 `E2E_BASE_URL` 与 `E2E_API_BASE`，由候选 UI 代理指向同轮 Core，Playwright 直接使用它。完整组合用 `E2E_REQUIRE_COMPLETE=1 pnpm gate` 核对 55 条最终均通过。严格入口在全局建号前核对独占 PostgreSQL 容器标签与数据库身份，并拒绝整条跳过、步骤跳过及历史回读缺失。S17 必须可访问本轮 PG，W5 使用下述真实输入。
+标准浏览器入口当前发现 37 个 spec、56 条用例，含 B2 第 4–5 项 D01/D02。运行 `pnpm test:e2e --list` 可核对发现范围。标准入口保留全局建号和一次重试。在独占候选栈已预启动 UI 时，可设 `E2E_USE_PRESTARTED_UI=1` 并显式注入本轮 `E2E_BASE_URL` 与 `E2E_API_BASE`，由候选 UI 代理指向同轮 Core，Playwright 直接使用它。完整组合用 `E2E_REQUIRE_COMPLETE=1 pnpm gate` 核对 56 条最终均通过。严格入口在全局建号前核对独占 PostgreSQL 容器标签与数据库身份，并拒绝整条跳过、步骤跳过及历史回读缺失。S17 必须可访问本轮 PG，W5 使用下述真实输入。
 
 ### 开发期已接受的依赖公告
 
@@ -93,7 +93,7 @@ ESLint是纯检查，修复用lint:fix后重跑。E2E使用[playwright.config.ts
 2. 协作者真正停止并启动 Core，沿用同一制品、同一 PG，保持 UI 和原浏览器页面在位。新实例就绪后发布 `restarted.<K>.json`，提供 `operationId`、`planId`、`coreArtifact`、不同的 `beforeInstance`/`afterInstance`、`ready: true` 与停机前快照 `before`。
 3. 同一个页面按 `K` 发只读 GET，完成独立回读后发布 `looked-up.<K>.json`。协作者收到后再从同一 PG 读取，发布 `readback.<K>.json`，提供 `operationId`、`planId`、`coreArtifact`、`afterInstance` 与 `snapshot`。两份快照按稳定标识排序，覆盖原操作、分组回执、工单、活跃关联、风险及工单历史，以及必要通知意图，专项逐项比较。
 
-所有写入用例使用本轮合成数据。归档本轮退出状态、用例结论及 `.codex/b2-browser-results/` 中的整改阶段 JSON 后再复跑，专项实跑会重置自身输出。复验前重新准备受影响的风险、工单和空交接目录，保留首次失败及后续复验结果。清单和预检只提供发现与输入证据，真实栈结果以标准 55 条和专项 8 条的实跑收据为准。
+所有写入用例使用本轮合成数据。归档本轮退出状态、用例结论及 `.codex/b2-browser-results/` 中的整改阶段 JSON 后再复跑，专项实跑会重置自身输出。复验前重新准备受影响的风险、工单和空交接目录，保留首次失败及后续复验结果。清单和预检只提供发现与输入证据，真实栈结果以标准 56 条和专项 8 条的实跑收据为准。
 
 ## 测试先行与单维护者审阅
 

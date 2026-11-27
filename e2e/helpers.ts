@@ -191,9 +191,10 @@ export async function tempTicketType(
   h: { token: string },
   prefix: string,
   transitionMeta?: Record<string, unknown>,
+  readPolicy?: 'inherit',
 ): Promise<{ code: string; cleanup: () => Promise<void> }> {
   const code = `${prefix}_${randomUUID().slice(0, 12).replace('-', '')}`
-  await mustData(api('/api/v1/ticket-types', { ...h, method: 'POST', body: { code, name: `E2E 临时类型 ${code}` } }), `POST /ticket-types(${code})`)
+  await mustData(api('/api/v1/ticket-types', { ...h, method: 'POST', body: { code, name: `E2E 临时类型 ${code}`, read_policy: readPolicy } }), `POST /ticket-types(${code})`)
   const cleanup = () => cleanupTicketType(h.token, code)
   try {
     if (transitionMeta) {

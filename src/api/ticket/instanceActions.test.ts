@@ -101,3 +101,17 @@ describe('工单已绑定规则与可用动作', () => {
     })
   })
 })
+
+it('仅采用与当前工单和修订配对的服务端专项动作布尔值', async () => {
+  const definition = normalizeTicketDefinition(detail)
+  const body = { ticket_id: '1', revision: '12', actions: [], capabilities: { transfer: true, withdraw: false } }
+  vi.mocked(request.get).mockResolvedValueOnce(body as never)
+  expect((await getInstanceActionsApi('1', definition)).capabilities).toEqual({ transfer: true, withdraw: false })
+  for (const incomplete of [
+    { ...body, revision: undefined }, { ...body, ticket_id: undefined },
+    { ...body, capabilities: { transfer: 'true', withdraw: false } }, { ...body, capabilities: undefined },
+  ]) {
+    vi.mocked(request.get).mockResolvedValueOnce(incomplete as never)
+    expect((await getInstanceActionsApi('1', definition)).capabilities).toBeUndefined()
+  }
+})

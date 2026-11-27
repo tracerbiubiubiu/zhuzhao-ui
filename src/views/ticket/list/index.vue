@@ -11,9 +11,9 @@
  * - 新建入口（ticket:create）→ /tickets/new（发起表单页=form-create 渲染器）
  */
 import { formatDateTime } from '@/utils/datetime'
-import { computed, onActivated, reactive, ref } from 'vue'
+import { computed, onActivated, onDeactivated, reactive, ref, watch } from 'vue'
 import {
-  ElButton, ElCard, ElCheckbox, ElDatePicker, ElInput, ElLink,
+  ElAlert, ElButton, ElCard, ElCheckbox, ElDrawer, ElDatePicker, ElInput, ElLink,
   ElOption, ElSelect, ElTag, ElRadioButton, ElRadioGroup} from 'element-plus'
 import { ElMessage } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
@@ -23,7 +23,8 @@ import FilterBar from '@/components/FilterBar/index.vue'
 import ProTable from '@/components/ProTable/index.vue'
 import UserNameText from '@/components/UserNameText/index.vue'
 import type { ProTableColumn } from '@/components/ProTable/types'
-import { exportTicketsApi, listTicketTypesApi, listTicketsApi, STATUS_LABEL, TICKET_STATUSES } from '@/api/ticket'
+import { getTicketStatsApi, type TicketStatsGroup, exportTicketsApi, listTicketTypesApi, listTicketsApi, STATUS_LABEL, TICKET_STATUSES } from '@/api/ticket'
+import { apiReadError } from '@/utils/apiError'
 import { usePermission } from '@/common/auth'
 
 // keep-alive 契约：name=动态路由名（菜单 code ticket_list，组件路径 ticket/list/index）
@@ -92,29 +93,43 @@ const statusSetLabel = computed(() => search.excludeStatuses
   : (search.status === 'assigned,in_progress' ? '待办（已分派 / 进行中）'
     : search.status.split(',').map((s) => STATUS_LABEL[s] ?? s).join(' / ')))
 
-// 筛选即时生效（筛选栏配方触发口径：全部控件变更即查，文本防抖 300ms 收敛；
-// URL 预填已在声明期完成，不经过本 watch）
-useAutoFilterRun(
-  () => ({ ...search, range: dateRange.value }),
-  () => tableRef.value?.refresh({ resetPage: true }),
-)
+function readFilters() {
+  return {
+    ...(search.keyword.trim() ? { keyword: search.keyword.trim() } : {}),
+    ...(search.type_code ? { type_code: search.type_code } : {}),
+    ...statusFilter(),
+    ...(search.priority !== '' ? { priority: search.priority } : {}),
+    ...(search.mineHandle ? { assignee: 'me' as const } : {}),
+    ...(search.mineCreated ? { created_by: 'me' as const } : {}),
+    ...(search.tag.trim() ? { tag: search.tag.trim() } : {}),
+    ...(dateRange.value ? { created_from: dateRange.value[0], created_to: dateRange.value[1] } : {}),
+  }
+}
+const appliedFilters = ref(readFilters())
+function applyFilters() {
+  appliedFilters.value = readFilters()
+  tableRef.value?.refresh({ resetPage: true })
+}
+useAutoFilterRun(() => ({ ...search, range: dateRange.value }), applyFilters)
+
+const statsVisible = ref(false)
+const statsGroup = ref<TicketStatsGroup>('status')
+const canReadStats = computed(() => hasPerm('ticket:stats'))
+watch(canReadStats, allowed => { if (!allowed) statsVisible.value = false }, { flush: 'sync' })
+onDeactivated(() => { statsVisible.value = false })
+const statsQuery = useQuery({
+  queryKey: computed(() => ['ticket', 'stats', { ...appliedFilters.value, group_by: statsGroup.value }] as const),
+  queryFn: ({ queryKey, signal }) => getTicketStatsApi(queryKey[2], signal),
+  enabled: computed(() => canReadStats.value && statsVisible.value),
+  retry: false,
+  staleTime: 0,
+})
 
 const exporting = ref(false)
-
-/** 导出当前筛选（S10 B10-5——与列表同筛选/同可见性；xlsx 下载） */
 async function onExport() {
   exporting.value = true
   try {
-    const blob = await exportTicketsApi({
-      ...(search.keyword.trim() ? { keyword: search.keyword.trim() } : {}),
-      ...(search.type_code ? { type_code: search.type_code } : {}),
-      ...statusFilter(),
-      ...(search.priority !== '' ? { priority: search.priority } : {}),
-      ...(search.mineHandle ? { assignee: 'me' as const } : {}),
-      ...(search.mineCreated ? { created_by: 'me' as const } : {}),
-      ...(search.tag.trim() ? { tag: search.tag.trim() } : {}),
-      ...(dateRange.value ? { created_from: dateRange.value[0], created_to: dateRange.value[1] } : {}),
-    })
+    const blob = await exportTicketsApi(appliedFilters.value)
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
@@ -139,22 +154,11 @@ function onReset() {
   search.mineCreated = false
   search.tag = ''
   presetReset()
-  tableRef.value?.refresh({ resetPage: true })
+  applyFilters()
 }
 
 function fetcher(params: { page: number; page_size: number }) {
-  return listTicketsApi({
-    page: params.page,
-    page_size: params.page_size,
-    ...(search.keyword.trim() ? { keyword: search.keyword.trim() } : {}),
-    ...(search.type_code ? { type_code: search.type_code } : {}),
-    ...statusFilter(),
-    ...(search.priority !== '' ? { priority: search.priority } : {}),
-    ...(search.mineHandle ? { assignee: 'me' as const } : {}),
-    ...(search.mineCreated ? { created_by: 'me' as const } : {}),
-    ...(search.tag.trim() ? { tag: search.tag.trim() } : {}),
-    ...(dateRange.value ? { created_from: dateRange.value[0], created_to: dateRange.value[1] } : {}),
-  })
+  return listTicketsApi({ ...appliedFilters.value, ...params })
 }
 
 const PRIORITY_TYPES = ['info', 'danger', 'warning', 'info', 'success'] as const
@@ -245,6 +249,7 @@ function typeLabel(code: string): string {
             </div>
             <div class="ml-auto !mr-0" data-ignore>
               <el-button @click="onReset">重置</el-button>
+              <el-button v-if="canReadStats" @click="statsVisible = true">工单统计</el-button>
               <el-button :loading="exporting" data-testid="btn-export" @click="onExport">导出</el-button>
             </div>
           
@@ -289,7 +294,7 @@ function typeLabel(code: string): string {
         </template>
 
         <template #sla_due_at="{ row }">
-          <span :class="row.sla_due_at && row.status !== 'closed' ? 'text-[var(--el-color-danger)]' : ''">
+          <span :class="row.sla_due_at && !['closed', 'cancelled'].includes(row.status) ? 'text-[var(--el-color-danger)]' : ''">
             {{ formatTime(row.sla_due_at) }}
           </span>
         </template>
@@ -297,10 +302,36 @@ function typeLabel(code: string): string {
         <template #created_at="{ row }">{{ formatTime(row.created_at) }}</template>
       </ProTable>
     </el-card>
+    <el-drawer v-if="canReadStats" v-model="statsVisible" title="工单统计" size="min(620px, 95vw)">
+      <el-radio-group v-model="statsGroup" aria-label="统计分组">
+        <el-radio-button value="status">按状态</el-radio-button>
+        <el-radio-button value="priority">按优先级</el-radio-button>
+        <el-radio-button value="type_code">按类型</el-radio-button>
+      </el-radio-group>
+      <p v-if="statsQuery.isFetching.value" role="status">正在读取统计…</p>
+      <el-alert v-else-if="statsQuery.isError.value" :title="apiReadError(statsQuery.error.value, '统计读取失败')" type="error" :closable="false">
+        <el-button size="small" @click="statsQuery.refetch()">重试读取</el-button>
+      </el-alert>
+      <template v-else-if="statsVisible && statsQuery.data.value">
+        <p>共 {{ statsQuery.data.value.total }} 份工单 · 统计时间 {{ formatTime(statsQuery.data.value.as_of) }}</p>
+        <table v-if="statsQuery.data.value.items.length" class="stats-table">
+          <thead><tr><th>分组</th><th>总数</th><th>进行中</th><th>逾期</th><th>逾期率</th></tr></thead>
+          <tbody><tr v-for="item in statsQuery.data.value.items" :key="item.key">
+            <th scope="row">{{ statsGroup === 'status' ? STATUS_LABEL[item.key] ?? item.key : statsGroup === 'priority' ? PRIORITY_LABELS[Number(item.key)] ?? item.key : typeLabel(item.key) }}</th>
+            <td>{{ item.count }}</td><td>{{ item.in_progress_count }}</td><td>{{ item.overdue_count }}</td>
+            <td>{{ item.overdue_rate === null ? '—' : (item.overdue_rate * 100).toFixed(1) + '%' }}</td>
+          </tr></tbody>
+        </table>
+        <p v-else>当前筛选下没有可见工单</p>
+      </template>
+    </el-drawer>
   </div>
 </template>
 
 <style scoped>
+.stats-table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.stats-table th, .stats-table td { padding: 8px; text-align: right; border-bottom: 1px solid var(--el-border-color-lighter); }
+.stats-table th:first-child { text-align: left; }
 /* 筛选栏：EP inline 默认项距 32px 过疏——收半使首行多容一个字段；尾行「勾选居左+重置钉右」。
    inline 原生是 inline-flex 文本流（margin-left:auto 无效），转 flex+wrap 后 ml-auto 才成立 */
 .ticket-filter {

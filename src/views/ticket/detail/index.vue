@@ -25,7 +25,7 @@ import {
   createTicketRelationApi, deleteTicketApi, getTicketApi, getTicketCommentsApi,
   getTicketRelationsApi, listTicketCCApi, listTicketTagsApi,
   listTicketTypesApi, listTicketRelationCandidatesApi, addTicketTagsApi, removeTicketCCApi, removeTicketTagApi,
-  STATUS_LABEL, updateTicketApi, type TagRow, type TicketCCRow,
+  STATUS_LABEL, handleTicketApi, type TicketHandlingCommand, updateTicketApi, type TagRow, type TicketCCRow,
 } from '@/api/ticket'
 import { getInstanceActionsApi, normalizeTicketDefinition, transitionInstanceApi, type InstanceAction } from '@/api/ticket/instanceActions'
 import { newTicketOperationKey } from '@/api/ticket/operationKey'
@@ -128,7 +128,7 @@ const canWriteTicket = computed(() => canQueryTicket.value && !!ticket.value && 
 const typeLabel = computed(
   () => typesQuery.data.value?.find((t) => t.code === ticket.value?.type_code)?.name ?? ticket.value?.type_code ?? '—',
 )
-const isClosed = computed(() => ticket.value?.status === 'closed')
+const isClosed = computed(() => ticket.value?.status === 'closed' || ticket.value?.status === 'cancelled')
 const canReadRiskWorkflow = computed(() => canQueryTicket.value && !!ticket.value
   && ticketReadScope.value && userStore.hasPermission('route:/risks'))
 const riskReadDenied = ref(false)
@@ -314,7 +314,86 @@ onActivated(() => {
   attachmentsNeedRefresh = false
   void attachments.value?.refresh()
 })
-const canUseOtherWrites = computed(() => canWriteTicket.value && !transition.state.busy && !transitionRefreshing.value
+type HandlingKind = TicketHandlingCommand['kind']
+const handling = createTransitionSubmission<TicketHandlingCommand>({ newKey: newTicketOperationKey, send: handleTicketApi })
+const handlingDialog = ref<{ kind: HandlingKind; revision: string; id: string } | null>(null)
+const handlingNotice = ref('')
+const handlingHidden = ref(false)
+const handlingTarget = ref('')
+const handlingComment = ref('')
+const handlingRefreshing = ref(false)
+const handlingLabels = { transfer: '转办', withdraw: '撤回' }
+
+function permittedHandling(kind: HandlingKind) {
+  return hasTicketReadScope() && userStore.hasPermission('ticket:read') && userStore.hasPermission(`ticket:${kind}`)
+    && canWriteTicket.value && !activeRiskWorkflow.value && !hideRiskTicketActions.value && !isClosed.value
+    && actionsQuery.isSuccess.value && actionsQuery.data.value?.capabilities?.[kind] === true
+}
+
+function resetHandling() {
+  handlingDialog.value = null
+  handlingHidden.value = false
+  handling.reset()
+  handlingTarget.value = ''
+  handlingComment.value = ''
+}
+function openHandling(kind: HandlingKind) {
+  const def = ticketDefinition.value
+  if (!canUseOtherWrites.value || handlingDialog.value || def?.resolution !== 'exact' || !permittedHandling(kind)) return
+  resetHandling()
+  handlingNotice.value = ''
+  handlingDialog.value = { kind, revision: def.revision, id: ticketId.value }
+}
+function handlingCurrent() {
+  const opened = handlingDialog.value
+  const def = ticketDefinition.value
+  return !!opened && opened.id === ticketId.value && def?.resolution === 'exact'
+    && def.revision === opened.revision && permittedHandling(opened.kind)
+}
+watch([ticketId, () => userStore.profile?.id], () => { resetHandling(); handlingNotice.value = '' }, { flush: 'sync' })
+watch(handlingCurrent, current => {
+  if (active.value && handlingDialog.value && !current && !handling.state.busy && handling.state.phase !== 'unknown') {
+    resetHandling()
+    handlingNotice.value = '工单或操作权限已变化，请重新确认。'
+  }
+}, { flush: 'sync' })
+onBeforeUnmount(resetHandling)
+
+async function submitHandling() {
+  const opened = handlingDialog.value
+  if (!opened || handling.state.busy || handlingRefreshing.value) return
+  if (!hasTicketReadScope() || !userStore.hasPermission('ticket:read') || opened.id !== ticketId.value) {
+    resetHandling()
+    return
+  }
+  // 原提交可能已经改变了处理人、修订和可用动作；重放仍由服务端按原号重新授权。
+  const replay = handling.state.phase === 'unknown'
+  if (replay && !userStore.hasPermission(`ticket:${opened.kind}`)) return
+  if (!replay && !handlingCurrent()) {
+    resetHandling()
+    return
+  }
+  if (!replay && opened.kind === 'transfer' && !handlingTarget.value) return
+  const body = { id: opened.id, expected_revision: opened.revision,
+    ...(handlingComment.value.trim() ? { comment: handlingComment.value.trim() } : {}) }
+  const accepted = replay ? await handling.retry() : await handling.submit(opened.kind === 'transfer'
+    ? { kind: 'transfer', body: { ...body, to_user_id: handlingTarget.value } }
+    : { kind: 'withdraw', body })
+  if (handlingDialog.value !== opened) return
+  if (riskSession !== getSessionGeneration() || userStore.profile?.id !== riskActor) { resetHandling(); return }
+  if (accepted || handling.state.phase === 'refresh') {
+    handlingNotice.value = accepted ? `已${handlingLabels[opened.kind]}` : handling.state.message
+    handlingRefreshing.value = true
+    resetHandling()
+    try { await refreshAll(opened.id) } finally { handlingRefreshing.value = false }
+  }
+}
+function closeHandling() {
+  if (handling.state.busy) return
+  if (handling.state.phase === 'unknown') handlingHidden.value = true
+  else resetHandling()
+}
+const canUseOtherWrites = computed(() => canWriteTicket.value && !handlingDialog.value && !handlingRefreshing.value && !transition.state.busy && !transitionRefreshing.value
   && transition.state.phase !== 'unknown' && transition.state.phase !== 'refresh')
 const canUseOrdinaryLifecycle = computed(() => canUseOtherWrites.value && !activeRiskWorkflow.value)
 const canUseLegacyClose = computed(() => canUseOrdinaryLifecycle.value && ticketDefinition.value?.resolution === 'legacy')
@@ -357,7 +436,7 @@ async function refreshTransitionState() {
 }
 
 function openTransition(action: InstanceAction) {
-  if (!canWriteTicket.value || transitionRefreshing.value || transition.state.busy
+  if (!canUseOtherWrites.value || transitionRefreshing.value || transition.state.busy
     || transition.state.phase === 'unknown' || transition.state.phase === 'refresh') return
   clearSelectedAction()
   selectedSession = getSessionGeneration()
@@ -555,6 +634,7 @@ function formatTime(iso?: string): string {
 async function refreshAll(source = ticketId.value) {
   await queryClient.invalidateQueries({ queryKey: ['ticket', 'detail', source] })
   await Promise.all([
+    queryClient.invalidateQueries({ queryKey: ['ticket', 'stats'] }),
     queryClient.invalidateQueries({ queryKey: ['ticket', 'comments', source] }),
     queryClient.invalidateQueries({ queryKey: ['ticket', 'relations', source] }),
     queryClient.invalidateQueries({ queryKey: ['ticket', 'transitions', source] }),
@@ -802,7 +882,7 @@ function onRelationInput(event: Event) {
         </el-descriptions-item>
         <el-descriptions-item label="优先级">{{ ticket?.priority ?? '—' }}</el-descriptions-item>
         <el-descriptions-item label="SLA 截止">
-          <span :class="ticket?.sla_due_at && ticket.status !== 'closed' ? 'text-[var(--el-color-danger)]' : ''">
+          <span :class="ticket?.sla_due_at && !isClosed ? 'text-[var(--el-color-danger)]' : ''">
             {{ formatTime(ticket?.sla_due_at) }}
           </span>
         </el-descriptions-item>
@@ -835,7 +915,16 @@ function onRelationInput(event: Event) {
         <el-button v-if="transition.state.phase === 'unknown'" size="small" :loading="transition.state.busy" :disabled="!canWriteTicket" @click="submitTransition()">原操作重试</el-button>
         <el-button v-if="transition.state.phase === 'refresh'" size="small" :loading="transitionRefreshing" @click="refreshTransitionState">刷新工单</el-button>
       </el-alert>
+      <el-alert v-if="handlingHidden && handlingDialog && ticketReadScope && userStore.hasPermission('ticket:read')"
+        title="原操作结果待确认" type="warning" :closable="false">
+        <el-button size="small" @click="handlingHidden = false">查看原操作</el-button>
+      </el-alert>
+      <el-alert v-if="handlingNotice" :title="handlingNotice" class="mt-4" type="info" show-icon @close="handlingNotice = ''" />
       <div v-if="canWriteTicket" class="mt-4 flex gap-2 flex-wrap">
+        <template v-for="(label, kind) in handlingLabels" :key="kind">
+          <el-button v-if="permittedHandling(kind)" :disabled="!canUseOtherWrites" :data-testid="`btn-${kind}`"
+            @click="openHandling(kind)">{{ label }}</el-button>
+        </template>
         <template v-if="!isClosed && !activeRiskWorkflow">
         <el-button
           v-for="action in availableActions"
@@ -844,7 +933,7 @@ function onRelationInput(event: Event) {
           plain
           size="small"
           :loading="transition.state.busy && selectedAction?.id === action.id"
-          :disabled="transition.state.busy || transitionRefreshing || transition.state.phase === 'unknown' || transition.state.phase === 'refresh'"
+          :disabled="!canUseOtherWrites"
           :data-testid="`btn-transition-${action.to}`"
           @click="openTransition(action)"
         >{{ action.title }}</el-button>
@@ -1144,6 +1233,29 @@ function onRelationInput(event: Event) {
     />
 
 
+    <el-dialog v-if="handlingDialog && !handlingHidden && ticketReadScope && ticket && userStore.hasPermission('ticket:read')"
+      :model-value="true" :title="handlingLabels[handlingDialog.kind] + '工单'" width="460px"
+      :show-close="!handling.state.busy" :close-on-click-modal="false"
+      :close-on-press-escape="!handling.state.busy" @close="closeHandling">
+      <el-form label-width="80px" @submit.prevent="submitHandling">
+        <el-form-item v-if="handlingDialog.kind === 'transfer'" label="新处理人" required>
+          <span v-if="handling.state.busy || handling.state.phase === 'unknown'">用户 #{{ handlingTarget }}</span>
+          <UserPicker v-else v-model="handlingTarget" :context="{ purpose: 'transfer', ticketId }" :active="handlingCurrent()" />
+        </el-form-item>
+        <el-form-item label="说明">
+          <el-input v-model="handlingComment" type="textarea" :rows="3"
+            :disabled="handling.state.busy || handling.state.phase === 'unknown'" placeholder="可选说明" />
+        </el-form-item>
+      </el-form>
+      <el-alert v-if="handling.state.message" :title="handling.state.message" type="error" :closable="false" />
+      <template #footer>
+        <el-button :disabled="handling.state.busy" @click="closeHandling">{{ handling.state.phase === 'unknown' ? '稍后核查' : '取消' }}</el-button>
+        <el-button type="primary" :loading="handling.state.busy"
+          :disabled="handling.state.phase === 'unknown' ? !userStore.hasPermission(`ticket:${handlingDialog.kind}`)
+            : !handlingCurrent() || (handlingDialog.kind === 'transfer' && !handlingTarget)"
+          @click="submitHandling">{{ handling.state.phase === 'unknown' ? '原操作重试' : '确认' + handlingLabels[handlingDialog.kind] }}</el-button>
+      </template>
+    </el-dialog>
     <TransitionActionDialog
       v-if="actionDialog"
       :model-value="canWriteTicket"

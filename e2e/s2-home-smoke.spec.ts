@@ -177,7 +177,7 @@ test('S2 工作台冒烟：admin 登录 → 菜单渲染 → 状态卡与最近�
     // 角标是另一已明确统计口径：分派给我且排除终态，须保留自定义状态。
     const badgeList = page.waitForResponse((r) => {
       const u = new URL(r.url())
-      return u.pathname === '/api/v1/tickets' && u.searchParams.get('exclude_statuses') === 'closed,rejected' && u.searchParams.get('assignee') === 'me'
+      return u.pathname === '/api/v1/tickets' && u.searchParams.get('exclude_statuses') === 'closed,rejected,cancelled' && u.searchParams.get('assignee') === 'me'
     })
     await page.getByTestId('navbar-todo').press('Enter')
     await expect(statusSelect).toContainText('排除 已关闭 / 已驳回')
@@ -185,10 +185,10 @@ test('S2 工作台冒烟：admin 登录 → 菜单渲染 → 状态卡与最近�
     expect(badgeRows.total, '角标与入口列表总数必须一致').toBe(badgeCount)
     expect(badgeRows.list.some((t) => t.id === handled[0])).toBe(true)
     expect(badgeRows.list.some((t) => t.id === handled[2]), '角标必须保留本轮自定义非终态').toBe(true)
-    expect(badgeRows.list.every((t) => !['closed', 'rejected'].includes(t.status))).toBe(true)
+    expect(badgeRows.list.every((t) => !['closed', 'rejected', 'cancelled'].includes(t.status))).toBe(true)
     const badgeExport = page.waitForResponse((r) => {
       const u = new URL(r.url())
-      return u.pathname === '/api/v1/tickets/export' && u.searchParams.get('exclude_statuses') === 'closed,rejected'
+      return u.pathname === '/api/v1/tickets/export' && u.searchParams.get('exclude_statuses') === 'closed,rejected,cancelled'
         && u.searchParams.get('assignee') === 'me' && !u.searchParams.has('status') && !u.searchParams.has('statuses')
     })
     await page.getByTestId('btn-export').click()

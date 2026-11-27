@@ -9,6 +9,7 @@
 import type { AxiosRequestConfig } from 'axios'
 import request from '@vea/request'
 import type { components, paths } from '@/api/__generated__/schema'
+import { compareInt64Desc } from '@/utils/int64'
 import type { TransitionInstanceInput } from './instanceActions'
 
 /** 工单行（= model.Ticket 的 JSON 投影；assigned_to 可空——创建即未分派；
@@ -281,6 +282,7 @@ export const TICKET_STATUSES: Array<{ value: string; label: string }> = [
   { value: 'in_progress', label: '进行中' },
   { value: 'pending_verify', label: '待验证' },
   { value: 'closed', label: '已关闭' },
+  { value: 'cancelled', label: '已撤回' },
   { value: 'rejected', label: '已驳回' },
 ]
 
@@ -434,6 +436,33 @@ export async function exportTicketsApi(params: TicketListQuery): Promise<Blob> {
   }
   const data = await request.get('/api/v1/tickets/export', { params: clean, responseType: 'blob', _silentError: true })
   return data as unknown as Blob
+}
+
+export type TicketHandlingCommand =
+  | { kind: 'transfer'; body: { id: string; expected_revision: string; to_user_id: string; comment?: string } }
+  | { kind: 'withdraw'; body: { id: string; expected_revision: string; comment?: string } }
+
+export async function handleTicketApi(command: TicketHandlingCommand, operationId: string): Promise<void> {
+  const result = await request.post(`/api/v1/tickets/${command.kind}`, command.body, {
+    _silentError: true, headers: { 'Idempotency-Key': operationId },
+  }) as unknown as { id?: string; assigned_to?: string | null; revision?: string; status?: string } | null
+  if (!result || result.id !== command.body.id || typeof result.revision !== 'string' || !/^[1-9]\d{0,18}$/.test(result.revision)
+    || compareInt64Desc(result.revision, command.body.expected_revision) >= 0 || !result.status
+    || (command.kind === 'transfer' ? result.assigned_to !== command.body.to_user_id : result.status !== 'cancelled')) {
+    throw new Error('工单操作回执不完整，请按原操作核查')
+  }
+}
+
+export type TicketStatsGroup = 'status' | 'priority' | 'type_code'
+export interface TicketStats {
+  as_of: string
+  total: number
+  items: { key: string; count: number; in_progress_count: number; overdue_count: number; overdue_rate: number | null }[]
+}
+
+export async function getTicketStatsApi(params: TicketListQuery & { group_by: TicketStatsGroup }, signal?: AbortSignal): Promise<TicketStats> {
+  const data = await request.get('/api/v1/tickets/stats', { params, signal, _silentError: true })
+  return data as unknown as TicketStats
 }
 
 /** 待办角标聚合（S10 B10-3——sections 开放 map；未知 section 前端忽略） */

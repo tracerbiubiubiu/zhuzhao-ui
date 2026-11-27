@@ -46,3 +46,10 @@ describe('stuckStates（B2-3 在途单告警判据）', () => {
     expect(stuckStates(old, old, { open: ['assigned'], assigned: ['in_progress'], in_progress: ['closed'] })).toEqual([])
   })
 })
+
+it('撤回无出边是合法终态，保存该图不会把已撤回工单报告为停滞', () => {
+  const states = ['open', 'assigned', 'closed', 'cancelled']
+  const transitions = { open: ['assigned', 'cancelled'], assigned: ['closed'] }
+  expect(lintGraph(states, transitions)).toEqual([])
+  expect(stuckStates(states, states, transitions)).toEqual([])
+})

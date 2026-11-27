@@ -4,13 +4,13 @@ import type { TransitionInstanceInput } from '@/api/ticket/instanceActions'
 
 type Phase = 'idle' | 'rejected' | 'refresh' | 'unknown'
 
-interface Dependencies {
+interface Dependencies<T> {
   newKey: () => string
-  send: (input: TransitionInstanceInput, operationId: string) => Promise<void>
+  send: (input: T, operationId: string) => Promise<void>
 }
 
-interface Attempt {
-  body: TransitionInstanceInput
+interface Attempt<T> {
+  body: T
   key: string
 }
 
@@ -28,11 +28,11 @@ function failurePhase(error: unknown): Exclude<Phase, 'idle'> {
 }
 
 /** 在结果未知时保留首次操作的完整载荷和标识，后续输入不能改写该操作。 */
-export function createTransitionSubmission(deps: Dependencies) {
+export function createTransitionSubmission<T = TransitionInstanceInput>(deps: Dependencies<T>) {
   const state = reactive({ phase: 'idle' as Phase, busy: false, message: '' })
-  let pending: Attempt | undefined
+  let pending: Attempt<T> | undefined
 
-  async function run(attempt: Attempt, replay: boolean): Promise<boolean> {
+  async function run(attempt: Attempt<T>, replay: boolean): Promise<boolean> {
     pending = attempt
     state.busy = true
     state.message = ''
@@ -63,10 +63,10 @@ export function createTransitionSubmission(deps: Dependencies) {
     }
   }
 
-  function submit(body: TransitionInstanceInput): Promise<boolean> {
+  function submit(body: T): Promise<boolean> {
     if (state.busy || state.phase === 'unknown' || state.phase === 'refresh') return Promise.resolve(false)
     try {
-      const snapshot = JSON.parse(JSON.stringify(body)) as TransitionInstanceInput
+      const snapshot = JSON.parse(JSON.stringify(body)) as T
       return run({ body: snapshot, key: deps.newKey() }, false)
     } catch {
       state.phase = 'rejected'
